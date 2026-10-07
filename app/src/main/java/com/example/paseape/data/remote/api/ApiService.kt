@@ -3,6 +3,7 @@ package com.example.paseape.data.remote.api
 import com.example.paseape.data.remote.dto.auth.LoginReqDto
 import com.example.paseape.data.remote.dto.auth.LoginResDto
 import com.example.paseape.data.remote.dto.auth.RegistroReqDto
+import com.example.paseape.data.remote.dto.auth.UsuarioReqDto
 import com.example.paseape.data.remote.dto.common.ResponseDto
 import com.example.paseape.data.remote.dto.mascota.MascotaReqDto
 import com.example.paseape.data.remote.dto.parameter.ApplicationParametersResDto
@@ -23,8 +24,13 @@ interface ApiService {
     ): ResponseDto<LoginResDto>
 
     @POST("auth/register/local")
-    suspend fun register(
-        @Body request: RegistroReqDto
+    suspend fun registrarUsuarioLocal(
+        @Body request: UsuarioReqDto
+    ): ResponseDto<Unit>
+
+    @POST("auth/register/google")
+    suspend fun registrarUsuarioGoogle(
+        @Body request: UsuarioReqDto
     ): ResponseDto<Unit>
 
     @POST("auth/logout")

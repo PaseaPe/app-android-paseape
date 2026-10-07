@@ -1,10 +1,14 @@
 package com.example.paseape.data.repository
 
+import com.example.paseape.core.util.AppConstants
 import com.example.paseape.data.local.session.SessionManager
 import com.example.paseape.data.remote.api.ApiService
 import com.example.paseape.data.remote.dto.auth.LoginReqDto
 import com.example.paseape.data.remote.dto.auth.LoginResDto
 import com.example.paseape.data.remote.dto.auth.RegistroReqDto
+import com.example.paseape.data.remote.mapper.toDto
+import com.example.paseape.domain.model.RegisterClientParams
+import com.example.paseape.domain.model.RegisterWalkerParams
 import com.example.paseape.domain.model.User
 import com.example.paseape.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
@@ -43,29 +47,33 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun register(
-        nombres: String,
-        apellidos: String,
-        correo: String,
-        contrasena: String,
-        tipoUsuarioId: Int
-    ): Result<Unit> {
-        return try {
-            val request = RegistroReqDto(
-                nombres = nombres.trim(),
-                apellidos = apellidos.trim(),
-                correo = correo.trim(),
-                contrasena = contrasena,
-                tipoUsuarioId = tipoUsuarioId
-            )
-            val response = apiService.register(request)
-            if (response.statusCode in 200..299 || response.code == "200" || response.message?.contains("éxito", ignoreCase = true) == true) {
-                Result.success(Unit)
+    override suspend fun registerClient(params: RegisterClientParams): Result<Unit> {
+        return runCatching {
+            val dto = params.toDto()
+            val response = if (params.idTokenGoogle != null) {
+                apiService.registrarUsuarioGoogle(dto)
             } else {
-                Result.failure(Exception(response.message ?: "Error al registrar usuario"))
+                apiService.registrarUsuarioLocal(dto)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+
+            if (response.code != AppConstants.CODE_SUCCESS) {
+                throw Exception(response.message)
+            }
+        }
+    }
+
+    override suspend fun registerWalker(params: RegisterWalkerParams): Result<Unit> {
+        return runCatching {
+            val dto = params.toDto()
+            val response = if (params.idTokenGoogle != null) {
+                apiService.registrarUsuarioGoogle(dto)
+            } else {
+                apiService.registrarUsuarioLocal(dto)
+            }
+
+            if (response.code != AppConstants.CODE_SUCCESS) {
+                throw Exception(response.message)
+            }
         }
     }
 
