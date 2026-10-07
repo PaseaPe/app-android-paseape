@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+}
+
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        FileInputStream(localFile).use { load(it) }
+    }
+}
+
+fun getBuildConfigString(propertyName: String, defaultValue: String): String {
+    val rawValue = localProperties.getProperty(propertyName)?.trim() ?: defaultValue
+    val cleaned = rawValue.removeSurrounding("\"")
+    return "\"$cleaned\""
 }
 
 android {
@@ -19,6 +35,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val baseUrl = getBuildConfigString("PASEAPE_BASE_URL", "http://10.0.2.2:7001/api-paseape/")
+        val googleWebClientId = getBuildConfigString("GOOGLE_WEB_CLIENT_ID", "TU_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com")
+
+        buildConfigField("String", "BASE_URL", baseUrl)
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId)
     }
 
     buildTypes {
@@ -39,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

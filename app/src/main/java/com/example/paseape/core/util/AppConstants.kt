@@ -1,7 +1,8 @@
 package com.example.paseape.core.util
 
 object AppConstants {
-    const val BASE_URL = "http://10.0.2.2:7001/api-paseape/"
+    val BASE_URL: String = AppConfig.baseUrl
+    val GOOGLE_WEB_CLIENT_ID: String = AppConfig.googleWebClientId
     const val PREFERENCES_NAME = "paseape_preferences"
     const val ROLE_CLIENTE = "CLIENTE"
     const val ROLE_PASEADOR = "PASEADOR"

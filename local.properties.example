@@ -1,0 +1,20 @@
+## Plantilla de configuración local para PaseaPe
+## Copia este archivo a 'local.properties' y ajusta tus valores locales:
+
+# sdk.dir=/Users/<tu-usuario>/Library/Android/sdk
+
+# ==============================================================================
+# CONFIGURACIÓN DE ENTORNO - PASEAPE MOBILE
+# ==============================================================================
+
+# Entorno Local (Emulador Android apuntando a máquina anfitriona):
+PASEAPE_BASE_URL="http://10.0.2.2:7001/api-paseape/"
+
+# Para pruebas en dispositivo físico (descomentar y reemplazar <TU_IP_LOCAL>):
+# PASEAPE_BASE_URL="http://192.168.1.X:7001/api-paseape/"
+
+# Entorno Cloud / Producción (Oracle Cloud Infrastructure - OCI):
+# PASEAPE_BASE_URL="https://api.paseape.com/api-paseape/"
+
+# Credenciales de Google Identity Services (Web Client ID generado en Google Cloud Console)
+GOOGLE_WEB_CLIENT_ID="TU_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
