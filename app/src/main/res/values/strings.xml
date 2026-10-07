@@ -59,4 +59,58 @@
     <string name="error_loading_walkers">No se pudieron cargar los paseadores</string>
     <string name="retry_button">Reintentar</string>
     <string name="view_action">Ver</string>
+
+    <!-- Google Register Screen -->
+    <string name="google_register_title">Registro con Google</string>
+    <string name="google_register_subtitle">Completa tu perfil para empezar en PaseaPe</string>
+    <string name="google_account_linked">Cuenta de Google vinculada</string>
+    <string name="google_btn_sign_in">Vincular cuenta con Google</string>
+    <string name="select_role_prompt">Selecciona tu tipo de cuenta</string>
+    <string name="role_client">Cliente (Dueño)</string>
+    <string name="role_walker">Paseador</string>
+
+    <!-- Formulario Común -->
+    <string name="phone_label">Teléfono / Celular</string>
+    <string name="address_reference_label">Dirección de referencia</string>
+    <string name="district_label">Distrito</string>
+    <string name="emergency_contact_name_label">Contacto de emergencia (Nombre)</string>
+    <string name="emergency_contact_phone_label">Contacto de emergencia (Teléfono)</string>
+    <string name="additional_notes_label">Notas adicionales</string>
+
+    <!-- Formulario Paseador -->
+    <string name="doc_type_label">Tipo de documento</string>
+    <string name="doc_number_label">Número de documento</string>
+    <string name="experience_years_label">Años de experiencia</string>
+    <string name="hourly_rate_label">Tarifa por hora (S/)</string>
+    <string name="coverage_district_label">Distrito de cobertura</string>
+    <string name="biography_label">Biografía / Presentación</string>
+    <string name="police_records_url_label">URL de antecedentes policiales</string>
+
+    <!-- Sección Mascotas (Cliente) -->
+    <string name="pet_question_title">¿Deseas registrar a tus mascotas ahora?</string>
+    <string name="pet_question_yes">Sí, registrar mascotas</string>
+    <string name="pet_question_skip">Omitir por ahora</string>
+    <string name="pet_section_title">Mis Mascotas</string>
+    <string name="pet_add_button">+ Agregar Mascota</string>
+    <string name="pet_remove_button">Eliminar Mascota</string>
+    <string name="pet_name_label">Nombre de la mascota</string>
+    <string name="pet_type_label">Tipo de mascota</string>
+    <string name="pet_breed_label">Raza</string>
+    <string name="pet_gender_label">Género</string>
+    <string name="pet_size_label">Tamaño</string>
+    <string name="pet_energy_label">Nivel de energía</string>
+    <string name="pet_age_years_label">Años</string>
+    <string name="pet_age_months_label">Meses</string>
+    <string name="pet_weight_label">Peso (kg)</string>
+    <string name="pet_sterilized_label">Esterilizado</string>
+    <string name="pet_sociable_dogs_label">Sociable con perros</string>
+    <string name="pet_sociable_humans_label">Sociable con personas</string>
+    <string name="pet_medical_notes_label">Precauciones médicas</string>
+    <string name="option_yes">Sí</string>
+    <string name="option_no">No</string>
+
+    <!-- Acciones -->
+    <string name="btn_complete_registration">Completar Registro</string>
+    <string name="error_fill_required_fields">Por favor completa todos los campos obligatorios</string>
+    <string name="error_google_token_missing">Debes autenticarte con Google antes de continuar</string>
 </resources>

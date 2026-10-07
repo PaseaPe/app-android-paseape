@@ -15,41 +15,29 @@ class ParameterRepositoryImpl @Inject constructor(
 ) : ParameterRepository {
 
     override suspend fun getApplicationParameters(): Result<ApplicationParameters> {
-        return try {
+        return runCatching {
             val response = apiService.getApplicationParameters()
-            val data = response.response
-            if (data != null) {
-                Result.success(data.toDomain())
-            } else {
-                Result.failure(Exception(response.message ?: "No se obtuvieron parámetros"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
+            val data = response.response ?: throw Exception(response.message ?: "Error al obtener parámetros")
+            data.toDomain()
         }
     }
 
     override suspend fun getRazasByTipo(tipoMascotaId: Int): Result<List<CatalogItem>> {
-        return try {
+        return runCatching {
             val response = apiService.getRazasByTipo(tipoMascotaId)
-            val list = response.response.orEmpty().map { it.toDomain() }
-            Result.success(list)
-        } catch (e: Exception) {
-            Result.failure(e)
+            response.response.orEmpty().map { it.toDomain() }
         }
     }
 
-    private fun ParameterItemDto.toDomain(): CatalogItem {
-        return CatalogItem(
-            id = this.id,
-            descripcion = this.descripcion
-        )
-    }
+    private fun ParameterItemDto.toDomain(): CatalogItem = CatalogItem(id = this.id, descripcion = this.descripcion)
 
-    private fun ApplicationParametersResDto.toDomain(): ApplicationParameters {
-        return ApplicationParameters(
-            tiposMascota = this.tiposMascota.map { it.toDomain() },
-            distritos = this.distritos.map { it.toDomain() },
-            tiposUsuario = this.tiposUsuario.map { it.toDomain() }
-        )
-    }
+    private fun ApplicationParametersResDto.toDomain(): ApplicationParameters = ApplicationParameters(
+        tiposMascota = this.tiposMascota.map { it.toDomain() },
+        distritos = this.distritos.map { it.toDomain() },
+        tiposUsuario = this.tiposUsuario.map { it.toDomain() },
+        tiposDocumento = this.tiposDocumento.map { it.toDomain() },
+        generosMascota = this.generosMascota.map { it.toDomain() },
+        tamanosMascota = this.tamanosMascota.map { it.toDomain() },
+        nivelesEnergia = this.nivelesEnergia.map { it.toDomain() }
+    )
 }

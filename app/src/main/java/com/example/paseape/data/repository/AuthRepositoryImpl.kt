@@ -8,6 +8,8 @@ import com.example.paseape.data.remote.dto.auth.LoginResDto
 import com.example.paseape.data.remote.dto.auth.RegistroReqDto
 import com.example.paseape.data.remote.mapper.toDto
 import com.example.paseape.domain.model.RegisterClientParams
+import com.example.paseape.domain.model.RegisterGoogleClientParams
+import com.example.paseape.domain.model.RegisterGoogleWalkerParams
 import com.example.paseape.domain.model.RegisterWalkerParams
 import com.example.paseape.domain.model.User
 import com.example.paseape.domain.repository.AuthRepository
@@ -89,6 +91,26 @@ class AuthRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             sessionManager.clearSession()
             Result.failure(e)
+        }
+    }
+
+    override suspend fun registerGoogleClient(params: RegisterGoogleClientParams): Result<Unit> {
+        return runCatching {
+            val dto = params.toDto()
+            val response = apiService.registrarUsuarioGoogle(dto)
+            if (response.code != AppConstants.CODE_SUCCESS) {
+                throw Exception(response.message ?: "Error al registrar cliente con Google")
+            }
+        }
+    }
+
+    override suspend fun registerGoogleWalker(params: RegisterGoogleWalkerParams): Result<Unit> {
+        return runCatching {
+            val dto = params.toDto()
+            val response = apiService.registrarUsuarioGoogle(dto)
+            if (response.code != AppConstants.CODE_SUCCESS) {
+                throw Exception(response.message ?: "Error al registrar paseador con Google")
+            }
         }
     }
 

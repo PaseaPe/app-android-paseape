@@ -21,11 +21,11 @@ data class UsuarioReqDto(
 
     // Datos Personales Comunes
     @SerialName("nombres")
-    val nombres: String,
+    val nombres: String? = null,
     @SerialName("apellidos")
-    val apellidos: String,
+    val apellidos: String? = null,
     @SerialName("correo")
-    val correo: String,
+    val correo: String? = null,
     @SerialName("telefono")
     val telefono: String? = null,
     @SerialName("foto_perfil_url")

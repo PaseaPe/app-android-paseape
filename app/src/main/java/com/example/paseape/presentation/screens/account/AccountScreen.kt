@@ -34,7 +34,8 @@ import com.example.paseape.presentation.theme.PrimaryDark
 
 @Composable
 fun AccountScreen(
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onNavigateToGoogleRegister: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -91,20 +92,20 @@ fun AccountScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = onNavigateToLogin,
+                    onClick = onNavigateToGoogleRegister,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface)
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.continue_google),
-                        color = PrimaryDark,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    )
-                }
+        .fillMaxWidth()
+        .height(52.dp),
+    shape = RoundedCornerShape(26.dp),
+    colors = ButtonDefaults.buttonColors(containerColor = CardSurface)
+) {
+    Text(
+        text = stringResource(id = R.string.continue_google),
+        color = PrimaryDark,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp
+    )
+}
 
                 Spacer(modifier = Modifier.height(12.dp))
 

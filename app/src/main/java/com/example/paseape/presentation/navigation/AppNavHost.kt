@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.paseape.presentation.screens.account.AccountScreen
 import com.example.paseape.presentation.screens.auth.LoginScreen
+import com.example.paseape.presentation.screens.auth.google.GoogleRegisterScreen
 import com.example.paseape.presentation.screens.dashboard.DashboardScreen
 import com.example.paseape.presentation.screens.paseadores.PaseadoresScreen
 import com.example.paseape.presentation.screens.splash.SplashScreen
@@ -36,6 +37,9 @@ fun AppNavHost(
             AccountScreen(
                 onNavigateToLogin = {
                     navController.navigate(ScreenRoute.LoginRoute)
+                },
+                onNavigateToGoogleRegister = {
+                    navController.navigate(ScreenRoute.GoogleRegisterRoute)
                 }
             )
         }
@@ -65,6 +69,17 @@ fun AppNavHost(
             PaseadoresScreen(
                 onBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable<ScreenRoute.GoogleRegisterRoute> {
+            GoogleRegisterScreen(
+                onBack = { navController.popBackStack() },
+                onRegistrationSuccess = {
+                    navController.navigate(ScreenRoute.DashboardRoute) {
+                        popUpTo<ScreenRoute.AccountRoute> { inclusive = true }
+                    }
                 }
             )
         }

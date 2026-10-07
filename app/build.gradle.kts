@@ -109,6 +109,7 @@ dependencies {
     // Credentials API
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.id)
 
     // Testing
     testImplementation(libs.junit)
