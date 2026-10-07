@@ -25,5 +25,9 @@ data class RegisterPetParams(
     val edadAnos: Int,
     val edadMeses: Int,
     val pesoKg: Double,
-    val esterilizado: Boolean
+    val esterilizado: Boolean,
+    val sociableConPerros: Boolean = true,
+    val sociableConPersonas: Boolean = true,
+    val precaucionesMedicas: String? = null,
+    val fotoUrl: String? = null
 )

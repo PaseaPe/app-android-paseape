@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.paseape.presentation.screens.account.AccountScreen
 import com.example.paseape.presentation.screens.auth.LoginScreen
 import com.example.paseape.presentation.screens.auth.google.GoogleRegisterScreen
+import com.example.paseape.presentation.screens.auth.register.RegisterScreen
 import com.example.paseape.presentation.screens.dashboard.DashboardScreen
 import com.example.paseape.presentation.screens.paseadores.PaseadoresScreen
 import com.example.paseape.presentation.screens.splash.SplashScreen
@@ -32,7 +33,6 @@ fun AppNavHost(
                 }
             )
         }
-
         composable<ScreenRoute.AccountRoute> {
             AccountScreen(
                 onNavigateToLogin = {
@@ -43,7 +43,6 @@ fun AppNavHost(
                 }
             )
         }
-
         composable<ScreenRoute.LoginRoute> {
             LoginScreen(
                 onLoginSuccess = {
@@ -52,27 +51,25 @@ fun AppNavHost(
                     }
                 },
                 onNavigateToRegister = {
-                    // Navegación a pantalla de registro futuro
+                    navController.navigate(ScreenRoute.RegisterRoute)
                 }
             )
         }
-
-        composable<ScreenRoute.DashboardRoute> {
-            DashboardScreen(
-                onPaseadoresClick = {
-                    navController.navigate(ScreenRoute.PaseadoresRoute)
+        composable<ScreenRoute.RegisterRoute> {
+            RegisterScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToLogin = {
+                    navController.navigate(ScreenRoute.LoginRoute) {
+                        popUpTo<ScreenRoute.RegisterRoute> { inclusive = true }
+                    }
+                },
+                onRegistrationSuccess = {
+                    navController.navigate(ScreenRoute.LoginRoute) {
+                        popUpTo<ScreenRoute.AccountRoute> { inclusive = false }
+                    }
                 }
             )
         }
-
-        composable<ScreenRoute.PaseadoresRoute> {
-            PaseadoresScreen(
-                onBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
-
         composable<ScreenRoute.GoogleRegisterRoute> {
             GoogleRegisterScreen(
                 onBack = { navController.popBackStack() },
@@ -80,6 +77,20 @@ fun AppNavHost(
                     navController.navigate(ScreenRoute.DashboardRoute) {
                         popUpTo<ScreenRoute.AccountRoute> { inclusive = true }
                     }
+                }
+            )
+        }
+        composable<ScreenRoute.DashboardRoute> {
+            DashboardScreen(
+                onPaseadoresClick = {
+                    navController.navigate(ScreenRoute.PaseadoresRoute)
+                }
+            )
+        }
+        composable<ScreenRoute.PaseadoresRoute> {
+            PaseadoresScreen(
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }

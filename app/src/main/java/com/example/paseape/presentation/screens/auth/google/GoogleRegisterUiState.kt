@@ -19,6 +19,7 @@ data class PetFormState(
     val sociableConPerros: Boolean = true,
     val sociableConPersonas: Boolean = true,
     val precaucionesMedicas: String = "",
+    val fotoUrl: String = "",
     val availableRazas: List<CatalogItem> = emptyList(),
     val isLoadingRazas: Boolean = false
 )

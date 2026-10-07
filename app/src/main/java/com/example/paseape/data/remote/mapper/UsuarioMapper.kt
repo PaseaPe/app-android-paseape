@@ -10,7 +10,7 @@ import com.example.paseape.domain.model.RegisterPetParams
 import com.example.paseape.domain.model.RegisterWalkerParams
 
 fun RegisterPetParams.toDto(): MascotaReqDto = MascotaReqDto(
-    nombre = nombre,
+    nombre = nombre.trim(),
     tipoMascotaId = tipoMascotaId,
     tipoRazaId = tipoRazaId,
     tipoGeneroMascotaId = tipoGeneroMascotaId,
@@ -19,7 +19,11 @@ fun RegisterPetParams.toDto(): MascotaReqDto = MascotaReqDto(
     edadAnos = edadAnos,
     edadMeses = edadMeses,
     pesoKg = pesoKg,
-    esterilizado = if (esterilizado) 1 else 0
+    esterilizado = if (esterilizado) 1 else 0,
+    sociableConPerros = if (sociableConPerros) 1 else 0,
+    sociableConPersonas = if (sociableConPersonas) 1 else 0,
+    precaucionesMedicas = precaucionesMedicas?.trim()?.ifBlank { null },
+    fotoUrl = fotoUrl?.trim()?.ifBlank { null }
 )
 
 fun RegisterClientParams.toDto(tipoUsuarioId: Int = AppConstants.TIPO_USUARIO_CLIENTE_ID): UsuarioReqDto {
@@ -33,10 +37,10 @@ fun RegisterClientParams.toDto(tipoUsuarioId: Int = AppConstants.TIPO_USUARIO_CL
         telefono = telefono.trim(),
         direccionReferencia = direccionReferencia.trim(),
         distritoId = distritoId,
-        contactoEmergenciaNombre = contactoEmergenciaNombre?.trim(),
-        contactoEmergenciaTelefono = contactoEmergenciaTelefono?.trim(),
-        notasAdicionales = notasAdicionales?.trim(),
-        mascotas = mascotas.map { it.toDto() }
+        contactoEmergenciaNombre = contactoEmergenciaNombre?.trim()?.ifBlank { null },
+        contactoEmergenciaTelefono = contactoEmergenciaTelefono?.trim()?.ifBlank { null },
+        notasAdicionales = notasAdicionales?.trim()?.ifBlank { null },
+        mascotas = if (mascotas.isNotEmpty()) mascotas.map { it.toDto() } else null
     )
 }
 
@@ -51,6 +55,7 @@ fun RegisterWalkerParams.toDto(tipoUsuarioId: Int = AppConstants.TIPO_USUARIO_PA
         telefono = telefono.trim(),
         tipoDocumentoId = tipoDocumentoId,
         numeroDocumento = numeroDocumento.trim(),
+        antecedentesPolicialesUrl = antecedentesPolicialesUrl?.trim()?.ifBlank { null },
         experienciaAnos = experienciaAnos,
         biografia = biografia.trim(),
         tarifaHoraPen = tarifaHoraPen,

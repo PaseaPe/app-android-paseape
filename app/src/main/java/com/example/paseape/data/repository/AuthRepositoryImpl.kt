@@ -5,7 +5,6 @@ import com.example.paseape.data.local.session.SessionManager
 import com.example.paseape.data.remote.api.ApiService
 import com.example.paseape.data.remote.dto.auth.LoginReqDto
 import com.example.paseape.data.remote.dto.auth.LoginResDto
-import com.example.paseape.data.remote.dto.auth.RegistroReqDto
 import com.example.paseape.data.remote.mapper.toDto
 import com.example.paseape.domain.model.RegisterClientParams
 import com.example.paseape.domain.model.RegisterGoogleClientParams

@@ -113,4 +113,20 @@
     <string name="btn_complete_registration">Completar Registro</string>
     <string name="error_fill_required_fields">Por favor completa todos los campos obligatorios</string>
     <string name="error_google_token_missing">Debes autenticarte con Google antes de continuar</string>
+
+    <!-- Formulario Registro Local -->
+    <string name="register_title">Crear Cuenta</string>
+    <string name="register_subtitle">Únete a la comunidad de PaseaPe</string>
+    <string name="first_name_label">Nombres</string>
+    <string name="last_name_label">Apellidos</string>
+    <string name="confirm_password_label">Confirmar Contraseña</string>
+    <string name="password_mismatch_error">Las contraseñas no coinciden</string>
+    <string name="invalid_email_error">Correo electrónico inválido</string>
+    <string name="invalid_password_error">Mínimo 6 caracteres</string>
+    <string name="required_field_error">Este campo es obligatorio</string>
+    <string name="already_have_account_prompt">¿Ya tienes una cuenta?</string>
+    <string name="login_action">Inicia Sesión</string>
+    <string name="btn_register_submit">Registrarse</string>
+    <string name="pet_photo_url_label">URL de foto de la mascota</string>
+    <string name="pet_item_title">Mascota #%1$d</string>
 </resources>

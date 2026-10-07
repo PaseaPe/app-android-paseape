@@ -2,7 +2,6 @@ package com.example.paseape.data.remote.api
 
 import com.example.paseape.data.remote.dto.auth.LoginReqDto
 import com.example.paseape.data.remote.dto.auth.LoginResDto
-import com.example.paseape.data.remote.dto.auth.RegistroReqDto
 import com.example.paseape.data.remote.dto.auth.UsuarioReqDto
 import com.example.paseape.data.remote.dto.common.ResponseDto
 import com.example.paseape.data.remote.dto.mascota.MascotaReqDto

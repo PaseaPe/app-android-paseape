@@ -13,6 +13,9 @@ sealed interface ScreenRoute {
     data object LoginRoute : ScreenRoute
 
     @Serializable
+    data object RegisterRoute : ScreenRoute
+
+    @Serializable
     data object GoogleRegisterRoute : ScreenRoute
 
     @Serializable
