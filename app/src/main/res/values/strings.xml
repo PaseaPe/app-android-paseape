@@ -1,3 +1,62 @@
 <resources>
     <string name="app_name">PaseaPE</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_logo_paseape">Logo PaseaPE</string>
+    <string name="cd_menu">Menú</string>
+    <string name="cd_notifications">Notificaciones</string>
+    <string name="cd_search">Buscar</string>
+    <string name="cd_categories">Categorías</string>
+    <string name="cd_back">Regresar</string>
+    <string name="cd_rating">Calificación</string>
+    <string name="cd_location">Ubicación</string>
+    <string name="cd_view_walkers">Ver paseadores</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_tagline">Paseos seguros en Lima</string>
+
+    <!-- Account Screen -->
+    <string name="account_tagline">Encuentra paseadores de confianza en tu distrito de Lima</string>
+    <string name="already_have_account">¿Ya tienes una cuenta?</string>
+    <string name="continue_google">Continuar con Google</string>
+    <string name="continue_apple">Continuar con Apple</string>
+    <string name="terms_notice">Al continuar, aceptas nuestros Términos de Servicio y Políticas de Privacidad.</string>
+
+    <!-- Login Screen -->
+    <string name="welcome_back">Bienvenido de nuevo</string>
+    <string name="enter_credentials">Ingresa tus datos para continuar</string>
+    <string name="email_label">Correo electrónico</string>
+    <string name="password_label">Contraseña</string>
+    <string name="login_button">Iniciar Sesión</string>
+    <string name="no_account">¿No tienes una cuenta?</string>
+    <string name="register_action">Regístrate</string>
+
+    <!-- Dashboard Screen -->
+    <string name="search_services">Buscar servicios</string>
+    <string name="find_walker_hero">Encuentra un paseador</string>
+    <string name="near_you">cerca de ti</string>
+    <string name="walker_verified_desc">Paseadores verificados listos para cuidar a tu mascota.</string>
+    <string name="search_now">Buscar ahora</string>
+    <string name="recommendation_title">Recomendación para ti</string>
+    <string name="recommendation_subtitle">Encuentra el paseo ideal para tu mascota</string>
+    <string name="recommended_for_you">Recomendado para ti</string>
+    <string name="see_all">Ver todo</string>
+    <string name="individual_walk">Paseo individual</string>
+    <string name="individual_walk_desc">Paseo para tu mascota</string>
+    <string name="group_walk">Paseo grupal</string>
+    <string name="group_walk_desc">Diversión y compañía</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_walkers">Paseadores</string>
+    <string name="nav_walks">Mis Paseos</string>
+    <string name="nav_profile">Perfil</string>
+
+    <!-- Walkers Screen -->
+    <string name="walkers_title">Paseadores</string>
+    <string name="walkers_subtitle">Encuentra el paseador ideal</string>
+    <string name="search_walker_placeholder">Buscar por nombre o distrito</string>
+    <string name="error_loading_walkers">No se pudieron cargar los paseadores</string>
+    <string name="retry_button">Reintentar</string>
+    <string name="view_action">Ver</string>
 </resources>
