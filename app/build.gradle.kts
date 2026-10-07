@@ -54,4 +54,16 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-gson:3.0.0")
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
+
+    // Red y APIs (Retrofit y Gson corregidos a versión estable)
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+
+    // Iconos extendidos de Compose
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
+
+    // Credential Manager para Google Sign-In
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }

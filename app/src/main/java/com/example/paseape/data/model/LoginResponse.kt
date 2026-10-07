@@ -3,14 +3,16 @@ package com.example.paseape.data.model
 data class LoginResponse(
     val success: Boolean,
     val message: String,
-    val usuario: Usuario? = null
+    val token: String?, // Token JWT para autorización
+    val usuario: UsuarioLogin?
 )
 
-data class Usuario(
-    val idusuario: Int,
-    val nombre: String,
-    val apellido: String,
-    val email: String,
-    val rol: String,
-    val foto_perfil: String?
+data class UsuarioLogin(
+    val id: Int,
+    val uuid: String,
+    val nombres: String,
+    val apellidos: String,
+    val correo: String,
+    val tipo_usuario_id: Int,
+    val foto_perfil_url: String?
 )

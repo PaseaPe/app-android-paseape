@@ -2,6 +2,7 @@ package com.example.paseape
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -14,16 +15,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.example.paseape.data.model.GoogleAuthReq
+import com.example.paseape.data.model.LoginRequest
+import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
+import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
-import com.example.paseape.ui.theme.PrimaryOrange
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,10 +44,16 @@ class LoginActivity : ComponentActivity() {
         setContent {
             PaseaPETheme {
                 LoginContent(
-                    onLoginSuccess = {
-                        val intent = Intent(this, DashboardActivity::class.java)
+                    onLoginSuccess = { role ->
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            putExtra("USER_ROLE", role)
+                        }
                         startActivity(intent)
                         finish()
+                    },
+                    onNavigateToRegister = {
+                        val intent = Intent(this, RegisterActivity::class.java)
+                        startActivity(intent)
                     }
                 )
             }
@@ -43,9 +62,81 @@ class LoginActivity : ComponentActivity() {
 }
 
 @Composable
-fun LoginContent(onLoginSuccess: () -> Unit) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+fun LoginContent(
+    onLoginSuccess: (Int) -> Unit,
+    onNavigateToRegister: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var showRoleDialog by remember { mutableStateOf(false) }
+
+    fun launchGoogleLoginFlow(selectedRole: Int) {
+        if (isLoading) return
+        isLoading = true
+
+        coroutineScope.launch {
+            try {
+                val credentialManager = CredentialManager.create(context)
+                val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
+
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(serverClientId)
+                    .setAutoSelectEnabled(false)
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result: GetCredentialResponse = credentialManager.getCredential(
+                    context = context,
+                    request = request
+                )
+
+                val credential = result.credential
+                if (credential is androidx.credentials.CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    val idToken = googleIdTokenCredential.idToken
+
+                    val googleRequest = GoogleAuthReq(
+                        idToken = idToken,
+                        selectedRole = selectedRole
+                    )
+
+                    val response = withContext(Dispatchers.IO) {
+                        RetrofitClient.api.loginWithGoogle(googleRequest)
+                    }
+
+                    // Aseguramos que la UI reaccione limpiamente
+                    isLoading = false
+                    if (response.success) {
+                        Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
+                        onLoginSuccess(selectedRole)
+                    } else {
+                        Toast.makeText(context, response.message, Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    isLoading = false
+                    Toast.makeText(context, "Tipo de credencial no soportado", Toast.LENGTH_SHORT).show()
+                }
+
+            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                isLoading = false
+                android.util.Log.e("GOOGLE_AUTH_ERROR", "Cancelado por el usuario", e)
+            } catch (e: Exception) {
+                isLoading = false
+                android.util.Log.e("GOOGLE_AUTH_ERROR", "Excepción general", e)
+                Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -64,21 +155,18 @@ fun LoginContent(onLoginSuccess: () -> Unit) {
                 Image(
                     painter = painterResource(id = R.drawable.perritologoapp),
                     contentDescription = "Logo PaseaPE",
-                    modifier = Modifier.size(120.dp)
+                    modifier = Modifier.size(100.dp)
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Bienvenido de nuevo",
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryDark
                 )
-
                 Text(
-                    text = "Ingresa tus datos para continuar",
-                    fontSize = 14.sp,
+                    text = "Ingresa tus datos o continúa con Google",
+                    fontSize = 13.sp,
                     color = Color.Gray
                 )
             }
@@ -88,8 +176,8 @@ fun LoginContent(onLoginSuccess: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
                     label = { Text("Correo electrónico") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -101,11 +189,11 @@ fun LoginContent(onLoginSuccess: () -> Unit) {
                     )
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
                     label = { Text("Contraseña") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
@@ -118,43 +206,125 @@ fun LoginContent(onLoginSuccess: () -> Unit) {
                     )
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
-                    onClick = { onLoginSuccess() },
+                    onClick = {
+                        if (emailInput.isBlank() || passwordInput.isBlank()) {
+                            Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        if (isLoading) return@Button
+                        isLoading = true
+
+                        coroutineScope.launch {
+                            try {
+                                val request = LoginRequest(
+                                    correo = emailInput,
+                                    contrasena = passwordInput
+                                )
+
+                                val response = withContext(Dispatchers.IO) {
+                                    RetrofitClient.api.iniciarSesion(request)
+                                }
+
+                                isLoading = false
+                                if (response.success) {
+                                    Toast.makeText(context, "¡Bienvenido!", Toast.LENGTH_SHORT).show()
+                                    onLoginSuccess(1)
+                                } else {
+                                    Toast.makeText(context, response.message, Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                isLoading = false
+                                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text(text = "Iniciar Sesión", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = "o", color = Color.Gray, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = { showRoleDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+                    enabled = !isLoading
                 ) {
                     Text(
-                        text = "Iniciar Sesión",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        text = "Continuar con Google",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PrimaryDark
                     )
                 }
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Text(
-                    text = "¿No tienes una cuenta?",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-                TextButton(onClick = { /* Registro */ }) {
-                    Text(
-                        text = "Regístrate",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryDark
-                    )
+                Text(text = "¿No tienes una cuenta?", fontSize = 13.sp, color = Color.Gray)
+                TextButton(onClick = { onNavigateToRegister() }) {
+                    Text(text = "Regístrate", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PrimaryDark)
                 }
             }
         }
+    }
+
+    if (showRoleDialog) {
+        AlertDialog(
+            onDismissRequest = { showRoleDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = Color.White,
+            title = {
+                Text(text = "¿Cómo deseas ingresar?", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = PrimaryDark)
+            },
+            text = {
+                Text(text = "Selecciona el tipo de cuenta para tu perfil en PaseaPE:", fontSize = 14.sp, color = Color.DarkGray)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRoleDialog = false
+                        launchGoogleLoginFlow(selectedRole = 1)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
+                ) {
+                    Text("Cliente (Dueño)", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showRoleDialog = false
+                        launchGoogleLoginFlow(selectedRole = 2)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryDark)
+                ) {
+                    Text("Paseador")
+                }
+            }
+        )
     }
 }

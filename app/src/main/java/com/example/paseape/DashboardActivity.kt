@@ -44,14 +44,19 @@ class DashboardActivity : ComponentActivity() {
 
         setContent {
             PaseaPETheme {
-
                 DashboardContent(
                     onPaseadoresClick = {
                         val intent = Intent(
                             this@DashboardActivity,
                             PaseadoresActivity::class.java
                         )
-
+                        startActivity(intent)
+                    },
+                    onAdminClick = {
+                        val intent = Intent(
+                            this@DashboardActivity,
+                            AdminActivity::class.java
+                        )
                         startActivity(intent)
                     }
                 )
@@ -62,7 +67,8 @@ class DashboardActivity : ComponentActivity() {
 
 @Composable
 fun DashboardContent(
-    onPaseadoresClick: () -> Unit
+    onPaseadoresClick: () -> Unit,
+    onAdminClick: () -> Unit
 ) {
 
     Column(
@@ -81,8 +87,8 @@ fun DashboardContent(
             Spacer(modifier = Modifier.height(30.dp))
 
             // -------------------------
-// CABECERA
-// -------------------------
+            // CABECERA
+            // -------------------------
 
             Row(
                 modifier = Modifier
@@ -112,8 +118,8 @@ fun DashboardContent(
                             id = R.drawable.perritologoapp
                         ),
                         contentDescription = "Logo PaseaPE",
-                        modifier = Modifier.height(48.dp), // Ajuste de altura
-                        contentScale = ContentScale.Fit     // Mantiene la proporción correcta del vector/png
+                        modifier = Modifier.height(48.dp),
+                        contentScale = ContentScale.Fit
                     )
                 }
 
@@ -172,17 +178,14 @@ fun DashboardContent(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-
                 CategoryChip(
                     text = "Paseo",
                     selected = true
                 )
-
                 CategoryChip(
                     text = "Cuidado",
                     selected = false
                 )
-
                 CategoryChip(
                     text = "Adiestramiento",
                     selected = false
@@ -227,7 +230,6 @@ fun DashboardContent(
                 ) {
 
                     Column {
-
                         Text(
                             text = "Encuentra un paseador",
                             color = Color.White,
@@ -249,10 +251,6 @@ fun DashboardContent(
                         )
                     }
 
-                    // -------------------------
-                    // BOTÓN BUSCAR AHORA
-                    // -------------------------
-
                     Button(
                         onClick = onPaseadoresClick,
                         modifier = Modifier
@@ -264,7 +262,6 @@ fun DashboardContent(
                         ),
                         contentPadding = PaddingValues(4.dp)
                     ) {
-
                         Text(
                             text = "Buscar ahora",
                             fontSize = 11.sp,
@@ -287,14 +284,12 @@ fun DashboardContent(
                     containerColor = Color.White
                 )
             ) {
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -304,7 +299,6 @@ fun DashboardContent(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-
                         Text(
                             text = "🐾",
                             fontSize = 20.sp
@@ -316,7 +310,6 @@ fun DashboardContent(
                     Column(
                         modifier = Modifier.weight(1f)
                     ) {
-
                         Text(
                             text = "Recomendación para ti",
                             fontSize = 13.sp,
@@ -334,7 +327,6 @@ fun DashboardContent(
                     IconButton(
                         onClick = onPaseadoresClick
                     ) {
-
                         Icon(
                             imageVector = Icons.Default.ArrowForward,
                             contentDescription = "Ver paseadores",
@@ -355,7 +347,6 @@ fun DashboardContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
                 Text(
                     text = "Recomendado para ti",
                     fontSize = 17.sp,
@@ -366,7 +357,6 @@ fun DashboardContent(
                 TextButton(
                     onClick = onPaseadoresClick
                 ) {
-
                     Text(
                         text = "Ver todo",
                         fontSize = 12.sp,
@@ -381,7 +371,6 @@ fun DashboardContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-
                 RecommendedCard(
                     modifier = Modifier.weight(1f),
                     image = R.drawable.perrito3,
@@ -405,7 +394,8 @@ fun DashboardContent(
         // -------------------------
 
         BottomNavigationBar(
-            onPaseadoresClick = onPaseadoresClick
+            onPaseadoresClick = onPaseadoresClick,
+            onPerfilClick = onAdminClick
         )
     }
 }
@@ -420,25 +410,15 @@ fun CategoryChip(
     text: String,
     selected: Boolean
 ) {
-
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (selected) {
-            PrimaryDark
-        } else {
-            Color.White
-        },
+        color = if (selected) PrimaryDark else Color.White,
         modifier = Modifier.border(
             width = 1.dp,
-            color = if (selected) {
-                PrimaryDark
-            } else {
-                Color.LightGray
-            },
+            color = if (selected) PrimaryDark else Color.LightGray,
             shape = RoundedCornerShape(20.dp)
         )
     ) {
-
         Text(
             text = text,
             modifier = Modifier.padding(
@@ -446,11 +426,7 @@ fun CategoryChip(
                 vertical = 8.dp
             ),
             fontSize = 11.sp,
-            color = if (selected) {
-                Color.White
-            } else {
-                Color.DarkGray
-            }
+            color = if (selected) Color.White else Color.DarkGray
         )
     }
 }
@@ -467,7 +443,6 @@ fun RecommendedCard(
     title: String,
     description: String
 ) {
-
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
@@ -478,13 +453,9 @@ fun RecommendedCard(
             defaultElevation = 2.dp
         )
     ) {
-
         Column {
-
             Image(
-                painter = painterResource(
-                    id = image
-                ),
+                painter = painterResource(id = image),
                 contentDescription = title,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -495,7 +466,6 @@ fun RecommendedCard(
             Column(
                 modifier = Modifier.padding(8.dp)
             ) {
-
                 Text(
                     text = title,
                     fontSize = 12.sp,
@@ -522,15 +492,14 @@ fun RecommendedCard(
 
 @Composable
 fun BottomNavigationBar(
-    onPaseadoresClick: () -> Unit
+    onPaseadoresClick: () -> Unit,
+    onPerfilClick: () -> Unit
 ) {
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White,
         shadowElevation = 8.dp
     ) {
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -541,7 +510,6 @@ fun BottomNavigationBar(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-
             BottomItem(
                 icon = Icons.Default.Home,
                 text = "Inicio",
@@ -567,7 +535,7 @@ fun BottomNavigationBar(
                 icon = Icons.Default.Person,
                 text = "Perfil",
                 selected = false,
-                onClick = { }
+                onClick = onPerfilClick // <--- Aquí conectamos el click con AdminActivity
             )
         }
     }
@@ -585,22 +553,16 @@ fun BottomItem(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp)
     ) {
-
         Icon(
             imageVector = icon,
             contentDescription = text,
-            tint = if (selected) {
-                PrimaryDark
-            } else {
-                Color.Gray
-            },
+            tint = if (selected) PrimaryDark else Color.Gray,
             modifier = Modifier.size(21.dp)
         )
 
@@ -609,11 +571,7 @@ fun BottomItem(
         Text(
             text = text,
             fontSize = 9.sp,
-            color = if (selected) {
-                PrimaryDark
-            } else {
-                Color.Gray
-            }
+            color = if (selected) PrimaryDark else Color.Gray
         )
     }
 }

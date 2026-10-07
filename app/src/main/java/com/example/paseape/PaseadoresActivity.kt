@@ -5,17 +5,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,294 +31,153 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.paseape.data.model.Paseador
-import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
-import kotlinx.coroutines.launch
 
 class PaseadoresActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
             PaseaPETheme {
                 PaseadoresScreen(
-                    onBack = {
-                        finish()
-                    }
+                    onBackClick = { finish() }
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PaseadoresScreen(
-    onBack: () -> Unit
-) {
+fun PaseadoresScreen(onBackClick: () -> Unit) {
+    // Catálogo maestro de distritos de Lima según tu documentación oficial
+    val distritosLima = listOf("Todos", "Miraflores", "San Isidro", "Santiago de Surco", "San Borja", "Barranco", "Jesús María", "Magdalena del Mar", "Lince")
+    var distritoSeleccionado by remember { mutableStateOf("Todos") }
 
-    var textoBusqueda by remember {
-        mutableStateOf("")
-    }
-
-    var paseadores by remember {
-        mutableStateOf<List<Paseador>>(emptyList())
-    }
-
-    var cargando by remember {
-        mutableStateOf(true)
-    }
-
-    var error by remember {
-        mutableStateOf("")
-    }
-
-    val scope = rememberCoroutineScope()
-
-    // CARGAR PASEADORES DESDE PHP
-    LaunchedEffect(Unit) {
-
-        try {
-
-            val respuesta = RetrofitClient.api.obtenerPaseadores()
-
-            if (respuesta.success) {
-                paseadores = respuesta.paseadores
-            } else {
-                error = "No se pudieron cargar los paseadores"
-            }
-
-        } catch (e: Exception) {
-
-            error = "Error de conexión: ${e.message}"
-
-        } finally {
-
-            cargando = false
-        }
-    }
-
-    val paseadoresFiltrados = paseadores.filter {
-
-        val nombreCompleto =
-            "${it.nombre} ${it.apellido}"
-
-        nombreCompleto.contains(
-            textoBusqueda,
-            ignoreCase = true
-        ) ||
-                it.distrito.contains(
-                    textoBusqueda,
-                    ignoreCase = true
-                )
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
-    ) {
-
-        // CABECERA
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 20.dp,
-                    end = 20.dp,
-                    top = 20.dp,
-                    bottom = 12.dp
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            IconButton(
-                onClick = onBack
-            ) {
-
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Regresar",
-                    tint = PrimaryDark
-                )
-            }
-
-            Spacer(
-                modifier = Modifier.width(8.dp)
-            )
-
-            Column {
-
-                Text(
-                    text = "Paseadores",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryDark
-                )
-
-                Text(
-                    text = "Encuentra el paseador ideal",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-
-        // BUSCADOR
-
-        OutlinedTextField(
-            value = textoBusqueda,
-            onValueChange = {
-                textoBusqueda = it
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            placeholder = {
-                Text("Buscar por nombre o distrito")
-            },
-            leadingIcon = {
-
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Buscar"
-                )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(15.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = PrimaryDark,
-                unfocusedBorderColor = Color.LightGray
+    // Lista de prueba usando exactamente la estructura de tu modelo Paseador
+    val listaPaseadores = remember {
+        listOf(
+            Paseador(
+                id = 205,
+                uuid = "8e7d6c5b-4a3f-4e2d-7f6d-5e4c3b2a4a19",
+                nombres = "Mateo Sebastián",
+                apellidos = "Quispe Vargas",
+                correo = "mateo.quispe.v@gmail.com",
+                telefono = "+51912345678",
+                foto_perfil_url = null,
+                experiencia_anos = 4,
+                biografia = "Estudiante de medicina veterinaria en Lima. Experiencia de 4 años en adiestramiento positivo.",
+                tarifa_hora_pen = 25.00,
+                distrito_cobertura_id = 1,
+                distrito_nombre = "Miraflores",
+                paseador_estado_verificacion_id = 3, // 3 = Verificado
+                calificacion_promedio = 5.00,
+                paseos_completados = 12
+            ),
+            Paseador(
+                id = 206,
+                uuid = "9f8e7d6c-5b4a-3f1e-8e7d-6c5b4a3f2e1d",
+                nombres = "Lucía",
+                apellidos = "Fernández Ruiz",
+                correo = "lucia.fernandez@gmail.com",
+                telefono = "+51987654321",
+                foto_perfil_url = null,
+                experiencia_anos = 2,
+                biografia = "Cuidadora y paseadora canina en zonas residenciales.",
+                tarifa_hora_pen = 30.00,
+                distrito_cobertura_id = 2,
+                distrito_nombre = "San Isidro",
+                paseador_estado_verificacion_id = 2, // 2 = En revisión
+                calificacion_promedio = 4.80,
+                paseos_completados = 8
             )
         )
+    }
 
-        Spacer(
-            modifier = Modifier.height(18.dp)
-        )
+    val paseadoresFiltrados = if (distritoSeleccionado == "Todos") {
+        listaPaseadores
+    } else {
+        listaPaseadores.filter { it.distrito_nombre.equals(distritoSeleccionado, ignoreCase = true) }
+    }
 
-        if (cargando) {
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-
-                CircularProgressIndicator(
-                    color = PrimaryDark
-                )
-            }
-
-        } else if (error.isNotEmpty()) {
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(30.dp),
-                contentAlignment = Alignment.Center
-            ) {
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
                     Text(
-                        text = "No se pudieron cargar los paseadores",
+                        text = "Paseadores Verificados",
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryDark
                     )
-
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
-
-                    Text(
-                        text = error,
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(16.dp)
-                    )
-
-                    Button(
-                        onClick = {
-
-                            cargando = true
-                            error = ""
-
-                            scope.launch {
-
-                                try {
-
-                                    val respuesta =
-                                        RetrofitClient.api.obtenerPaseadores()
-
-                                    if (respuesta.success) {
-                                        paseadores =
-                                            respuesta.paseadores
-                                    } else {
-                                        error =
-                                            "No se pudieron cargar los paseadores"
-                                    }
-
-                                } catch (e: Exception) {
-
-                                    error =
-                                        "Error de conexión: ${e.message}"
-
-                                } finally {
-
-                                    cargando = false
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryDark
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Regresar",
+                            tint = PrimaryDark
                         )
-                    ) {
-
-                        Text("Reintentar")
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundOffWhite)
+            )
+        },
+        containerColor = BackgroundOffWhite
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FilterList,
+                    contentDescription = "Filtro",
+                    tint = PrimaryDark,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Cobertura por Distrito:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+            }
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                items(distritosLima) { distrito ->
+                    FilterChip(
+                        selected = distritoSeleccionado == distrito,
+                        onClick = { distritoSeleccionado = distrito },
+                        label = { Text(text = distrito, fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryDark,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.White,
+                            labelColor = Color.DarkGray
+                        )
+                    )
                 }
             }
 
-        } else {
-
-            Text(
-                text = "${paseadoresFiltrados.size} paseadores disponibles",
-                modifier = Modifier.padding(horizontal = 20.dp),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PrimaryDark
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 20.dp,
-                    end = 20.dp,
-                    bottom = 24.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
-
                 items(paseadoresFiltrados) { paseador ->
-
-                    PaseadorCard(
-                        paseador = paseador,
-                        onClick = {
-                            // Después abriremos el perfil
-                            // del paseador
-                        }
-                    )
+                    PaseadorDbCard(paseador = paseador)
                 }
             }
         }
@@ -323,143 +185,108 @@ fun PaseadoresScreen(
 }
 
 @Composable
-fun PaseadorCard(
-    paseador: Paseador,
-    onClick: () -> Unit
-) {
-
+fun PaseadorDbCard(paseador: Paseador) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable {
-                onClick()
-            },
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 3.dp
-        ),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        )
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            // FOTO
             Image(
-                painter = painterResource(
-                    id = R.drawable.iconpaseador
-                ),
-                contentDescription = "Foto de ${paseador.nombre}",
+                painter = painterResource(id = R.drawable.perrito3),
+                contentDescription = paseador.nombres,
                 modifier = Modifier
-                    .size(90.dp)
-                    .clip(CircleShape),
+                    .size(70.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, PrimaryDark, CircleShape),
                 contentScale = ContentScale.Crop
             )
 
-            Spacer(
-                modifier = Modifier.width(14.dp)
-            )
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-
-                Text(
-                    text = "${paseador.nombre} ${paseador.apellido}",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryDark
-                )
-
-                Spacer(
-                    modifier = Modifier.height(5.dp)
-                )
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Calificación",
-                        tint = Color(0xFFFFB300),
-                        modifier = Modifier.size(18.dp)
-                    )
-
-                    Spacer(
-                        modifier = Modifier.width(4.dp)
-                    )
-
                     Text(
-                        text = paseador.calificacion.toString(),
+                        text = "${paseador.nombres} ${paseador.apellidos}",
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark
                     )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Validación de paseador_estado_verificacion_id (3 = VERIFICADO)
+                    if (paseador.paseador_estado_verificacion_id == 3) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Verificado",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.HourglassEmpty,
+                            contentDescription = "En revisión",
+                            tint = Color(0xFFFF9800),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
+                Spacer(modifier = Modifier.height(2.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Ubicación",
+                        contentDescription = "Distrito",
                         tint = Color.Gray,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(12.dp)
                     )
-
-                    Spacer(
-                        modifier = Modifier.width(3.dp)
-                    )
-
+                    Spacer(modifier = Modifier.width(2.dp))
                     Text(
-                        text = paseador.distrito,
-                        fontSize = 13.sp,
+                        text = "Zona: ${paseador.distrito_nombre}",
+                        fontSize = 11.sp,
                         color = Color.Gray
                     )
                 }
 
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = "S/ ${paseador.tarifa_hora} por hora",
-                    fontSize = 12.sp,
-                    color = Color.Gray
+                    text = "${paseador.experiencia_anos} años de experiencia",
+                    fontSize = 10.sp,
+                    color = Color.DarkGray
                 )
-            }
 
-            Spacer(
-                modifier = Modifier.width(8.dp)
-            )
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Button(
-                onClick = onClick,
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryDark
-                ),
-                contentPadding = PaddingValues(
-                    horizontal = 14.dp
-                )
-            ) {
-
-                Text(
-                    text = "Ver",
-                    fontSize = 13.sp,
-                    color = Color.White
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Calificación",
+                        tint = Color(0xFFFFC107),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "${paseador.calificacion_promedio} • S/ ${paseador.tarifa_hora_pen} / hora",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.DarkGray
+                    )
+                }
             }
         }
     }

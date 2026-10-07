@@ -37,6 +37,12 @@
         <activity
             android:name=".PaseadoresActivity"
             android:exported="false" />
+        <activity
+            android:name=".AdminActivity"
+            android:exported="false" />
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false" />
 
 
     </application>

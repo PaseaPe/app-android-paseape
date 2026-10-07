@@ -9,7 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,7 +39,9 @@ class AccountActivity : ComponentActivity() {
 }
 
 @Composable
-fun AccountContent(onNavigateToLogin: () -> Unit) {
+fun AccountContent(
+    onNavigateToLogin: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -53,12 +55,12 @@ fun AccountContent(onNavigateToLogin: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Logo y descripción
+            // Logo y descripción de la app
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(
                     painter = painterResource(id = R.drawable.perritologoapp),
                     contentDescription = "Logo PaseaPE",
-                    modifier = Modifier.size(450.dp)
+                    modifier = Modifier.size(280.dp)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -73,60 +75,24 @@ fun AccountContent(onNavigateToLogin: () -> Unit) {
                 )
             }
 
-            // Opciones de registro
+            // Botón Siguiente para pasar al Login
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "¿Ya tienes una cuenta?",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                    TextButton(onClick = onNavigateToLogin) {
-                        Text(
-                            text = "Iniciar Sesión",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryDark
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
                 Button(
-                    onClick = { onNavigateToLogin() },
+                    onClick = onNavigateToLogin,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
                     shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface)
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
                 ) {
                     Text(
-                        text = "Continuar con Google",
-                        color = PrimaryDark,
+                        text = "Siguiente",
+                        color = Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = { onNavigateToLogin() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface)
-                ) {
-                    Text(
-                        text = "Continuar con Apple",
-                        color = PrimaryDark,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
+                        fontSize = 16.sp
                     )
                 }
 
