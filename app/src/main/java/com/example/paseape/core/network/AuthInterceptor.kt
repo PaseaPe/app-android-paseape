@@ -1,5 +1,6 @@
 package com.example.paseape.core.network
 
+import com.example.paseape.core.util.AppConstants
 import com.example.paseape.data.local.session.SessionManager
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
@@ -18,9 +19,7 @@ class AuthInterceptor @Inject constructor(
         val path = originalRequest.url.encodedPath
 
         // Rutas públicas que no requieren token
-        val isPublicEndpoint = path.contains("auth/login") ||
-                path.contains("auth/register") ||
-                path.contains("auth/reset-password")
+        val isPublicEndpoint = AppConstants.PUBLIC_ENDPOINTS.any { path.contains(it) }
 
         val token = if (!isPublicEndpoint) {
             runBlocking {

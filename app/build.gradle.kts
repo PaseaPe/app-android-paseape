@@ -1,4 +1,3 @@
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -10,18 +9,25 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Lectura segura de local.properties
 val localProperties = Properties().apply {
-    val localFile = rootProject.file("local.properties")
-    if (localFile.exists()) {
-        FileInputStream(localFile).use { load(it) }
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
     }
 }
 
-fun getBuildConfigString(propertyName: String, defaultValue: String): String {
-    val rawValue = localProperties.getProperty(propertyName)?.trim() ?: defaultValue
-    val cleaned = rawValue.removeSurrounding("\"")
-    return "\"$cleaned\""
-}
+val defaultBaseUrl = "http://10.0.2.2:7001/api-paseape/"
+val defaultGoogleClientId = ""
+
+val baseUrl = localProperties.getProperty("PASEAPE_BASE_URL")
+    ?.trim()
+    ?.removeSurrounding("\"")
+    ?.let { "\"$it\"" } ?: "\"$defaultBaseUrl\""
+val googleClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID")
+    ?.trim()
+    ?.removeSurrounding("\"")
+    ?.let { "\"$it\"" } ?: "\"$defaultGoogleClientId\""
 
 android {
     namespace = "com.example.paseape"
@@ -36,11 +42,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val baseUrl = getBuildConfigString("PASEAPE_BASE_URL", "http://10.0.2.2:7001/api-paseape/")
-        val googleWebClientId = getBuildConfigString("GOOGLE_WEB_CLIENT_ID", "TU_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com")
-
         buildConfigField("String", "BASE_URL", baseUrl)
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleWebClientId)
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", googleClientId)
     }
 
     buildTypes {

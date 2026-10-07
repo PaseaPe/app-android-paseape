@@ -1,7 +1,7 @@
 package com.example.paseape.core.di
 
 import com.example.paseape.core.network.AuthInterceptor
-import com.example.paseape.core.util.AppConstants
+import com.example.paseape.core.util.AppConfig
 import com.example.paseape.data.remote.api.ApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -65,7 +65,7 @@ object NetworkModule {
     ): Retrofit {
         val contentType = "application/json".toMediaType()
         return Retrofit.Builder()
-            .baseUrl(AppConstants.BASE_URL)
+            .baseUrl(AppConfig.baseUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
