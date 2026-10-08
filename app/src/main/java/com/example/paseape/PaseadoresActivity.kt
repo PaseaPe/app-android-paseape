@@ -40,14 +40,13 @@ class PaseadoresActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             PaseaPETheme {
-                PaseadoresScreen(
+                PaseadoresHomeScreen(
                     onBackClick = { finish() }
                 )
             }
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaseadoresScreen(onBackClick: () -> Unit) {

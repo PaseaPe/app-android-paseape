@@ -2,6 +2,7 @@ package com.example.paseape
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,10 +26,11 @@ import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.paseape.data.model.GoogleAuthReq
-import com.example.paseape.data.model.LoginRequest
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
@@ -74,6 +76,7 @@ fun LoginContent(
     var isLoading by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
 
+    // Flujo real de Google intacto para tus pruebas/conexion
     fun launchGoogleLoginFlow(selectedRole: Int) {
         if (isLoading) return
         isLoading = true
@@ -81,8 +84,9 @@ fun LoginContent(
         coroutineScope.launch {
             try {
                 val credentialManager = CredentialManager.create(context)
-                val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
 
+                // IMPORTANTE: Coloca aquí el Web Client ID de tu compañero
+                val serverClientId = "990768552615-m4ukkjgqvvam2h4t10blkfku8i87t9sc.apps.googleusercontent.com"
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)
                     .setServerClientId(serverClientId)
@@ -105,6 +109,8 @@ fun LoginContent(
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                     val idToken = googleIdTokenCredential.idToken
 
+                    Log.d("PaseaPE_Auth", "idToken obtenido exitosamente: $idToken")
+
                     val googleRequest = GoogleAuthReq(
                         idToken = idToken,
                         selectedRole = selectedRole
@@ -114,7 +120,6 @@ fun LoginContent(
                         RetrofitClient.api.loginWithGoogle(googleRequest)
                     }
 
-                    // Aseguramos que la UI reaccione limpiamente
                     isLoading = false
                     if (response.success) {
                         Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
@@ -127,13 +132,17 @@ fun LoginContent(
                     Toast.makeText(context, "Tipo de credencial no soportado", Toast.LENGTH_SHORT).show()
                 }
 
-            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+            } catch (e: GetCredentialCancellationException) {
                 isLoading = false
-                android.util.Log.e("GOOGLE_AUTH_ERROR", "Cancelado por el usuario", e)
+                Log.d("PaseaPE_Auth", "Selección de cuenta cancelada por el usuario")
+            } catch (e: GetCredentialException) {
+                isLoading = false
+                Log.e("PaseaPE_Auth", "Error en CredentialManager: ${e.type} - ${e.message}", e)
+                Toast.makeText(context, "Error Credenciales Google: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 isLoading = false
-                android.util.Log.e("GOOGLE_AUTH_ERROR", "Excepción general", e)
-                Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Log.e("PaseaPE_Auth", "Error durante el flujo de inicio de sesión", e)
+                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -208,52 +217,19 @@ fun LoginContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // BOTÓN INICIAR SESIÓN -> Pasa directo al Dashboard
                 Button(
                     onClick = {
-                        if (emailInput.isBlank() || passwordInput.isBlank()) {
-                            Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        if (isLoading) return@Button
-                        isLoading = true
-
-                        coroutineScope.launch {
-                            try {
-                                val request = LoginRequest(
-                                    correo = emailInput,
-                                    contrasena = passwordInput
-                                )
-
-                                val response = withContext(Dispatchers.IO) {
-                                    RetrofitClient.api.iniciarSesion(request)
-                                }
-
-                                isLoading = false
-                                if (response.success) {
-                                    Toast.makeText(context, "¡Bienvenido!", Toast.LENGTH_SHORT).show()
-                                    onLoginSuccess(1)
-                                } else {
-                                    Toast.makeText(context, response.message, Toast.LENGTH_LONG).show()
-                                }
-                            } catch (e: Exception) {
-                                isLoading = false
-                                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-                            }
-                        }
+                        Toast.makeText(context, "Ingreso directo", Toast.LENGTH_SHORT).show()
+                        onLoginSuccess(1) // Pasa rol 1 (Cliente)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
-                    enabled = !isLoading
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
-                    } else {
-                        Text(text = "Iniciar Sesión", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
+                    Text(text = "Iniciar Sesión", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -269,12 +245,16 @@ fun LoginContent(
                     colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
                     enabled = !isLoading
                 ) {
-                    Text(
-                        text = "Continuar con Google",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PrimaryDark
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = PrimaryDark, strokeWidth = 2.dp)
+                    } else {
+                        Text(
+                            text = "Continuar con Google",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryDark
+                        )
+                    }
                 }
             }
 
