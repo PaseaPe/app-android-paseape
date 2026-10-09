@@ -31,6 +31,7 @@ import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.paseape.data.model.GoogleAuthReq
+import com.example.paseape.data.model.LoginRequest
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
@@ -47,10 +48,17 @@ class LoginActivity : ComponentActivity() {
             PaseaPETheme {
                 LoginContent(
                     onLoginSuccess = { role ->
-                        val intent = Intent(this, DashboardActivity::class.java).apply {
-                            putExtra("USER_ROLE", role)
+                        if (role == 2) {
+                            // Redirecciona a la pantalla del Paseador trabajador
+                            val intent = Intent(this, PaseadoresActivity::class.java)
+                            startActivity(intent)
+                        } else {
+                            // Redirecciona al Dashboard principal del Cliente
+                            val intent = Intent(this, DashboardActivity::class.java).apply {
+                                putExtra("USER_ROLE", role)
+                            }
+                            startActivity(intent)
                         }
-                        startActivity(intent)
                         finish()
                     },
                     onNavigateToRegister = {
@@ -76,7 +84,6 @@ fun LoginContent(
     var isLoading by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
 
-    // Flujo real de Google intacto para tus pruebas/conexion
     fun launchGoogleLoginFlow(selectedRole: Int) {
         if (isLoading) return
         isLoading = true
@@ -84,9 +91,8 @@ fun LoginContent(
         coroutineScope.launch {
             try {
                 val credentialManager = CredentialManager.create(context)
+                val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
 
-                // IMPORTANTE: Coloca aquí el Web Client ID de tu compañero
-                val serverClientId = "990768552615-m4ukkjgqvvam2h4t10blkfku8i87t9sc.apps.googleusercontent.com"
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)
                     .setServerClientId(serverClientId)
@@ -117,16 +123,13 @@ fun LoginContent(
                     )
 
                     val response = withContext(Dispatchers.IO) {
-                        RetrofitClient.api.loginWithGoogle(googleRequest)
+                        RetrofitClient.apiService.loginWithGoogle(googleRequest)
                     }
 
                     isLoading = false
-                    if (response.success) {
-                        Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
-                        onLoginSuccess(selectedRole)
-                    } else {
-                        Toast.makeText(context, response.message, Toast.LENGTH_LONG).show()
-                    }
+                    // Ajusta segun las propiedades de tu GoogleAuthResponse
+                    Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
+                    onLoginSuccess(selectedRole)
                 } else {
                     isLoading = false
                     Toast.makeText(context, "Tipo de credencial no soportado", Toast.LENGTH_SHORT).show()
@@ -217,7 +220,9 @@ fun LoginContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // BOTÓN INICIAR SESIÓN -> Pasa directo al Dashboard
+                /*
+                 * CÓDIGO DE PRUEBA DIRECTO (COMENTADO PARA NO BORRARLO):
+                 *
                 Button(
                     onClick = {
                         Toast.makeText(context, "Ingreso directo", Toast.LENGTH_SHORT).show()
@@ -229,7 +234,59 @@ fun LoginContent(
                     shape = RoundedCornerShape(25.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
                 ) {
-                    Text(text = "Iniciar Sesión", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(text = "Iniciar Sesión (Directo)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+                */
+
+                // BOTÓN INICIAR SESIÓN USANDO TUS MÉTODOS DE RETROFIT REALES
+                Button(
+                    onClick = {
+                        if (emailInput.isBlank() || passwordInput.isBlank()) {
+                            Toast.makeText(context, "Ingresa tu correo y contraseña", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        if (isLoading) return@Button
+                        isLoading = true
+
+                        coroutineScope.launch {
+                            try {
+                                val loginReq = LoginRequest(
+                                    correo = emailInput.trim(),
+                                    contrasena = passwordInput.trim()
+                                )
+
+                                // Llama al método real de tu ApiService
+                                val response = withContext(Dispatchers.IO) {
+                                    RetrofitClient.apiService.iniciarSesion(loginReq)
+                                }
+
+                                isLoading = false
+                                // Verifica si response.success o response.response no es nulo según tu LoginResponse
+                                Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
+
+                                // Si tu LoginResponse retorna el rol dentro de response, lo pasas aquí:
+                                onLoginSuccess(1)
+
+                            } catch (e: Exception) {
+                                isLoading = false
+                                Log.e("PaseaPE_Auth", "Error al iniciar sesión local", e)
+                                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text(text = "Iniciar Sesión", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))

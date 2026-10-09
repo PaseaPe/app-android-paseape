@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 SplashScreen(onTimeout = {
                     startActivity(Intent(this@MainActivity, AccountActivity::class.java))
-                    finish() // Cierra el Splash para que el usuario no vuelva atrás
+                    finish()
                 })
             }
         }
