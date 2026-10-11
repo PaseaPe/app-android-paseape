@@ -11,6 +11,7 @@ import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
 import com.example.paseape.data.model.GoogleAuthReq
 import com.example.paseape.data.model.GoogleAuthResponse
+import com.example.paseape.data.model.RegistroGoogleRequest
 import com.example.paseape.data.model.UserProfileResponse
 
 interface ApiService {
@@ -34,10 +35,17 @@ interface ApiService {
     ): GenericResponse
 
     @POST("auth/google")
-    suspend fun loginWithGoogle(@Body request: GoogleAuthReq): GoogleAuthResponse
+    suspend fun loginWithGoogle(
+        @Body request: GoogleAuthReq
+    ): GoogleAuthResponse
 
-    @GET("clientes/perfil") // Ajusta el endpoint según la ruta exacta de tu backend
+    @GET("clientes/perfil")
     suspend fun obtenerPerfilCliente(
         @Header("Authorization") token: String? = null
     ): UserProfileResponse
+
+    @POST("auth/register/google")
+    suspend fun registrarConGoogle(
+        @Body request: RegistroGoogleRequest
+    ): GenericResponse
 }

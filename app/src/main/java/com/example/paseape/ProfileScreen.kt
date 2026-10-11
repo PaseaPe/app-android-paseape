@@ -1,5 +1,6 @@
 package com.example.paseape.ui.profile
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,22 +10,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.LoginActivity
 import com.example.paseape.data.model.MascotaResponse
 import com.example.paseape.data.model.UserProfileResponse
 import com.example.paseape.ui.theme.BackgroundOffWhite
@@ -33,8 +37,12 @@ import com.example.paseape.ui.theme.PrimaryDark
 @Composable
 fun ProfileScreen(
     userProfile: UserProfileResponse,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLogout: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -161,6 +169,81 @@ fun ProfileScreen(
                 }
             }
         }
+
+        // BOTÓN CERRAR SESIÓN
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { showLogoutDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = "Cerrar sesión",
+                    tint = Color.White
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Cerrar Sesión",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+
+    // DIÁLOGO DE CONFIRMACIÓN DE CERRAR SESIÓN
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Cerrar Sesión",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = PrimaryDark
+                )
+            },
+            text = {
+                Text(
+                    text = "¿Estás seguro de que deseas salir de tu cuenta?",
+                    fontSize = 14.sp,
+                    color = Color.DarkGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                        // Redirecciona al Login limpiando el stack de pantallas
+                        val intent = Intent(context, LoginActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                        context.startActivity(intent)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Sí, salir", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showLogoutDialog = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
