@@ -3,15 +3,21 @@ package com.example.paseape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
@@ -29,10 +35,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.CrearMascotaPayload
+import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.ui.theme.BackgroundOffWhite
@@ -47,6 +58,9 @@ fun ProfileScreen(
     onLogoutClick: () -> Unit = {},
     onLogout: () -> Unit = onLogoutClick,
     onBack: () -> Unit = {},
+    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit = {},
+    onCrearMascota: (CrearMascotaRequest) -> Unit = {},
+    onMascotaClick: (MascotaData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -107,7 +121,10 @@ fun ProfileScreen(
                 is ProfileUiState.Success -> {
                     ProfileSuccessContent(
                         usuario = uiState.data,
-                        onLogout = onLogoutClick
+                        onLogout = onLogoutClick,
+                        onGuardarPerfil = onGuardarPerfil,
+                        onCrearMascota = onCrearMascota,
+                        onMascotaClick = onMascotaClick
                     )
                 }
             }
@@ -237,11 +254,17 @@ fun ProfileErrorContent(
 @Composable
 fun ProfileSuccessContent(
     usuario: UsuarioClienteData,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit,
+    onCrearMascota: (CrearMascotaRequest) -> Unit,
+    onMascotaClick: (MascotaData) -> Unit
 ) {
     val detalle = usuario.detalleCliente
     val mascotas = detalle?.mascotas ?: emptyList()
+
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+    var showAddPetDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -323,14 +346,35 @@ fun ProfileSuccessContent(
             }
         }
 
-        // CARD: DATOS GENERALES DEL CLIENTE (DIRECCIÓN, DISTRITO, CONTACTO DE EMERGENCIA)
+        // CARD: DATOS GENERALES DEL CLIENTE (CON BOTÓN "EDITAR DATOS")
         item {
-            Text(
-                text = "Datos Generales y Contacto",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = PrimaryDark
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Datos Generales y Contacto",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+                TextButton(onClick = { showEditProfileDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Editar",
+                        tint = PrimaryDark,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Editar datos",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark
+                    )
+                }
+            }
         }
 
         item {
@@ -388,23 +432,50 @@ fun ProfileSuccessContent(
             }
         }
 
-        // SECCIÓN: LISTADO REACTIVO DE MASCOTAS
+        // SECCIÓN: LISTADO REACTIVO DE MASCOTAS (CON BOTÓN "+ AGREGAR MASCOTA")
         item {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Pets,
-                    contentDescription = null,
-                    tint = PrimaryDark
-                )
-                Text(
-                    text = "Mis Mascotas (${mascotas.size})",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryDark
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Pets,
+                        contentDescription = null,
+                        tint = PrimaryDark
+                    )
+                    Text(
+                        text = "Mis Mascotas (${mascotas.size})",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark
+                    )
+                }
+
+                Button(
+                    onClick = { showAddPetDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Agregar mascota",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
         }
 
@@ -441,7 +512,10 @@ fun ProfileSuccessContent(
                 items = mascotas,
                 key = { it.uuid ?: it.id?.toString() ?: it.nombre ?: it.hashCode().toString() }
             ) { mascota ->
-                MascotaItemCard(mascota = mascota)
+                MascotaItemCard(
+                    mascota = mascota,
+                    onClick = { onMascotaClick(mascota) }
+                )
             }
         }
 
@@ -515,12 +589,333 @@ fun ProfileSuccessContent(
             }
         )
     }
+
+    if (showEditProfileDialog) {
+        EditarPerfilDialog(
+            usuario = usuario,
+            onDismiss = { showEditProfileDialog = false },
+            onConfirm = { req ->
+                showEditProfileDialog = false
+                onGuardarPerfil(req)
+            }
+        )
+    }
+
+    if (showAddPetDialog) {
+        AgregarMascotaDialog(
+            usuarioUuid = usuario.uuid ?: "",
+            onDismiss = { showAddPetDialog = false },
+            onConfirm = { req ->
+                showAddPetDialog = false
+                onCrearMascota(req)
+            }
+        )
+    }
 }
 
 @Composable
-fun MascotaItemCard(mascota: MascotaData) {
+fun EditarPerfilDialog(
+    usuario: UsuarioClienteData,
+    onDismiss: () -> Unit,
+    onConfirm: (ActualizarPerfilReqDto) -> Unit
+) {
+    val detalle = usuario.detalleCliente
+
+    var nombres by remember { mutableStateOf(usuario.nombres ?: "") }
+    var apellidos by remember { mutableStateOf(usuario.apellidos ?: "") }
+    var telefono by remember { mutableStateOf(usuario.telefono ?: "") }
+    var direccion by remember { mutableStateOf(detalle?.direccionReferencia ?: "") }
+    var contactoEmergenciaNombre by remember { mutableStateOf(detalle?.contactoEmergenciaNombre ?: "") }
+    var contactoEmergenciaTelefono by remember { mutableStateOf(detalle?.contactoEmergenciaTelefono ?: "") }
+    var notasAdicionales by remember { mutableStateOf(detalle?.notasAdicionales ?: "") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Editar Perfil",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+
+                OutlinedTextField(
+                    value = nombres,
+                    onValueChange = { nombres = it },
+                    label = { Text("Nombres") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = apellidos,
+                    onValueChange = { apellidos = it },
+                    label = { Text("Apellidos") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = telefono,
+                    onValueChange = { telefono = it },
+                    label = { Text("Teléfono") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = direccion,
+                    onValueChange = { direccion = it },
+                    label = { Text("Dirección de referencia") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = contactoEmergenciaNombre,
+                    onValueChange = { contactoEmergenciaNombre = it },
+                    label = { Text("Nombre de contacto de emergencia") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = contactoEmergenciaTelefono,
+                    onValueChange = { contactoEmergenciaTelefono = it },
+                    label = { Text("Teléfono de contacto de emergencia") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = notasAdicionales,
+                    onValueChange = { notasAdicionales = it },
+                    label = { Text("Notas adicionales") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Cancelar", color = Color.Gray)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val req = ActualizarPerfilReqDto(
+                                nombres = nombres.trim().ifBlank { null },
+                                apellidos = apellidos.trim().ifBlank { null },
+                                telefono = telefono.trim().ifBlank { null },
+                                direccionReferencia = direccion.trim().ifBlank { null },
+                                contactoEmergenciaNombre = contactoEmergenciaNombre.trim().ifBlank { null },
+                                contactoEmergenciaTelefono = contactoEmergenciaTelefono.trim().ifBlank { null },
+                                notasAdicionales = notasAdicionales.trim().ifBlank { null }
+                            )
+                            onConfirm(req)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                        enabled = nombres.isNotBlank() && apellidos.isNotBlank()
+                    ) {
+                        Text(text = "Guardar", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AgregarMascotaDialog(
+    usuarioUuid: String,
+    onDismiss: () -> Unit,
+    onConfirm: (CrearMascotaRequest) -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var edadAnos by remember { mutableStateOf("0") }
+    var edadMeses by remember { mutableStateOf("0") }
+    var pesoKg by remember { mutableStateOf("0.0") }
+    var esterilizado by remember { mutableStateOf(false) }
+    var sociablePerros by remember { mutableStateOf(true) }
+    var sociablePersonas by remember { mutableStateOf(true) }
+    var precauciones by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Nueva Mascota",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre de la mascota") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = edadAnos,
+                        onValueChange = { edadAnos = it.filter { char -> char.isDigit() } },
+                        label = { Text("Años") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    OutlinedTextField(
+                        value = edadMeses,
+                        onValueChange = { edadMeses = it.filter { char -> char.isDigit() } },
+                        label = { Text("Meses") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = pesoKg,
+                    onValueChange = { pesoKg = it },
+                    label = { Text("Peso en kg") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = "¿Esterilizado?", fontSize = 14.sp, color = PrimaryDark)
+                    Switch(checked = esterilizado, onCheckedChange = { esterilizado = it })
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = "Sociable con perros", fontSize = 14.sp, color = PrimaryDark)
+                    Switch(checked = sociablePerros, onCheckedChange = { sociablePerros = it })
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = "Sociable con personas", fontSize = 14.sp, color = PrimaryDark)
+                    Switch(checked = sociablePersonas, onCheckedChange = { sociablePersonas = it })
+                }
+
+                OutlinedTextField(
+                    value = precauciones,
+                    onValueChange = { precauciones = it },
+                    label = { Text("Precauciones médicas") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Cancelar", color = Color.Gray)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val anosInt = edadAnos.toIntOrNull() ?: 0
+                            val mesesInt = edadMeses.toIntOrNull() ?: 0
+                            val pesoDouble = pesoKg.toDoubleOrNull() ?: 0.0
+
+                            val payload = CrearMascotaPayload(
+                                nombre = nombre.trim(),
+                                tipoMascotaId = 1,
+                                tipoRazaId = 1,
+                                tipoGeneroMascotaId = 1,
+                                tipoTamanoMascotaId = 1,
+                                tipoNivelEnergiaId = 1,
+                                edadAnos = anosInt,
+                                edadMeses = mesesInt,
+                                pesoKg = pesoDouble,
+                                esterilizado = if (esterilizado) 1 else 0,
+                                sociableConPerros = if (sociablePerros) 1 else 0,
+                                sociableConPersonas = if (sociablePersonas) 1 else 0,
+                                precaucionesMedicas = precauciones.trim()
+                            )
+                            val req = CrearMascotaRequest(
+                                usuarioUuid = usuarioUuid,
+                                mascota = payload
+                            )
+                            onConfirm(req)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
+                        enabled = nombre.isNotBlank()
+                    ) {
+                        Text(text = "Agregar", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MascotaItemCard(
+    mascota: MascotaData,
+    onClick: () -> Unit = {}
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

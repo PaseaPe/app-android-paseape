@@ -47,6 +47,10 @@
         <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false" />
+        <activity
+            android:name=".MascotaDetalleActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PaseaPE" />
 
 
 

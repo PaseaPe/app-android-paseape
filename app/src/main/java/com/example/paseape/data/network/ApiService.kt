@@ -21,6 +21,10 @@ import com.example.paseape.data.model.ResetPasswordRequest
 import com.example.paseape.data.model.ResponseDto
 import com.example.paseape.data.model.UserProfileResponse
 import com.example.paseape.data.model.ClienteProfileResponse
+import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.CrearMascotaRequest
+import com.example.paseape.data.model.DetalleMascotaResponse
+import com.example.paseape.data.model.ActualizarMascotaRequest
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -34,6 +38,31 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("uuid") uuid: String
     ): Response<ClienteProfileResponse>
+
+    @PUT("auth/profile")
+    suspend fun actualizarPerfil(
+        @Header("Authorization") token: String,
+        @Body request: ActualizarPerfilReqDto
+    ): Response<GenericResponse>
+
+    @POST("mascotas")
+    suspend fun crearMascota(
+        @Header("Authorization") token: String,
+        @Body request: CrearMascotaRequest
+    ): Response<GenericResponse>
+
+    @GET("mascotas/mascota/{uuid}")
+    suspend fun getMascotaPorUuid(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<DetalleMascotaResponse>
+
+    @PUT("mascotas/{uuid}")
+    suspend fun actualizarMascota(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: ActualizarMascotaRequest
+    ): Response<GenericResponse>
 
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse

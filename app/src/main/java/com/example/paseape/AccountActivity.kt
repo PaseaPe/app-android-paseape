@@ -4,12 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.CrearMascotaRequest
+import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
@@ -30,35 +34,55 @@ class AccountActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        cargarPerfil()
+        cargarPerfilCliente()
 
         setContent {
             PaseaPETheme {
                 ProfileScreen(
                     uiState = uiState,
-                    onRetry = { cargarPerfil() },
+                    onRetry = { cargarPerfilCliente() },
                     onLogoutClick = { cerrarSesionYRedirigir() },
                     onLogout = { cerrarSesionYRedirigir() },
-                    onBack = { finish() }
+                    onBack = { finish() },
+                    onGuardarPerfil = { req -> actualizarDatosPerfil(req) },
+                    onCrearMascota = { req -> crearMascota(req) },
+                    onMascotaClick = { mascota: MascotaData ->
+                        val intent = Intent(this, MascotaDetalleActivity::class.java).apply {
+                            putExtra(MascotaDetalleActivity.EXTRA_MASCOTA_UUID, mascota.uuid)
+                        }
+                        startActivity(intent)
+                    }
                 )
             }
         }
     }
 
-    private fun cargarPerfil() {
+    private fun getStoredToken(): String? {
         val prefs = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
         val legacyPrefs = getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+        return prefs.getString("auth_token", null)
+            ?: prefs.getString("JWT_TOKEN", null)
+            ?: legacyPrefs.getString("auth_token", null)
+            ?: legacyPrefs.getString("JWT_TOKEN", null)
+    }
 
-        val uuid = intent.getStringExtra("EXTRA_USER_UUID")
+    private fun getStoredUuid(): String? {
+        val prefs = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+        val legacyPrefs = getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+        return intent.getStringExtra("EXTRA_USER_UUID")
             ?: intent.getStringExtra("user_uuid")
             ?: intent.getStringExtra("USER_UUID")
             ?: prefs.getString("user_uuid", null)
             ?: legacyPrefs.getString("user_uuid", null)
+    }
 
-        val token = prefs.getString("auth_token", null)
-            ?: prefs.getString("JWT_TOKEN", null)
-            ?: legacyPrefs.getString("auth_token", null)
-            ?: legacyPrefs.getString("JWT_TOKEN", null)
+    fun cargarPerfil() {
+        cargarPerfilCliente()
+    }
+
+    fun cargarPerfilCliente() {
+        val uuid = getStoredUuid()
+        val token = getStoredToken()
 
         Log.d("ACCOUNT_DEBUG", "Intentando cargar perfil. UUID: [$uuid], Token presente: [${!token.isNullOrBlank()}]")
 
@@ -109,13 +133,79 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
+    fun actualizarDatosPerfil(req: ActualizarPerfilReqDto) {
+        val token = getStoredToken()
+        if (token.isNullOrBlank()) {
+            Toast.makeText(this, "Sesión no válida. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.actualizarPerfil(authHeader, req)
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        Toast.makeText(this@AccountActivity, "Perfil actualizado con éxito", Toast.LENGTH_SHORT).show()
+                        cargarPerfilCliente()
+                    } else {
+                        val errorMsg = response.message().ifBlank { "HTTP ${response.code()}" }
+                        Toast.makeText(this@AccountActivity, "Error al actualizar perfil: $errorMsg", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_DEBUG", "Error al actualizar perfil", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@AccountActivity, "Error de conexión al actualizar perfil", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun crearMascota(req: CrearMascotaRequest) {
+        val token = getStoredToken()
+        if (token.isNullOrBlank()) {
+            Toast.makeText(this, "Sesión no válida. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+        // Aseguramos que usuarioUuid esté presente
+        val finalReq = if (req.usuarioUuid.isBlank()) {
+            val uuid = getStoredUuid() ?: ""
+            req.copy(usuarioUuid = uuid)
+        } else {
+            req
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.crearMascota(authHeader, finalReq)
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        Toast.makeText(this@AccountActivity, "Mascota agregada con éxito", Toast.LENGTH_SHORT).show()
+                        cargarPerfilCliente()
+                    } else {
+                        val errorMsg = response.message().ifBlank { "HTTP ${response.code()}" }
+                        Toast.makeText(this@AccountActivity, "Error al agregar mascota: $errorMsg", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_DEBUG", "Error al crear mascota", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@AccountActivity, "Error de conexión al crear mascota", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     fun cerrarSesionYRedirigir() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val token = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).getString("JWT_TOKEN", null)
-                    ?: getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).getString("JWT_TOKEN", null)
+                val token = getStoredToken()
                 if (!token.isNullOrEmpty()) {
-                    RetrofitClient.apiService.logout("Bearer $token")
+                    val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+                    RetrofitClient.apiService.logout(authHeader)
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_LOGOUT", "Error al revocar sesión en servidor: ${e.message}")
