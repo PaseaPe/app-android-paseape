@@ -1,110 +1,135 @@
 package com.example.paseape
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.paseape.ui.theme.BackgroundOffWhite
-import com.example.paseape.ui.theme.CardSurface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
+import com.example.paseape.data.model.UsuarioClienteData
+import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
-import com.example.paseape.ui.theme.PrimaryDark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+sealed interface ProfileUiState {
+    data object Loading : ProfileUiState
+    data class Success(val data: UsuarioClienteData) : ProfileUiState
+    data class Error(val message: String) : ProfileUiState
+}
 
 class AccountActivity : ComponentActivity() {
+
+    private var uiState by mutableStateOf<ProfileUiState>(ProfileUiState.Loading)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        cargarPerfil()
+
         setContent {
             PaseaPETheme {
-                AccountContent(
-                    onNavigateToLogin = {
-                        startActivity(Intent(this@AccountActivity, LoginActivity::class.java))
-                    }
+                ProfileScreen(
+                    uiState = uiState,
+                    onRetry = { cargarPerfil() },
+                    onLogoutClick = { cerrarSesionYRedirigir() },
+                    onLogout = { cerrarSesionYRedirigir() },
+                    onBack = { finish() }
                 )
             }
         }
     }
-}
 
-@Composable
-fun AccountContent(
-    onNavigateToLogin: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
-            .padding(24.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Spacer(modifier = Modifier.height(20.dp))
+    private fun cargarPerfil() {
+        val prefs = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+        val legacyPrefs = getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
 
-            // Logo y descripción de la app
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = painterResource(id = R.drawable.perritologoapp),
-                    contentDescription = "Logo PaseaPE",
-                    modifier = Modifier.size(280.dp)
-                )
+        val uuid = intent.getStringExtra("EXTRA_USER_UUID")
+            ?: intent.getStringExtra("user_uuid")
+            ?: intent.getStringExtra("USER_UUID")
+            ?: prefs.getString("user_uuid", null)
+            ?: legacyPrefs.getString("user_uuid", null)
 
-                Spacer(modifier = Modifier.height(16.dp))
+        val token = prefs.getString("auth_token", null)
+            ?: prefs.getString("JWT_TOKEN", null)
+            ?: legacyPrefs.getString("auth_token", null)
+            ?: legacyPrefs.getString("JWT_TOKEN", null)
 
-                Text(
-                    text = "Encuentra paseadores de confianza en tu distrito de Lima",
-                    fontSize = 15.sp,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
+        Log.d("ACCOUNT_DEBUG", "Intentando cargar perfil. UUID: [$uuid], Token presente: [${!token.isNullOrBlank()}]")
 
-            // Botón Siguiente para pasar al Login
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = onNavigateToLogin,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
-                ) {
-                    Text(
-                        text = "Siguiente",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
+        if (uuid.isNullOrBlank()) {
+            Log.e("ACCOUNT_DEBUG", "Error: user_uuid no encontrado en Intent ni SharedPreferences")
+            uiState = ProfileUiState.Error("Sesión expirada o identificador no encontrado. Por favor inicia sesión nuevamente.")
+            return
+        }
+
+        if (token.isNullOrBlank()) {
+            Log.e("ACCOUNT_DEBUG", "Error: auth_token no encontrado en SharedPreferences")
+            uiState = ProfileUiState.Error("Sesión expirada: Token de autenticación ausente. Por favor inicia sesión nuevamente.")
+            return
+        }
+
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+        uiState = ProfileUiState.Loading
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                Log.d("ACCOUNT_DEBUG", "Ejecutando GET cliente/$uuid con cabecera Authorization")
+                val response = RetrofitClient.apiService.getClientePorUuid(token = authHeader, uuid = uuid)
+                Log.d("ACCOUNT_DEBUG", "Status Code recibido: ${response.code()}, Message: [${response.message()}]")
+
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        val body = response.body()
+                        val usuarioCliente = body?.extraerUsuarioCliente()
+                        if (usuarioCliente != null) {
+                            Log.d("ACCOUNT_DEBUG", "Perfil cargado con éxito para: ${usuarioCliente.nombres} ${usuarioCliente.apellidos}")
+                            uiState = ProfileUiState.Success(usuarioCliente)
+                        } else {
+                            Log.w("ACCOUNT_DEBUG", "Respuesta 200 pero cuerpo o usuarioCliente nulo: $body")
+                            uiState = ProfileUiState.Error("No se encontraron los datos del cliente en la respuesta.")
+                        }
+                    } else {
+                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                        Log.e("ACCOUNT_DEBUG", "Error del servidor: HTTP ${response.code()} ${response.message()} - Body: $rawError")
+                        uiState = ProfileUiState.Error("Error del servidor: HTTP ${response.code()} ${response.message()}".trim())
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_DEBUG", "Error de red", e)
+                withContext(Dispatchers.Main) {
+                    uiState = ProfileUiState.Error("Error de conexión: ${e.localizedMessage ?: "Fallo de red"}")
+                }
+            }
+        }
+    }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Al continuar, aceptas nuestros Términos de Servicio y Políticas de Privacidad.",
-                    fontSize = 11.sp,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 14.sp
-                )
+    fun cerrarSesionYRedirigir() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val token = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).getString("JWT_TOKEN", null)
+                    ?: getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).getString("JWT_TOKEN", null)
+                if (!token.isNullOrEmpty()) {
+                    RetrofitClient.apiService.logout("Bearer $token")
+                }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_LOGOUT", "Error al revocar sesión en servidor: ${e.message}")
+            } finally {
+                // Limpieza completa de SharedPreferences
+                getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+                getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).edit().clear().commit()
+                withContext(Dispatchers.Main) {
+                    val intent = Intent(this@AccountActivity, LoginActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                    startActivity(intent)
+                    finish()
+                }
             }
         }
     }

@@ -52,16 +52,29 @@ class LoginActivity : ComponentActivity() {
         setContent {
             PaseaPETheme {
                 LoginContent(
-                    onLoginSuccess = { role ->
+                    onLoginSuccess = { role, uuid ->
                         if (role == 99) {
-                            val intent = Intent(this, AdminActivity::class.java)
+                            val intent = Intent(this, AdminActivity::class.java).apply {
+                                putExtra("USER_ROLE", role)
+                                putExtra("EXTRA_USER_UUID", uuid)
+                                putExtra("user_uuid", uuid)
+                                putExtra("USER_UUID", uuid)
+                            }
                             startActivity(intent)
                         } else if (role == 2) {
-                            val intent = Intent(this, PaseadoresActivity::class.java)
+                            val intent = Intent(this, PaseadoresActivity::class.java).apply {
+                                putExtra("USER_ROLE", role)
+                                putExtra("EXTRA_USER_UUID", uuid)
+                                putExtra("user_uuid", uuid)
+                                putExtra("USER_UUID", uuid)
+                            }
                             startActivity(intent)
                         } else {
                             val intent = Intent(this, DashboardActivity::class.java).apply {
                                 putExtra("USER_ROLE", role)
+                                putExtra("EXTRA_USER_UUID", uuid)
+                                putExtra("user_uuid", uuid)
+                                putExtra("USER_UUID", uuid)
                             }
                             startActivity(intent)
                         }
@@ -79,7 +92,7 @@ class LoginActivity : ComponentActivity() {
 
 @Composable
 fun LoginContent(
-    onLoginSuccess: (Int) -> Unit,
+    onLoginSuccess: (Int, String?) -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
     val context = LocalContext.current
@@ -132,12 +145,23 @@ fun LoginContent(
 
                     if (tokenJwt.isNotEmpty()) {
                         val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                        sharedPref.edit().putString("JWT_TOKEN", tokenJwt).apply()
+                        sharedPref.edit()
+                            .putString("auth_token", tokenJwt)
+                            .putString("JWT_TOKEN", tokenJwt)
+                            .putInt("USER_ROLE", selectedRole)
+                            .commit()
+
+                        val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+                        paseaPrefs.edit()
+                            .putString("auth_token", tokenJwt)
+                            .putString("JWT_TOKEN", tokenJwt)
+                            .putInt("USER_ROLE", selectedRole)
+                            .commit()
                     }
 
                     isLoading = false
                     Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
-                    onLoginSuccess(selectedRole)
+                    onLoginSuccess(selectedRole, null)
 
                 } else {
                     isLoading = false
@@ -277,21 +301,36 @@ fun LoginContent(
 
                                 Log.d("LOGIN_TEST", "Objeto response recibido: $apiResponse")
                                 val tokenJwt = apiResponse.response?.token ?: ""
-                                Log.d("LOGIN_TEST", "Token extraído: [$tokenJwt]")
+                                val userUuid = apiResponse.userUuid ?: apiResponse.response?.uuid ?: apiResponse.uuid ?: ""
+                                Log.d("LOGIN_TEST", "Token extraído: [$tokenJwt], UUID: [$userUuid]")
 
                                 if (tokenJwt.isNotEmpty()) {
+                                    val userRole = if (trimmedEmail.contains("admin")) 99 else 1
+
+                                    // Guardar en SharedPreferences "paseape_prefs" (user_uuid, auth_token, USER_ROLE)
+                                    val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+                                    paseaPrefs.edit()
+                                        .putString("user_uuid", userUuid)
+                                        .putString("auth_token", tokenJwt)
+                                        .putString("JWT_TOKEN", tokenJwt)
+                                        .putInt("USER_ROLE", userRole)
+                                        .commit()
+
+                                    // Guardar en PaseaPePrefs para retrocompatibilidad
                                     val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                                    sharedPref.edit().putString("JWT_TOKEN", tokenJwt).apply()
-                                    Log.d("LOGIN_TEST", "¡Token guardado exitosamente!")
+                                    sharedPref.edit()
+                                        .putString("user_uuid", userUuid)
+                                        .putString("auth_token", tokenJwt)
+                                        .putString("JWT_TOKEN", tokenJwt)
+                                        .putInt("USER_ROLE", userRole)
+                                        .commit()
+
+                                    Log.d("LOGIN_TEST", "¡Token (auth_token), UUID (user_uuid) y Rol ($userRole) guardados exitosamente!")
 
                                     isLoading = false
                                     Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
 
-                                    if (trimmedEmail.contains("admin")) {
-                                        onLoginSuccess(99)
-                                    } else {
-                                        onLoginSuccess(1)
-                                    }
+                                    onLoginSuccess(userRole, userUuid)
                                 } else {
                                     isLoading = false
                                     Toast.makeText(context, "Credenciales incorrectas o token vacío", Toast.LENGTH_LONG).show()

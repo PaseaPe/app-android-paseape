@@ -20,6 +20,7 @@ import com.example.paseape.data.model.RegistroGoogleRequest
 import com.example.paseape.data.model.ResetPasswordRequest
 import com.example.paseape.data.model.ResponseDto
 import com.example.paseape.data.model.UserProfileResponse
+import com.example.paseape.data.model.ClienteProfileResponse
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -27,6 +28,12 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface ApiService {
+
+    @GET("cliente/{uuid}")
+    suspend fun getClientePorUuid(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ClienteProfileResponse>
 
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse

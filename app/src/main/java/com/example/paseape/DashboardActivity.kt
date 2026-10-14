@@ -17,7 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
@@ -38,19 +39,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.paseape.data.model.MascotaResponse
-import com.example.paseape.data.model.UserProfileResponse
-import com.example.paseape.data.network.RetrofitClient
-import com.example.paseape.ui.profile.ProfileScreen
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
-import kotlinx.coroutines.launch
 
 class DashboardActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val userUuid = intent.getStringExtra("EXTRA_USER_UUID")
+            ?: intent.getStringExtra("user_uuid")
+            ?: intent.getStringExtra("USER_UUID")
+            ?: getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).getString("user_uuid", null)
+            ?: getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).getString("user_uuid", null)
 
         setContent {
             PaseaPETheme {
@@ -61,70 +63,50 @@ class DashboardActivity : ComponentActivity() {
                             PaseadoresActivity::class.java
                         )
                         startActivity(intent)
+                    },
+                    onProfileClick = {
+                        val currentUuid = intent.getStringExtra("EXTRA_USER_UUID")
+                            ?: intent.getStringExtra("user_uuid")
+                            ?: intent.getStringExtra("USER_UUID")
+                            ?: getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).getString("user_uuid", null)
+                            ?: getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).getString("user_uuid", null)
+
+                        val intent = Intent(
+                            this@DashboardActivity,
+                            AccountActivity::class.java
+                        ).apply {
+                            putExtra("EXTRA_USER_UUID", currentUuid)
+                            putExtra("user_uuid", currentUuid)
+                            putExtra("USER_UUID", currentUuid)
+                        }
+                        startActivity(intent)
+                    },
+                    onLogoutClick = {
+                        cerrarSesion()
                     }
                 )
             }
         }
     }
+
+    private fun cerrarSesion() {
+        getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).edit().clear().apply()
+        val intent = Intent(this@DashboardActivity, LoginActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        startActivity(intent)
+        finish()
+    }
 }
 
 @Composable
 fun DashboardMainScreen(
-    onPaseadoresClick: () -> Unit
+    onPaseadoresClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-
-    // DATOS DE PRUEBA TEMPORALES
-    val mockProfile = remember {
-        UserProfileResponse(
-            nombres = "Diego Alonso",
-            apellidos = "Aparicio Vela",
-            correo = "diego.cliente@example.com",
-            telefono = "+51981234567",
-            tipoUsuarioId = 1,
-            direccionReferencia = "Calle Las Begonias 450, Dpto 302",
-            distritoId = 31,
-            contactoEmergenciaNombre = "Carlos Vela",
-            contactoEmergenciaTelefono = "+51987654320",
-            notasAdicionales = "Edificio con recepción las 24 horas",
-            mascotas = listOf(
-                MascotaResponse(
-                    nombre = "Bobby",
-                    tipoMascotaId = 1,
-                    tipoRazaId = 4,
-                    tipoGeneroMascotaId = 1,
-                    tipoTamanoMascotaId = 3,
-                    tipoNivelEnergiaId = 3,
-                    edadAnos = 2,
-                    edadMeses = 4,
-                    pesoKg = 24.50,
-                    esterilizado = 1,
-                    sociableConPerros = 1,
-                    sociableConPersonas = 1,
-                    precaucionesMedicas = "Alergia cutánea estacional",
-                    fotoUrl = "https://images.unsplash.com/photo-1543466835-00a7907e9de1"
-                ),
-                MascotaResponse(
-                    nombre = "Luna",
-                    tipoMascotaId = 1,
-                    tipoRazaId = 10,
-                    tipoGeneroMascotaId = 2,
-                    tipoTamanoMascotaId = 2,
-                    tipoNivelEnergiaId = 2,
-                    edadAnos = 1,
-                    edadMeses = 6,
-                    pesoKg = 7.20,
-                    esterilizado = 0,
-                    sociableConPerros = 1,
-                    sociableConPersonas = 1,
-                    precaucionesMedicas = "Ninguna",
-                    fotoUrl = "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e"
-                )
-            )
-        )
-    }
 
     Column(
         modifier = Modifier
@@ -139,49 +121,16 @@ fun DashboardMainScreen(
                 .fillMaxWidth()
         ) {
             when (selectedTab) {
-                0 -> DashboardHomeContent(onPaseadoresClick = onPaseadoresClick)
-                3 -> ProfileScreen(
-                    userProfile = mockProfile,
-                    onLogout = {
-                        scope.launch {
-                            try {
-                                val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                                val token = sharedPref.getString("JWT_TOKEN", "") ?: ""
-
-                                // LOG 1: Verificar que el token no esté vacío antes de enviarlo
-                                Log.d("LOGOUT_DEBUG", "Token recuperado para enviar: $token")
-
-                                if (token.isNotEmpty()) {
-                                    val response = RetrofitClient.apiService.logout("Bearer $token")
-
-                                    // LOG 2: Ver el código de respuesta del servidor
-                                    Log.d("LOGOUT_DEBUG", "Código de respuesta del servidor: ${response.code()}")
-
-                                    if (response.isSuccessful) {
-                                        Log.d("LOGOUT", "Cierre de sesión exitoso en el backend")
-                                    } else {
-                                        Log.e("LOGOUT", "El servidor rechazó el logout. Código: ${response.code()}")
-                                    }
-                                } else {
-                                    Log.w("LOGOUT", "No hay token guardado localmente")
-                                }
-                            } catch (e: Exception) {
-                                Log.e("LOGOUT", "Excepción al llamar al logout: ${e.message}")
-                            } finally {
-                                // Limpia las preferencias
-                                val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                                sharedPref.edit().clear().apply()
-
-                                // Opcional: Redirigir al LoginActivity si lo deseas
-                                val intent = Intent(context, LoginActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                }
-                                context.startActivity(intent)
-                            }
-                        }
-                    }
+                0 -> DashboardHomeContent(
+                    onPaseadoresClick = onPaseadoresClick,
+                    onProfileClick = onProfileClick,
+                    onLogoutClick = onLogoutClick
                 )
-                else -> DashboardHomeContent(onPaseadoresClick = onPaseadoresClick)
+                else -> DashboardHomeContent(
+                    onPaseadoresClick = onPaseadoresClick,
+                    onProfileClick = onProfileClick,
+                    onLogoutClick = onLogoutClick
+                )
             }
         }
 
@@ -189,10 +138,10 @@ fun DashboardMainScreen(
         BottomNavigationBar(
             selectedTab = selectedTab,
             onTabSelected = { index ->
-                if (index == 1) {
-                    onPaseadoresClick()
-                } else {
-                    selectedTab = index
+                when (index) {
+                    1 -> onPaseadoresClick()
+                    3 -> onProfileClick()
+                    else -> selectedTab = index
                 }
             }
         )
@@ -205,8 +154,12 @@ fun DashboardMainScreen(
 
 @Composable
 fun DashboardHomeContent(
-    onPaseadoresClick: () -> Unit
+    onPaseadoresClick: () -> Unit,
+    onProfileClick: () -> Unit = {},
+    onLogoutClick: () -> Unit = {}
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -223,12 +176,40 @@ fun DashboardHomeContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { }) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Menú",
-                    tint = PrimaryDark
-                )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menú",
+                        tint = PrimaryDark
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Mi Perfil") },
+                        onClick = {
+                            showMenu = false
+                            onProfileClick()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = PrimaryDark)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Cerrar Sesión", color = Color(0xFFD32F2F)) },
+                        onClick = {
+                            showMenu = false
+                            onLogoutClick()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = Color(0xFFD32F2F))
+                        }
+                    )
+                }
             }
 
             Box(
@@ -355,7 +336,7 @@ fun DashboardHomeContent(
                 }
 
                 IconButton(onClick = onPaseadoresClick) {
-                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Ver paseadores", tint = PrimaryDark)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Ver paseadores", tint = PrimaryDark)
                 }
             }
         }

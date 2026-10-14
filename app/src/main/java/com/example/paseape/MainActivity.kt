@@ -25,17 +25,54 @@ import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PrimaryDark
 
+import android.content.Context
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
                 SplashScreen(onTimeout = {
-                    startActivity(Intent(this@MainActivity, AccountActivity::class.java))
-                    finish()
+                    determinarDestinoYContinuar()
                 })
             }
         }
+    }
+
+    private fun determinarDestinoYContinuar() {
+        val prefs = getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+        val legacyPrefs = getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+
+        val token = prefs.getString("auth_token", null)
+            ?: prefs.getString("JWT_TOKEN", null)
+            ?: legacyPrefs.getString("auth_token", null)
+            ?: legacyPrefs.getString("JWT_TOKEN", null)
+
+        val uuid = prefs.getString("user_uuid", null)
+            ?: legacyPrefs.getString("user_uuid", null)
+
+        val role = prefs.getInt("USER_ROLE", legacyPrefs.getInt("USER_ROLE", 1))
+
+        if (!token.isNullOrBlank()) {
+            val intent = when (role) {
+                99 -> Intent(this@MainActivity, AdminActivity::class.java)
+                2 -> Intent(this@MainActivity, PaseadoresActivity::class.java)
+                else -> Intent(this@MainActivity, DashboardActivity::class.java)
+            }.apply {
+                putExtra("USER_ROLE", role)
+                putExtra("EXTRA_USER_UUID", uuid)
+                putExtra("user_uuid", uuid)
+                putExtra("USER_UUID", uuid)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(intent)
+        } else {
+            val intent = Intent(this@MainActivity, LoginActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(intent)
+        }
+        finish()
     }
 }
 
