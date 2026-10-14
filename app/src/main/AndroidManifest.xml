@@ -51,6 +51,10 @@
             android:name=".MascotaDetalleActivity"
             android:exported="false"
             android:theme="@style/Theme.PaseaPE" />
+        <activity
+            android:name=".PaseadorDetalleActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PaseaPE" />
 
 
 

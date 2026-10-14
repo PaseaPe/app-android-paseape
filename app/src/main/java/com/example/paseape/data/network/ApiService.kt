@@ -25,6 +25,8 @@ import com.example.paseape.data.model.ActualizarPerfilReqDto
 import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.DetalleMascotaResponse
 import com.example.paseape.data.model.ActualizarMascotaRequest
+import com.example.paseape.data.model.PaseadoresListResponse
+import com.example.paseape.data.model.DetallePaseadorResponse
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -63,6 +65,17 @@ interface ApiService {
         @Path("uuid") uuid: String,
         @Body request: ActualizarMascotaRequest
     ): Response<GenericResponse>
+
+    @GET("paseadores")
+    suspend fun getPaseadores(
+        @Header("Authorization") token: String
+    ): Response<PaseadoresListResponse>
+
+    @GET("paseadores/{usuario_uuid}")
+    suspend fun getPaseadorPorUsuarioUuid(
+        @Header("Authorization") token: String,
+        @Path("usuario_uuid") usuarioUuid: String
+    ): Response<DetallePaseadorResponse>
 
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse
