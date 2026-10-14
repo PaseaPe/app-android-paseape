@@ -3,7 +3,17 @@ package com.example.paseape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,8 +26,27 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -247,7 +276,6 @@ fun MascotaDetalleContent(
                 )
 
                 val raza = mascota.tipoRazaDescripcion
-                    ?: mascota.tipoMascotaDescripcion
                     ?: "Raza no especificada"
                 Text(
                     text = raza,
@@ -256,19 +284,40 @@ fun MascotaDetalleContent(
                     textAlign = TextAlign.Center
                 )
 
-                mascota.tipoGeneroMascotaDescripcion?.takeIf { it.isNotBlank() }?.let { genero ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = PrimaryDark.copy(alpha = 0.1f)
-                    ) {
-                        Text(
-                            text = genero,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = PrimaryDark,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    mascota.tipoMascotaDescripcion?.takeIf { it.isNotBlank() }?.let { tipo ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = PrimaryDark.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = tipo.uppercase(),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryDark,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    mascota.tipoGeneroMascotaDescripcion?.takeIf { it.isNotBlank() }?.let { genero ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = PrimaryDark.copy(alpha = 0.08f)
+                        ) {
+                            Text(
+                                text = genero,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = PrimaryDark,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -461,160 +510,3 @@ fun MascotaStatItem(
     }
 }
 
-@Composable
-fun EditarMascotaDialog(
-    mascota: MascotaData,
-    onDismiss: () -> Unit,
-    onConfirm: (ActualizarMascotaRequest) -> Unit
-) {
-    var nombre by remember { mutableStateOf(mascota.nombre ?: "") }
-    var edadAnos by remember { mutableStateOf(mascota.edadAnos?.toString() ?: "0") }
-    var edadMeses by remember { mutableStateOf(mascota.edadMeses?.toString() ?: "0") }
-    var pesoKg by remember { mutableStateOf(mascota.pesoKg?.toString() ?: "0.0") }
-    var esterilizado by remember { mutableStateOf(mascota.esterilizado == 1) }
-    var sociablePerros by remember { mutableStateOf(mascota.sociableConPerros == 1) }
-    var sociablePersonas by remember { mutableStateOf(mascota.sociableConPersonas == 1) }
-    var precauciones by remember { mutableStateOf(mascota.precaucionesMedicas ?: "") }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Editar Mascota",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryDark
-                )
-
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = { nombre = it },
-                    label = { Text("Nombre de la mascota") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = edadAnos,
-                        onValueChange = { edadAnos = it.filter { char -> char.isDigit() } },
-                        label = { Text("Años") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = edadMeses,
-                        onValueChange = { edadMeses = it.filter { char -> char.isDigit() } },
-                        label = { Text("Meses") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = pesoKg,
-                    onValueChange = { pesoKg = it },
-                    label = { Text("Peso en kg") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = "¿Esterilizado?", fontSize = 14.sp, color = PrimaryDark)
-                    Switch(checked = esterilizado, onCheckedChange = { esterilizado = it })
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = "Sociable con perros", fontSize = 14.sp, color = PrimaryDark)
-                    Switch(checked = sociablePerros, onCheckedChange = { sociablePerros = it })
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = "Sociable con personas", fontSize = 14.sp, color = PrimaryDark)
-                    Switch(checked = sociablePersonas, onCheckedChange = { sociablePersonas = it })
-                }
-
-                OutlinedTextField(
-                    value = precauciones,
-                    onValueChange = { precauciones = it },
-                    label = { Text("Precauciones médicas") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(text = "Cancelar", color = Color.Gray)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val anosInt = edadAnos.toIntOrNull() ?: 0
-                            val mesesInt = edadMeses.toIntOrNull() ?: 0
-                            val pesoDouble = pesoKg.toDoubleOrNull() ?: 0.0
-
-                            val req = ActualizarMascotaRequest(
-                                nombre = nombre.trim(),
-                                tipoMascotaId = 1,
-                                tipoRazaId = 1,
-                                tipoGeneroMascotaId = 1,
-                                tipoTamanoMascotaId = 1,
-                                tipoNivelEnergiaId = 1,
-                                edadAnos = anosInt,
-                                edadMeses = mesesInt,
-                                pesoKg = pesoDouble,
-                                esterilizado = if (esterilizado) 1 else 0,
-                                sociableConPerros = if (sociablePerros) 1 else 0,
-                                sociableConPersonas = if (sociablePersonas) 1 else 0,
-                                precaucionesMedicas = precauciones.trim(),
-                                fotoUrl = mascota.fotoUrl
-                            )
-                            onConfirm(req)
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
-                        enabled = nombre.isNotBlank()
-                    ) {
-                        Text(text = "Guardar", color = Color.White)
-                    }
-                }
-            }
-        }
-    }
-}

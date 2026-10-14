@@ -23,5 +23,6 @@ data class AuthResData(
     @SerializedName("fullName") val fullName: String?,
     @SerializedName("pictureUrl") val pictureUrl: String?,
     @SerializedName("role") val role: String?,
+    @SerializedName("userTypeId") val userTypeId: Int? = null,
     @SerializedName("token") val token: String? // ¡El token real vive aquí!
 )

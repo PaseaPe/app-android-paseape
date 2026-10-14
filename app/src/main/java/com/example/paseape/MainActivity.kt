@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
         if (!token.isNullOrBlank()) {
             val intent = when (role) {
                 99 -> Intent(this@MainActivity, AdminActivity::class.java)
-                2 -> Intent(this@MainActivity, PaseadoresActivity::class.java)
+                2 -> Intent(this@MainActivity, WalkerDashboardActivity::class.java)
                 else -> Intent(this@MainActivity, DashboardActivity::class.java)
             }.apply {
                 putExtra("USER_ROLE", role)

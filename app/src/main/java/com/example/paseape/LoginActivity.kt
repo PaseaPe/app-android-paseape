@@ -62,7 +62,7 @@ class LoginActivity : ComponentActivity() {
                             }
                             startActivity(intent)
                         } else if (role == 2) {
-                            val intent = Intent(this, PaseadoresActivity::class.java).apply {
+                            val intent = Intent(this, WalkerDashboardActivity::class.java).apply {
                                 putExtra("USER_ROLE", role)
                                 putExtra("EXTRA_USER_UUID", uuid)
                                 putExtra("user_uuid", uuid)
@@ -305,7 +305,18 @@ fun LoginContent(
                                 Log.d("LOGIN_TEST", "Token extraído: [$tokenJwt], UUID: [$userUuid]")
 
                                 if (tokenJwt.isNotEmpty()) {
-                                    val userRole = if (trimmedEmail.contains("admin")) 99 else 1
+                                    val roleFromResponse = apiResponse.response?.role?.uppercase()
+                                    val userTypeId = apiResponse.response?.userTypeId
+                                    val userRole = when {
+                                        trimmedEmail.contains("admin") || roleFromResponse == "ADMIN" -> 99
+                                        roleFromResponse == "PASEADOR" || userTypeId == 2 -> 2
+                                        else -> 1
+                                    }
+                                    val roleString = when (userRole) {
+                                        99 -> "ADMIN"
+                                        2 -> "PASEADOR"
+                                        else -> "CLIENTE"
+                                    }
 
                                     // Guardar en SharedPreferences "paseape_prefs" (user_uuid, auth_token, USER_ROLE)
                                     val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
@@ -314,6 +325,7 @@ fun LoginContent(
                                         .putString("auth_token", tokenJwt)
                                         .putString("JWT_TOKEN", tokenJwt)
                                         .putInt("USER_ROLE", userRole)
+                                        .putString("user_role", roleString)
                                         .commit()
 
                                     // Guardar en PaseaPePrefs para retrocompatibilidad
@@ -323,9 +335,10 @@ fun LoginContent(
                                         .putString("auth_token", tokenJwt)
                                         .putString("JWT_TOKEN", tokenJwt)
                                         .putInt("USER_ROLE", userRole)
+                                        .putString("user_role", roleString)
                                         .commit()
 
-                                    Log.d("LOGIN_TEST", "¡Token (auth_token), UUID (user_uuid) y Rol ($userRole) guardados exitosamente!")
+                                    Log.d("LOGIN_TEST", "¡Token (auth_token), UUID (user_uuid) y Rol ($userRole - $roleString) guardados exitosamente!")
 
                                     isLoading = false
                                     Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()

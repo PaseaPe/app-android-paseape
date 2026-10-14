@@ -27,6 +27,10 @@ import com.example.paseape.data.model.DetalleMascotaResponse
 import com.example.paseape.data.model.ActualizarMascotaRequest
 import com.example.paseape.data.model.PaseadoresListResponse
 import com.example.paseape.data.model.DetallePaseadorResponse
+import com.example.paseape.data.model.UpdateProfileRequestDto
+import com.example.paseape.data.model.UpdateCoverageRequestDto
+import com.example.paseape.data.model.ApplicationParametersResponse
+import com.example.paseape.data.model.RazasResponse
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -45,6 +49,12 @@ interface ApiService {
     suspend fun actualizarPerfil(
         @Header("Authorization") token: String,
         @Body request: ActualizarPerfilReqDto
+    ): Response<GenericResponse>
+
+    @PUT("auth/profile")
+    suspend fun updateProfile(
+        @Header("Authorization") token: String,
+        @Body request: UpdateProfileRequestDto
     ): Response<GenericResponse>
 
     @POST("mascotas")
@@ -76,6 +86,29 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("usuario_uuid") usuarioUuid: String
     ): Response<DetallePaseadorResponse>
+
+    @GET("paseadores/{uuid}")
+    suspend fun getWalkerDetail(
+        @Header("Authorization") token: String,
+        @Path("uuid") userUuid: String
+    ): Response<DetallePaseadorResponse>
+
+    @PUT("paseadores/distrito-cobertura")
+    suspend fun updateWalkerCoverage(
+        @Header("Authorization") token: String,
+        @Body request: UpdateCoverageRequestDto
+    ): Response<GenericResponse>
+
+    @GET("application-parameters")
+    suspend fun getApplicationParameters(
+        @Header("Authorization") token: String? = null
+    ): Response<ApplicationParametersResponse>
+
+    @GET("application-parameters/razas/{tipoMascotaId}")
+    suspend fun getRazasPorTipo(
+        @Header("Authorization") token: String? = null,
+        @Path("tipoMascotaId") tipoMascotaId: Int
+    ): Response<RazasResponse>
 
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse
