@@ -1,7 +1,10 @@
 package com.example.paseape
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -29,16 +32,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.paseape.data.model.MascotaResponse
 import com.example.paseape.data.model.UserProfileResponse
+import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.profile.ProfileScreen
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
+import kotlinx.coroutines.launch
 
 class DashboardActivity : ComponentActivity() {
 
@@ -66,27 +73,8 @@ fun DashboardMainScreen(
     onPaseadoresClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-
-    /*
-    // TODO: DESCOMENTAR CUANDO EL ENDPOINT DEL BACKEND ESTÉ LISTO
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var userProfileApi by remember { mutableStateOf<UserProfileResponse?>(null) }
-    var isLoading by remember { mutableStateOf(false) }
-
-    LaunchedEffect(selectedTab) {
-        if (selectedTab == 3 && userProfileApi == null) {
-            isLoading = true
-            try {
-                val response = RetrofitClient.apiService.obtenerPerfilCliente()
-                userProfileApi = response
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-    */
 
     // DATOS DE PRUEBA TEMPORALES
     val mockProfile = remember {
@@ -152,7 +140,47 @@ fun DashboardMainScreen(
         ) {
             when (selectedTab) {
                 0 -> DashboardHomeContent(onPaseadoresClick = onPaseadoresClick)
-                3 -> ProfileScreen(userProfile = mockProfile)
+                3 -> ProfileScreen(
+                    userProfile = mockProfile,
+                    onLogout = {
+                        scope.launch {
+                            try {
+                                val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+                                val token = sharedPref.getString("JWT_TOKEN", "") ?: ""
+
+                                // LOG 1: Verificar que el token no esté vacío antes de enviarlo
+                                Log.d("LOGOUT_DEBUG", "Token recuperado para enviar: $token")
+
+                                if (token.isNotEmpty()) {
+                                    val response = RetrofitClient.apiService.logout("Bearer $token")
+
+                                    // LOG 2: Ver el código de respuesta del servidor
+                                    Log.d("LOGOUT_DEBUG", "Código de respuesta del servidor: ${response.code()}")
+
+                                    if (response.isSuccessful) {
+                                        Log.d("LOGOUT", "Cierre de sesión exitoso en el backend")
+                                    } else {
+                                        Log.e("LOGOUT", "El servidor rechazó el logout. Código: ${response.code()}")
+                                    }
+                                } else {
+                                    Log.w("LOGOUT", "No hay token guardado localmente")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("LOGOUT", "Excepción al llamar al logout: ${e.message}")
+                            } finally {
+                                // Limpia las preferencias
+                                val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+                                sharedPref.edit().clear().apply()
+
+                                // Opcional: Redirigir al LoginActivity si lo deseas
+                                val intent = Intent(context, LoginActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    }
+                )
                 else -> DashboardHomeContent(onPaseadoresClick = onPaseadoresClick)
             }
         }

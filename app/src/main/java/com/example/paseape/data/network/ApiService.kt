@@ -1,5 +1,9 @@
 package com.example.paseape.data.network
 
+import LogoutResponseDto
+import com.example.paseape.data.model.ActualizarEstadoUsuarioRequest
+import com.example.paseape.data.model.ClienteAdminDto
+import com.example.paseape.data.model.ForgotPasswordRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -11,8 +15,16 @@ import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
 import com.example.paseape.data.model.GoogleAuthReq
 import com.example.paseape.data.model.GoogleAuthResponse
+import com.example.paseape.data.model.PaseadorAdminDto
 import com.example.paseape.data.model.RegistroGoogleRequest
+import com.example.paseape.data.model.ResetPasswordRequest
+import com.example.paseape.data.model.ResponseDto
 import com.example.paseape.data.model.UserProfileResponse
+import retrofit2.Response
+import retrofit2.http.Headers
+import retrofit2.http.PUT
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
 
@@ -30,22 +42,41 @@ interface ApiService {
     ): LoginResponse
 
     @POST("auth/logout")
-    suspend fun cerrarSesion(
+    suspend fun logout(
         @Header("Authorization") token: String
-    ): GenericResponse
+    ): Response<LogoutResponseDto>
 
     @POST("auth/google")
     suspend fun loginWithGoogle(
         @Body request: GoogleAuthReq
     ): GoogleAuthResponse
 
-    @GET("clientes/perfil")
-    suspend fun obtenerPerfilCliente(
-        @Header("Authorization") token: String? = null
-    ): UserProfileResponse
-
     @POST("auth/register/google")
     suspend fun registrarConGoogle(
         @Body request: RegistroGoogleRequest
     ): GenericResponse
+
+    @Headers("Content-Type: application/json")
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequest): Response<Void>
+    @POST("auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<Void>
+
+    @GET("admin/paseadores")
+    suspend fun listarPaseadoresAdmin(
+        @Header("Authorization") token: String
+    ): ResponseDto<List<PaseadorAdminDto>>
+
+    @GET("admin/usuarios")
+    suspend fun listarClientesAdmin(
+        @Header("Authorization") token: String,
+        @Query("tipo_usuario_id") tipoUsuarioId: Int? = 1 // Opcional: para filtrar solo clientes (ID 1)
+    ): ResponseDto<List<ClienteAdminDto>>
+
+    @PUT("admin/usuarios/{uuid}/estado")
+    suspend fun actualizarEstadoUsuario(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: ActualizarEstadoUsuarioRequest // Asegúrate que coincida con el nombre exacto de tu archivo
+    ): ResponseDto<Any>
 }

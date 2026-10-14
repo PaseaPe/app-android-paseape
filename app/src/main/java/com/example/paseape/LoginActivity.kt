@@ -1,5 +1,6 @@
 package com.example.paseape
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
@@ -49,15 +54,12 @@ class LoginActivity : ComponentActivity() {
                 LoginContent(
                     onLoginSuccess = { role ->
                         if (role == 99) {
-                            // Redirecciona a tu AdminActivity existente
                             val intent = Intent(this, AdminActivity::class.java)
                             startActivity(intent)
                         } else if (role == 2) {
-                            // Redirecciona a la pantalla del Paseador trabajador
                             val intent = Intent(this, PaseadoresActivity::class.java)
                             startActivity(intent)
                         } else {
-                            // Redirecciona al Dashboard principal del Cliente
                             val intent = Intent(this, DashboardActivity::class.java).apply {
                                 putExtra("USER_ROLE", role)
                             }
@@ -85,6 +87,7 @@ fun LoginContent(
 
     var emailInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
 
@@ -121,8 +124,15 @@ fun LoginContent(
 
                     val googleRequest = GoogleAuthReq(idToken = idToken)
 
-                    val response = withContext(Dispatchers.IO) {
+                    val apiResponse = withContext(Dispatchers.IO) {
                         RetrofitClient.apiService.loginWithGoogle(googleRequest)
+                    }
+
+                    val tokenJwt = apiResponse.token ?: ""
+
+                    if (tokenJwt.isNotEmpty()) {
+                        val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+                        sharedPref.edit().putString("JWT_TOKEN", tokenJwt).apply()
                     }
 
                     isLoading = false
@@ -204,8 +214,16 @@ fun LoginContent(
                     onValueChange = { passwordInput = it },
                     label = { Text("Contraseña") },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                        val description = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(imageVector = image, contentDescription = description, tint = PrimaryDark)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -216,7 +234,6 @@ fun LoginContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Enlace para abrir la nueva pantalla de recuperar contraseña
                 TextButton(
                     onClick = {
                         val intent = Intent(context, ForgotPasswordActivity::class.java)
@@ -234,7 +251,6 @@ fun LoginContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // BOTÓN INICIAR SESIÓN (CON ACCESO DE ADMIN Y RETROFIT)
                 Button(
                     onClick = {
                         val trimmedEmail = emailInput.trim()
@@ -245,14 +261,6 @@ fun LoginContent(
                             return@Button
                         }
 
-                        // Validación local de Administrador
-                        if (trimmedEmail == "admin@paseape.com" && trimmedPassword == "Admin12345678*") {
-                            Toast.makeText(context, "¡Bienvenido, Administrador!", Toast.LENGTH_SHORT).show()
-                            onLoginSuccess(99)
-                            return@Button
-                        }
-
-                        // Flujo normal por Retrofit
                         if (isLoading) return@Button
                         isLoading = true
 
@@ -263,16 +271,40 @@ fun LoginContent(
                                     contrasena = trimmedPassword
                                 )
 
-                                val response = withContext(Dispatchers.IO) {
+                                val apiResponse = withContext(Dispatchers.IO) {
                                     RetrofitClient.apiService.iniciarSesion(loginReq)
                                 }
 
-                                isLoading = false
-                                Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
-                                onLoginSuccess(1)
+                                Log.d("LOGIN_TEST", "Objeto response recibido: $apiResponse")
+                                val tokenJwt = apiResponse.response?.token ?: ""
+                                Log.d("LOGIN_TEST", "Token extraído: [$tokenJwt]")
 
+                                if (tokenJwt.isNotEmpty()) {
+                                    val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+                                    sharedPref.edit().putString("JWT_TOKEN", tokenJwt).apply()
+                                    Log.d("LOGIN_TEST", "¡Token guardado exitosamente!")
+
+                                    isLoading = false
+                                    Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
+
+                                    if (trimmedEmail.contains("admin")) {
+                                        onLoginSuccess(99)
+                                    } else {
+                                        onLoginSuccess(1)
+                                    }
+                                } else {
+                                    isLoading = false
+                                    Toast.makeText(context, "Credenciales incorrectas o token vacío", Toast.LENGTH_LONG).show()
+                                }
+
+                            } catch (e: retrofit2.HttpException) {
+                                isLoading = false
+                                val errorBody = e.response()?.errorBody()?.string() ?: "Sin detalle"
+                                Log.e("LOGIN_ERROR", "HTTP ${e.code()} - Body: $errorBody", e)
+                                Toast.makeText(context, "Error servidor (${e.code()}): $errorBody", Toast.LENGTH_LONG).show()
                             } catch (e: Exception) {
                                 isLoading = false
+                                Log.e("LOGIN_ERROR", "Error de conexión: ${e.localizedMessage}", e)
                                 Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
                         }

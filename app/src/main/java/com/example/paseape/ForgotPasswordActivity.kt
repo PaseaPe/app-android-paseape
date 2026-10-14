@@ -24,9 +24,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.paseape.data.model.ForgotPasswordRequest
+import com.example.paseape.data.model.ResetPasswordRequest
+import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ForgotPasswordActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,11 +58,15 @@ fun ForgotPasswordScreen(
     onPasswordResetSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var email by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+
+    var isSendingCode by remember { mutableStateOf(false) }
+    var isResettingPassword by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -95,7 +105,7 @@ fun ForgotPasswordScreen(
                 )
             }
 
-            // PASO 1: Verifica tu correo
+            // PASO 1: Ingresa tu correo
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -122,15 +132,15 @@ fun ForgotPasswordScreen(
                                 color = Color(0xFFE65100)
                             )
                         }
-                        Text(text = "Verifica tu correo", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PrimaryDark)
+                        Text(text = "Solicitar código", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PrimaryDark)
                     }
 
-                    Text(text = "Correo registrado", fontSize = 13.sp, color = Color.DarkGray)
+                    Text(text = "Correo electrónico", fontSize = 13.sp, color = Color.DarkGray)
 
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        placeholder = { Text("Ingresa tu correo registrado", color = Color.LightGray) },
+                        placeholder = { Text("Ingresa cualquier correo", color = Color.LightGray) },
                         leadingIcon = { Icon(imageVector = Icons.Outlined.Mail, contentDescription = null, tint = Color.Gray) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -140,19 +150,46 @@ fun ForgotPasswordScreen(
 
                     Button(
                         onClick = {
-                            if (email.isBlank()) {
-                                Toast.makeText(context, "Ingresa tu correo", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Código enviado", Toast.LENGTH_SHORT).show()
+                            val trimmedEmail = email.trim()
+                            if (trimmedEmail.isBlank()) {
+                                Toast.makeText(context, "Ingresa un correo", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            if (isSendingCode) return@Button
+                            isSendingCode = true
+
+                            coroutineScope.launch {
+                                try {
+                                    val request = ForgotPasswordRequest(correo = trimmedEmail)
+                                    val response = withContext(Dispatchers.IO) {
+                                        RetrofitClient.apiService.forgotPassword(request)
+                                    }
+
+                                    isSendingCode = false
+                                    if (response.isSuccessful) {
+                                        Toast.makeText(context, "¡Petición enviada con éxito!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Error en el servidor (${response.code()})", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    isSendingCode = false
+                                    Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
                         shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF27B35))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF27B35)),
+                        enabled = !isSendingCode
                     ) {
-                        Text(text = "Enviar Código", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (isSendingCode) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text(text = "Enviar Código", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             }
@@ -187,14 +224,13 @@ fun ForgotPasswordScreen(
                         Text(text = "Confirma el código", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = PrimaryDark)
                     }
 
-                    Text(text = "Código OTP (6 dígitos)", fontSize = 13.sp, color = Color.DarkGray)
+                    Text(text = "Código OTP / Token", fontSize = 13.sp, color = Color.DarkGray)
 
                     OutlinedTextField(
                         value = code,
-                        onValueChange = { if (it.length <= 6) code = it },
-                        placeholder = { Text("0 0 0 0 0 0", color = Color.LightGray) },
+                        onValueChange = { code = it },
+                        placeholder = { Text("Pega el código o token aquí", color = Color.LightGray) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -265,21 +301,57 @@ fun ForgotPasswordScreen(
 
                     Button(
                         onClick = {
-                            if (code.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                            val trimmedCode = code.trim()
+                            val trimmedNewPassword = newPassword.trim()
+                            val trimmedConfirmPassword = confirmPassword.trim()
+
+                            if (trimmedCode.isBlank() || trimmedNewPassword.isBlank() || trimmedConfirmPassword.isBlank()) {
                                 Toast.makeText(context, "Completa todos los campos", Toast.LENGTH_SHORT).show()
-                            } else if (newPassword != confirmPassword) {
+                                return@Button
+                            }
+
+                            if (trimmedNewPassword != trimmedConfirmPassword) {
                                 Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
-                            } else {
-                                onPasswordResetSuccess()
+                                return@Button
+                            }
+
+                            if (isResettingPassword) return@Button
+                            isResettingPassword = true
+
+                            coroutineScope.launch {
+                                try {
+                                    val request = ResetPasswordRequest(
+                                        token = trimmedCode,
+                                        nueva_contrasena = trimmedNewPassword
+                                    )
+                                    val response = withContext(Dispatchers.IO) {
+                                        RetrofitClient.apiService.resetPassword(request)
+                                    }
+
+                                    isResettingPassword = false
+                                    if (response.isSuccessful) {
+                                        onPasswordResetSuccess()
+                                    } else {
+                                        Toast.makeText(context, "Error al restablecer (${response.code()})", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    isResettingPassword = false
+                                    Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
                         shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF27B35))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF27B35)),
+                        enabled = !isResettingPassword
                     ) {
-                        Text(text = "Restablecer Contraseña", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (isResettingPassword) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text(text = "Restablecer Contraseña", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             }
