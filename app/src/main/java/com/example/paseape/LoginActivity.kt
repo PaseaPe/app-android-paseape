@@ -48,7 +48,11 @@ class LoginActivity : ComponentActivity() {
             PaseaPETheme {
                 LoginContent(
                     onLoginSuccess = { role ->
-                        if (role == 2) {
+                        if (role == 99) {
+                            // Redirecciona a tu AdminActivity existente
+                            val intent = Intent(this, AdminActivity::class.java)
+                            startActivity(intent)
+                        } else if (role == 2) {
                             // Redirecciona a la pantalla del Paseador trabajador
                             val intent = Intent(this, PaseadoresActivity::class.java)
                             startActivity(intent)
@@ -57,7 +61,6 @@ class LoginActivity : ComponentActivity() {
                             val intent = Intent(this, DashboardActivity::class.java).apply {
                                 putExtra("USER_ROLE", role)
                             }
-
                             startActivity(intent)
                         }
                         finish()
@@ -66,7 +69,6 @@ class LoginActivity : ComponentActivity() {
                         val intent = Intent(this, RegisterActivity::class.java)
                         startActivity(intent)
                     }
-
                 )
             }
         }
@@ -85,7 +87,6 @@ fun LoginContent(
     var passwordInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
-    var showForgotPasswordDialog by remember { mutableStateOf(false) }
 
     fun launchGoogleLoginFlow(selectedRole: Int) {
         if (isLoading) return
@@ -118,18 +119,13 @@ fun LoginContent(
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                     val idToken = googleIdTokenCredential.idToken
 
-                    Log.d("PaseaPE_Auth", "idToken obtenido exitosamente: $idToken")
-
-                    val googleRequest = GoogleAuthReq(
-                        idToken = idToken
-                    )
+                    val googleRequest = GoogleAuthReq(idToken = idToken)
 
                     val response = withContext(Dispatchers.IO) {
                         RetrofitClient.apiService.loginWithGoogle(googleRequest)
                     }
 
                     isLoading = false
-                    Log.d("PaseaPE_Auth", "Respuesta exitosa Google Auth: $response")
                     Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
                     onLoginSuccess(selectedRole)
 
@@ -140,14 +136,11 @@ fun LoginContent(
 
             } catch (e: GetCredentialCancellationException) {
                 isLoading = false
-                Log.d("PaseaPE_Auth", "Selección de cuenta cancelada por el usuario")
             } catch (e: GetCredentialException) {
                 isLoading = false
-                Log.e("PaseaPE_Auth", "Error en CredentialManager: ${e.type} ${e.message}", e)
                 Toast.makeText(context, "Error Credenciales Google: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 isLoading = false
-                Log.e("PaseaPE_Auth", "Error durante el flujo de inicio de sesión", e)
                 Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
@@ -223,8 +216,12 @@ fun LoginContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Enlace para abrir la nueva pantalla de recuperar contraseña
                 TextButton(
-                    onClick = { showForgotPasswordDialog = true },
+                    onClick = {
+                        val intent = Intent(context, ForgotPasswordActivity::class.java)
+                        context.startActivity(intent)
+                    },
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text(
@@ -235,45 +232,35 @@ fun LoginContent(
                     )
                 }
 
-                if (showForgotPasswordDialog) {
-                    ForgotPasswordDialog(onDismiss = { showForgotPasswordDialog = false })
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
 
-                /*
-                // CÓDIGO DE PRUEBA DIRECTO (COMENTADO PARA NO BORRARLO):
+                // BOTÓN INICIAR SESIÓN (CON ACCESO DE ADMIN Y RETROFIT)
                 Button(
                     onClick = {
-                        Toast.makeText(context, "Ingreso directo", Toast.LENGTH_SHORT).show()
-                        onLoginSuccess(1) // Pasa rol 1 (Cliente)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
-                ) {
-                    Text(text = "Iniciar Sesión (Directo)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-                */
+                        val trimmedEmail = emailInput.trim()
+                        val trimmedPassword = passwordInput.trim()
 
-                // BOTÓN INICIAR SESIÓN USANDO TUS MÉTODOS DE RETROFIT REALES
-                Button(
-                    onClick = {
-                        if (emailInput.isBlank() || passwordInput.isBlank()) {
+                        if (trimmedEmail.isBlank() || trimmedPassword.isBlank()) {
                             Toast.makeText(context, "Ingresa tu correo y contraseña", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
 
+                        // Validación local de Administrador
+                        if (trimmedEmail == "admin@paseape.com" && trimmedPassword == "Admin12345678*") {
+                            Toast.makeText(context, "¡Bienvenido, Administrador!", Toast.LENGTH_SHORT).show()
+                            onLoginSuccess(99)
+                            return@Button
+                        }
+
+                        // Flujo normal por Retrofit
                         if (isLoading) return@Button
                         isLoading = true
 
                         coroutineScope.launch {
                             try {
                                 val loginReq = LoginRequest(
-                                    correo = emailInput.trim(),
-                                    contrasena = passwordInput.trim()
+                                    correo = trimmedEmail,
+                                    contrasena = trimmedPassword
                                 )
 
                                 val response = withContext(Dispatchers.IO) {
@@ -281,13 +268,11 @@ fun LoginContent(
                                 }
 
                                 isLoading = false
-                                Log.d("PaseaPE_Auth", "Login local exitoso: $response")
                                 Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
                                 onLoginSuccess(1)
 
                             } catch (e: Exception) {
                                 isLoading = false
-                                Log.e("PaseaPE_Auth", "Error al iniciar sesión local", e)
                                 Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
                         }
@@ -319,16 +304,12 @@ fun LoginContent(
                     colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
                     enabled = !isLoading
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = PrimaryDark, strokeWidth = 2.dp)
-                    } else {
-                        Text(
-                            text = "Continuar con Google",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = PrimaryDark
-                        )
-                    }
+                    Text(
+                        text = "Continuar con Google",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PrimaryDark
+                    )
                 }
             }
 
@@ -381,104 +362,4 @@ fun LoginContent(
             }
         )
     }
-}
-
-@Composable
-fun ForgotPasswordDialog(
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    var step by remember { mutableIntStateOf(1) } // 1: Enviar Email, 2: Código y Nueva Contraseña
-    var email by remember { mutableStateOf("") }
-    var code by remember { mutableStateOf("") }
-    var newPassword by remember { mutableStateOf("") }
-    var isSending by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
-        containerColor = Color.White,
-        title = {
-            Text(
-                text = if (step == 1) "Recuperar Contraseña" else "Restablecer Contraseña",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = PrimaryDark
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (step == 1) {
-                    Text(
-                        text = "Ingresa tu correo registrado para enviarte un código de verificación:",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Correo electrónico") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    Text(
-                        text = "Ingresa el código enviado a $email y tu nueva contraseña:",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { code = it },
-                        label = { Text("Código de 6 dígitos") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it },
-                        label = { Text("Nueva Contraseña") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (step == 1) {
-                        if (email.isBlank()) {
-                            Toast.makeText(context, "Ingresa tu correo", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        // TODO: Llamar al backend para enviar el código por correo (p. ej., /auth/forgot-password)
-                        Toast.makeText(context, "Código enviado a tu correo", Toast.LENGTH_SHORT).show()
-                        step = 2
-                    } else {
-                        if (code.isBlank() || newPassword.isBlank()) {
-                            Toast.makeText(context, "Completa todos los campos", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        // TODO: Llamar al backend para validar código y cambiar clave (p. ej., /auth/reset-password)
-                        Toast.makeText(context, "¡Contraseña actualizada correctamente!", Toast.LENGTH_SHORT).show()
-                        onDismiss()
-                    }
-                },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
-            ) {
-                Text(if (step == 1) "Enviar Código" else "Guardar Contraseña", color = Color.White)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color.Gray)
-            }
-        }
-    )
 }
