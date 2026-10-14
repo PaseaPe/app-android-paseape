@@ -31,6 +31,8 @@ import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UpdateCoverageRequestDto
 import com.example.paseape.data.model.ApplicationParametersResponse
 import com.example.paseape.data.model.RazasResponse
+import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
+import com.example.paseape.data.model.GenericApiResponse
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -147,18 +149,25 @@ interface ApiService {
     @GET("admin/paseadores")
     suspend fun listarPaseadoresAdmin(
         @Header("Authorization") token: String
-    ): ResponseDto<List<PaseadorAdminDto>>
+    ): Response<ResponseDto<List<PaseadorAdminDto>>>
 
     @GET("admin/usuarios")
     suspend fun listarClientesAdmin(
         @Header("Authorization") token: String,
-        @Query("tipo_usuario_id") tipoUsuarioId: Int? = 1 // Opcional: para filtrar solo clientes (ID 1)
-    ): ResponseDto<List<ClienteAdminDto>>
+        @Query("tipo_usuario_id") tipoUsuarioId: Int? = 1
+    ): Response<ResponseDto<List<ClienteAdminDto>>>
 
-    @PUT("admin/usuarios/{uuid}/estado")
+    @PUT("admin/usuarios/{usuario_uuid}/estado")
     suspend fun actualizarEstadoUsuario(
         @Header("Authorization") token: String,
-        @Path("uuid") uuid: String,
-        @Body request: ActualizarEstadoUsuarioRequest // Asegúrate que coincida con el nombre exacto de tu archivo
-    ): ResponseDto<Any>
+        @Path("usuario_uuid") usuarioUuid: String,
+        @Body request: ActualizarEstadoUsuarioRequest
+    ): Response<GenericApiResponse>
+
+    @PUT("admin/paseadores/{paseador_uuid}/verificacion")
+    suspend fun actualizarVerificacionPaseador(
+        @Header("Authorization") token: String,
+        @Path("paseador_uuid") paseadorUuid: String,
+        @Body request: ActualizarVerificacionPaseadorRequest
+    ): Response<GenericApiResponse>
 }
