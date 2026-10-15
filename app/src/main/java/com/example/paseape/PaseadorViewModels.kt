@@ -1,0 +1,96 @@
+package com.example.paseape
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.paseape.data.model.PaseadorDto
+import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.data.network.RetrofitClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+sealed interface PaseadoresListUiState {
+    data object Loading : PaseadoresListUiState
+    data class Success(val paseadores: List<PaseadorDto>) : PaseadoresListUiState
+    data class Error(val message: String) : PaseadoresListUiState
+}
+
+sealed interface PaseadorDetalleUiState {
+    data object Loading : PaseadorDetalleUiState
+    data class Success(val detalle: UsuarioPaseadorDetalleDto) : PaseadorDetalleUiState
+    data class Error(val message: String) : PaseadorDetalleUiState
+}
+
+class PaseadoresViewModel : ViewModel() {
+
+    private val _uiState = MutableStateFlow<PaseadoresListUiState>(PaseadoresListUiState.Loading)
+    val uiState: StateFlow<PaseadoresListUiState> = _uiState.asStateFlow()
+
+    fun cargarPaseadores(authHeader: String) {
+        _uiState.value = PaseadoresListUiState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.getPaseadores(token = authHeader)
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        val body = response.body()
+                        val lista = body?.response.orEmpty()
+                        _uiState.value = PaseadoresListUiState.Success(lista)
+                    } else {
+                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
+                        _uiState.value = PaseadoresListUiState.Error("Error al cargar paseadores: $errorMsg")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = PaseadoresListUiState.Error("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                }
+            }
+        }
+    }
+}
+
+class PaseadorDetalleViewModel : ViewModel() {
+
+    private val _uiState = MutableStateFlow<PaseadorDetalleUiState>(PaseadorDetalleUiState.Loading)
+    val uiState: StateFlow<PaseadorDetalleUiState> = _uiState.asStateFlow()
+
+    fun cargarDetalle(authHeader: String, usuarioUuid: String) {
+        if (usuarioUuid.isBlank()) {
+            _uiState.value = PaseadorDetalleUiState.Error("Identificador (UUID) del usuario paseador ausente.")
+            return
+        }
+        _uiState.value = PaseadorDetalleUiState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.getPaseadorPorUsuarioUuid(
+                    token = authHeader,
+                    usuarioUuid = usuarioUuid
+                )
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        val body = response.body()
+                        val detalle = body?.response
+                        if (detalle != null) {
+                            _uiState.value = PaseadorDetalleUiState.Success(detalle)
+                        } else {
+                            _uiState.value = PaseadorDetalleUiState.Error("No se encontraron los datos del paseador.")
+                        }
+                    } else {
+                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
+                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
+                        _uiState.value = PaseadorDetalleUiState.Error("Error al cargar detalle: $errorMsg")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = PaseadorDetalleUiState.Error("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                }
+            }
+        }
+    }
+}

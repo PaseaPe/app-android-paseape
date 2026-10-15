@@ -1,0 +1,24 @@
+## This file must *NOT* be checked into Version Control Systems,
+# as it contains information specific to your local configuration.
+#
+# Location of the SDK. This is only used by Gradle.
+# For customization when using a Version Control System, please read the
+# header note.
+#Tue Oct 06 10:11:12 GMT-05:00 2026
+sdk.dir=/Users/diegoapariciovela/Library/Android/sdk
+
+# ==============================================================================
+# CONFIGURACIÓN DE ENTORNO - PASEAPE MOBILE
+# ==============================================================================
+
+# Entorno Local (Emulador Android apuntando a máquina anfitriona):
+BASE_URL=http://10.0.2.2:7002/api-paseape/
+
+# Para pruebas en dispositivo físico (descomentar y reemplazar <TU_IP_LOCAL>):
+# BASE_URL="http://192.168.1.X:7001/api-paseape/"
+
+# Entorno Cloud / Producción (Oracle Cloud Infrastructure - OCI):
+# BASE_URL="https://api.paseape.com/api-paseape/"
+
+# Credenciales de Google Identity Services (Web Client ID generado en Google Cloud Console)
+GOOGLE_WEB_CLIENT_ID=
