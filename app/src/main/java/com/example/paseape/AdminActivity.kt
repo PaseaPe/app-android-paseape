@@ -1,5 +1,6 @@
 package com.example.paseape
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,13 +22,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,7 +45,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,7 +68,18 @@ class AdminActivity : ComponentActivity() {
         setContent {
             PaseaPETheme {
                 AdminScreen(
-                    onBack = { finish() }
+                    onBack = { finish() },
+                    onLogout = {
+                        // Limpia ambos archivos de preferencias (paseape_prefs y PaseaPePrefs)
+                        SessionManager.clear(this)
+
+                        // Redirige al Login limpiando el historial de pantallas
+                        val intent = Intent(this, LoginActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                        startActivity(intent)
+                        finish()
+                    }
                 )
             }
         }
@@ -70,12 +89,14 @@ class AdminActivity : ComponentActivity() {
 @Composable
 fun AdminScreen(
     viewModel: AdminViewModel = remember { AdminViewModel() },
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLogout: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val authToken = remember(context) { SessionManager.getAuthHeader(context) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val tabs = listOf("Paseadores", "Clientes")
 
@@ -98,33 +119,66 @@ fun AdminScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // ENCABEZADO
+            // ENCABEZADO CON MENÚ DESPLEGABLE DE CERRAR SESIÓN
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Regresar",
-                        tint = PrimaryDark
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Regresar",
+                            tint = PrimaryDark
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Panel de Administrador",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryDark
+                        )
+                        Text(
+                            text = "Gestión de usuarios y validaciones",
+                            fontSize = 13.sp,
+                            color = Color.Gray
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = "Panel de Administrador",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryDark
-                    )
-                    Text(
-                        text = "Gestión de usuarios y validaciones",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
+
+                // MENÚ DE OPCIONES / LOGOUT
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Opciones",
+                            tint = PrimaryDark
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Cerrar sesión", color = Color(0xFFC62828)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = "Cerrar sesión",
+                                    tint = Color(0xFFC62828)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onLogout()
+                            }
+                        )
+                    }
                 }
             }
 

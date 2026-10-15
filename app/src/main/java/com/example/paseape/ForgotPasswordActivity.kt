@@ -277,7 +277,7 @@ fun ForgotPasswordScreen(
                     OutlinedTextField(
                         value = newPassword,
                         onValueChange = { newPassword = it },
-                        placeholder = { Text("Mínimo 8 caracteres", color = Color.LightGray) },
+                        placeholder = { Text("Mínimo 8 caracteres, una mayúscula y un símbolo", color = Color.LightGray) },
                         leadingIcon = { Icon(imageVector = Icons.Outlined.Lock, contentDescription = null, tint = Color.Gray) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),

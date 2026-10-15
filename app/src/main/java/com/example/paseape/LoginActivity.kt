@@ -207,7 +207,7 @@ fun LoginContent(
                     color = PrimaryDark
                 )
                 Text(
-                    text = "Ingresa tus datos o continúa con Google",
+                    text = "Ingresa tus datos",
                     fontSize = 13.sp,
                     color = Color.Gray
                 )
@@ -375,11 +375,9 @@ fun LoginContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(text = "o", color = Color.Gray, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(10.dp))
 
-                Button(
+
+                /*Button(
                     onClick = { showRoleDialog = true },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -387,6 +385,9 @@ fun LoginContent(
                     shape = RoundedCornerShape(25.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
                     enabled = !isLoading
+                )
+
+                {
                 ) {
                     Text(
                         text = "Continuar con Google",
@@ -395,6 +396,8 @@ fun LoginContent(
                         color = PrimaryDark
                     )
                 }
+                */
+
             }
 
             Row(

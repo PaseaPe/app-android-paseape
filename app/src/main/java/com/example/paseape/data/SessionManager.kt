@@ -30,4 +30,12 @@ object SessionManager {
         return prefs.getString(KEY_USER_UUID, null)
             ?: legacyPrefs.getString(KEY_USER_UUID, null)
     }
+
+    //actualizacion
+    fun clear(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val legacyPrefs = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
+        legacyPrefs.edit().clear().apply()
+    }
 }
