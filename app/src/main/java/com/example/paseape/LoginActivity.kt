@@ -375,6 +375,9 @@ fun LoginContent(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = "o", color = Color.Gray, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(10.dp))
 
 
                 /*Button(
@@ -388,6 +391,7 @@ fun LoginContent(
                 )
 
                 {
+                ) {
                     Text(
                         text = "Continuar con Google",
                         fontSize = 15.sp,
