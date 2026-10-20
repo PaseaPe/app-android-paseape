@@ -3,8 +3,6 @@ package com.example.paseape
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -33,10 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.paseape.ui.theme.BackgroundOffWhite
@@ -48,20 +44,19 @@ class DashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val userUuid = intent.getStringExtra("EXTRA_USER_UUID")
-            ?: intent.getStringExtra("user_uuid")
-            ?: intent.getStringExtra("USER_UUID")
-            ?: getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).getString("user_uuid", null)
-            ?: getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).getString("user_uuid", null)
-
         setContent {
             PaseaPETheme {
                 DashboardMainScreen(
                     onPaseadoresClick = {
-                        val intent = Intent(
-                            this@DashboardActivity,
-                            PaseadoresActivity::class.java
-                        )
+                        val intent = Intent(this@DashboardActivity, PaseadoresActivity::class.java)
+                        startActivity(intent)
+                    },
+                    onPaseosClick = {
+                        val intent = Intent(this@DashboardActivity, PaseosActivity::class.java)
+                        startActivity(intent)
+                    },
+                    onNotificacionesClick = {
+                        val intent = Intent(this@DashboardActivity, NotificacionesActivity::class.java)
                         startActivity(intent)
                     },
                     onProfileClick = {
@@ -103,6 +98,8 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 fun DashboardMainScreen(
     onPaseadoresClick: () -> Unit,
+    onPaseosClick: () -> Unit,
+    onNotificacionesClick: () -> Unit,
     onProfileClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
@@ -113,7 +110,6 @@ fun DashboardMainScreen(
             .fillMaxSize()
             .background(BackgroundOffWhite)
     ) {
-
         // CONTENIDO PRINCIPAL SEGÚN LA PESTAÑA SELECCIONADA
         Box(
             modifier = Modifier
@@ -123,11 +119,13 @@ fun DashboardMainScreen(
             when (selectedTab) {
                 0 -> DashboardHomeContent(
                     onPaseadoresClick = onPaseadoresClick,
+                    onNotificacionesClick = onNotificacionesClick,
                     onProfileClick = onProfileClick,
                     onLogoutClick = onLogoutClick
                 )
                 else -> DashboardHomeContent(
                     onPaseadoresClick = onPaseadoresClick,
+                    onNotificacionesClick = onNotificacionesClick,
                     onProfileClick = onProfileClick,
                     onLogoutClick = onLogoutClick
                 )
@@ -140,6 +138,7 @@ fun DashboardMainScreen(
             onTabSelected = { index ->
                 when (index) {
                     1 -> onPaseadoresClick()
+                    2 -> onPaseosClick()
                     3 -> onProfileClick()
                     else -> selectedTab = index
                 }
@@ -155,6 +154,7 @@ fun DashboardMainScreen(
 @Composable
 fun DashboardHomeContent(
     onPaseadoresClick: () -> Unit,
+    onNotificacionesClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onLogoutClick: () -> Unit = {}
 ) {
@@ -224,7 +224,8 @@ fun DashboardHomeContent(
                 )
             }
 
-            IconButton(onClick = { }) {
+            // BOTÓN DE NOTIFICACIONES
+            IconButton(onClick = onNotificacionesClick) {
                 Icon(
                     imageVector = Icons.Default.Notifications,
                     contentDescription = "Notificaciones",

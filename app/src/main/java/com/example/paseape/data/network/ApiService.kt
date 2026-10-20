@@ -33,6 +33,8 @@ import com.example.paseape.data.model.ApplicationParametersResponse
 import com.example.paseape.data.model.RazasResponse
 import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
+import com.example.paseape.data.model.NotificacionDto
+import com.example.paseape.data.model.PaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PUT
@@ -143,6 +145,7 @@ interface ApiService {
     @Headers("Content-Type: application/json")
     @POST("auth/forgot-password")
     suspend fun forgotPassword(@Body request: ForgotPasswordRequest): Response<Void>
+
     @POST("auth/reset-password")
     suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<Void>
 
@@ -170,4 +173,18 @@ interface ApiService {
         @Path("paseador_uuid") paseadorUuid: String,
         @Body request: ActualizarVerificacionPaseadorRequest
     ): Response<GenericApiResponse>
+
+    // Métodos de paseos y notificaciones integrados directamente en ApiService
+    @GET("api-paseape/paseos/cliente/{clienteId}")
+    suspend fun obtenerPaseosPorCliente(
+        @Header("Authorization") token: String,
+        @Path("clienteId") clienteId: Long
+    ): Response<List<PaseoResDto>>
+
+    @GET("api-paseape/notificaciones/usuario/{usuarioId}")
+    suspend fun obtenerNotificaciones(
+        @Header("Authorization") token: String,
+        @Path("usuarioId") usuarioId: Long
+    ): Response<List<NotificacionDto>>
+
 }

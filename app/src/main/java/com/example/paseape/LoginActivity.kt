@@ -318,7 +318,6 @@ fun LoginContent(
                                         else -> "CLIENTE"
                                     }
 
-                                    // Guardar en SharedPreferences "paseape_prefs" (user_uuid, auth_token, USER_ROLE)
                                     val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
                                     paseaPrefs.edit()
                                         .putString("user_uuid", userUuid)
@@ -328,7 +327,6 @@ fun LoginContent(
                                         .putString("user_role", roleString)
                                         .commit()
 
-                                    // Guardar en PaseaPePrefs para retrocompatibilidad
                                     val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
                                     sharedPref.edit()
                                         .putString("user_uuid", userUuid)
@@ -338,7 +336,7 @@ fun LoginContent(
                                         .putString("user_role", roleString)
                                         .commit()
 
-                                    Log.d("LOGIN_TEST", "¡Token (auth_token), UUID (user_uuid) y Rol ($userRole - $roleString) guardados exitosamente!")
+                                    Log.d("LOGIN_TEST", "¡Token, UUID y Rol guardados exitosamente!")
 
                                     isLoading = false
                                     Toast.makeText(context, "¡Bienvenido a PaseaPE!", Toast.LENGTH_SHORT).show()
@@ -352,7 +350,7 @@ fun LoginContent(
                             } catch (e: retrofit2.HttpException) {
                                 isLoading = false
                                 val errorBody = e.response()?.errorBody()?.string() ?: "Sin detalle"
-                                Log.e("LOGIN_ERROR", "HTTP ${e.code()} - Body: $errorBody", e)
+                                Log.e("LOGIN_ERROR", "HTTP ${e.code()} Body: $errorBody", e)
                                 Toast.makeText(context, "Error servidor (${e.code()}): $errorBody", Toast.LENGTH_LONG).show()
                             } catch (e: Exception) {
                                 isLoading = false
@@ -375,28 +373,29 @@ fun LoginContent(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
 
-
-                /*Button(
-                    onClick = { showRoleDialog = true },
+                // ----------------------------------------------------------------------
+                // BOTÓN TEMPORAL DE PRUEBA (BORRAR DESPUÉS)
+                // ----------------------------------------------------------------------
+                OutlinedButton(
+                    onClick = {
+                        onLoginSuccess(1, "mock-uuid-test-123")
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
-                    enabled = !isLoading
-                )
-
-                {
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
                 ) {
                     Text(
-                        text = "Continuar con Google",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PrimaryDark
+                        text = "[PRUEBA] Omitir Login e Ir al Dashboard",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Red
                     )
                 }
-                */
+                // ----------------------------------------------------------------------
 
             }
 
