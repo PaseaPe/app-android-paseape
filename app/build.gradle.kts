@@ -15,7 +15,7 @@ val localProperties = Properties().apply {
 }
 
 val baseUrl: String = localProperties.getProperty("BASE_URL")
-    ?: "http://10.0.2.2:7002/api-paseape/"
+    ?: "http://192.168.100.114:7001/api-paseape/"
 
 android {
     namespace = "com.example.paseape"

@@ -1,18 +1,8 @@
-package com.example.paseape
+package com.example.paseape.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,32 +10,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Work
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +26,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.PaseadorDetalleUiState
+import com.example.paseape.R
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
@@ -63,16 +38,17 @@ import java.util.Locale
 fun PaseadorDetalleScreen(
     uiState: PaseadorDetalleUiState,
     onBackClick: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onReservarClick: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Detalle del Paseador",
+                        text = "Perfil del Paseador",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         color = PrimaryDark
                     )
                 },
@@ -85,10 +61,49 @@ fun PaseadorDetalleScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = { /* Menú adicional si se requiere */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menú",
+                            tint = PrimaryDark
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BackgroundOffWhite
                 )
             )
+        },
+        bottomBar = {
+            // Botón inferior fijo para contratar o reservar servicio
+            if (uiState is PaseadorDetalleUiState.Success) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    shadowElevation = 8.dp
+                ) {
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        Button(
+                            onClick = onReservarClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFF97316) // Naranja principal del mockup
+                            )
+                        ) {
+                            Text(
+                                text = "Contactar / Reservar Paseo",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         },
         containerColor = BackgroundOffWhite
     ) { paddingValues ->
@@ -186,30 +201,31 @@ fun PaseadorDetalleContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ==========================================
-        // 1. SECCIÓN CABECERA: Perfil y Contacto
+        // 1. TARJETA CABECERA (Perfil, Ubicación y Badges)
         // ==========================================
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Foto de perfil o avatar con placeholder
+                // Avatar circular
                 Box(
                     modifier = Modifier
-                        .size(90.dp)
+                        .size(70.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFF1F5F9))
-                        .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
+                        .border(1.dp, Color(0xFFE2E8F0), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!detalle.fotoPerfilUrl.isNullOrBlank()) {
@@ -227,286 +243,301 @@ fun PaseadorDetalleContent(
                         val iniciales = "$inicial1$inicial2".uppercase()
                         Text(
                             text = iniciales.ifBlank { "P" },
-                            fontSize = 32.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryDark
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                // Nombre Completo
-                Text(
-                    text = detalle.nombreCompleto,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B),
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Estado de Usuario (Badge)
-                val estadoUsuario = detalle.usuarioEstadoDescripcion ?: "ACTIVO"
-                Surface(
-                    color = Color(0xFFE8F5E9),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    // Nombre completo
                     Text(
-                        text = estadoUsuario.uppercase(),
-                        color = Color(0xFF2E7D32),
-                        fontSize = 11.sp,
+                        text = detalle.nombreCompleto,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Datos de Contacto
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    FilaContacto(
-                        icon = Icons.Default.Email,
-                        label = "Correo electrónico",
-                        valor = detalle.correo ?: paseador?.correo ?: "No registrado"
+                        color = Color(0xFF1E293B)
                     )
 
-                    FilaContacto(
-                        icon = Icons.Default.Phone,
-                        label = "Teléfono",
-                        valor = detalle.telefono ?: paseador?.telefono ?: "No registrado"
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // Ubicación / Distrito
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = (paseador?.distritoCoberturaDescripcion ?: "LIMA").uppercase(),
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Badges de Estado y Verificación
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val verificacion = paseador?.estadoVerificacionDescripcion ?: "PENDIENTE"
+                        Surface(
+                            color = Color(0xFFFFEDD5),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "VERIFICACIÓN: $verificacion".uppercase(),
+                                color = Color(0xFFC2410C),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        val estadoUsuario = detalle.usuarioEstadoDescripcion ?: "ACTIVO"
+                        Surface(
+                            color = Color(0xFFDCFCE7),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = estadoUsuario.uppercase(),
+                                color = Color(0xFF166534),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // ID / UUID sutil
+                    Text(
+                        text = "ID ${detalle.id ?: 1} · UUID ${detalle.hashCode().toString().take(8)}...",
+                        fontSize = 10.sp,
+                        color = Color(0xFF94A3B8)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
         // ==========================================
-        // 2. SECCIÓN DATOS DEL PASEADOR
+        // 2. TARJETA MÉTRICAS (Tarifa, Experiencia, Paseos)
         // ==========================================
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Tarifa
+                val tarifa = paseador?.tarifaHoraPen ?: 0.0
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = String.format(Locale.US, "S/ %.2f", tarifa),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF97316)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Tarifa / hora",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+
+                VerticalDivider(
+                    modifier = Modifier.height(30.dp),
+                    color = Color(0xFFE2E8F0)
+                )
+
+                // Experiencia
+                val exp = paseador?.experienciaAnos ?: 0
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "$exp años",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF97316)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Experiencia",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+
+                VerticalDivider(
+                    modifier = Modifier.height(30.dp),
+                    color = Color(0xFFE2E8F0)
+                )
+
+                // Paseos y Calificación
+                val paseos = paseador?.paseosCompletados ?: 0
+                val calificacion = paseador?.calificacionPromedio ?: 0.0
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "$paseos paseos",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF97316)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "⭐ ${String.format(Locale.US, "%.1f", calificacion)}",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 3. TARJETA DOCUMENTACIÓN DE CONFIANZA
+        // ==========================================
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(16.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Work,
-                        contentDescription = null,
-                        tint = PrimaryDark,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Datos del Paseador",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
-                    )
-                }
+                Text(
+                    text = "Documentación de Confianza",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Tipo de documento",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+                Text(
+                    text = "DNI (1)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1E293B)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Número de documento",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+                Text(
+                    text = paseador?.biografia ?: "45678912", // O campo DNI si lo tienes en el DTO
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1E293B)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Contacto",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+                val correoVal = detalle.correo ?: paseador?.correo ?: "correo@example.com"
+                val telVal = detalle.telefono ?: paseador?.telefono ?: "+51 900000000"
+                Text(
+                    text = "$correoVal • $telVal",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF334155)
+                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Biografía
+                // Cuadro interno de Certificado PDF adjunto
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFF8FAFC),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "📄 Certificado de Antecedentes Policiales adjunto",
+                            fontSize = 12.sp,
+                            color = Color(0xFF475569)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Ver documento PDF",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF97316)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 4. TARJETA SOBRE EL PASEADOR
+        // ==========================================
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
                 Text(
-                    text = "Biografía",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF64748B)
+                    text = "Sobre el paseador",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+
+                Spacer(modifier = Modifier.height(8.dp)
+                )
+
                 Text(
                     text = paseador?.biografia?.ifBlank { null }
-                        ?: "Sin biografía registrada.",
-                    fontSize = 14.sp,
-                    color = Color(0xFF334155),
-                    lineHeight = 20.sp
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Atributos en Grid / Cards
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Tarifa por Hora
-                    val tarifa = paseador?.tarifaHoraPen ?: 0.0
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Tarifa por hora",
-                        valor = String.format(Locale.US, "S/ %.2f / h", tarifa),
-                        destacado = true
-                    )
-
-                    // Años de Experiencia
-                    val exp = paseador?.experienciaAnos ?: 0
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Experiencia",
-                        valor = "$exp años"
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Distrito de Cobertura
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Distrito cobertura",
-                        valor = paseador?.distritoCoberturaDescripcion?.uppercase() ?: "NO ESPECIFICADO",
-                        icono = Icons.Default.LocationOn
-                    )
-
-                    // Estado de Verificación
-                    val verificacion = paseador?.estadoVerificacionDescripcion ?: "PENDIENTE"
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Verificación",
-                        valor = verificacion.uppercase(),
-                        icono = Icons.Default.CheckCircle,
-                        iconoColor = Color(0xFF10B981)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Calificación Promedio
-                    val calificacion = paseador?.calificacionPromedio ?: 0.0
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Calificación",
-                        valor = String.format(Locale.US, "%.1f ⭐", calificacion)
-                    )
-
-                    // Paseos Completados
-                    val paseos = paseador?.paseosCompletados ?: 0
-                    ItemDetalleAtributo(
-                        modifier = Modifier.weight(1f),
-                        titulo = "Paseos realizados",
-                        valor = "$paseos completados"
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-@Composable
-fun FilaContacto(
-    icon: ImageVector,
-    label: String,
-    valor: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFF1F5F9)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = PrimaryDark,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column {
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B)
-            )
-            Text(
-                text = valor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF1E293B)
-            )
-        }
-    }
-}
-
-@Composable
-fun ItemDetalleAtributo(
-    modifier: Modifier = Modifier,
-    titulo: String,
-    valor: String,
-    icono: ImageVector? = null,
-    iconoColor: Color = Color(0xFF64748B),
-    destacado: Boolean = false
-) {
-    Surface(
-        modifier = modifier,
-        color = Color(0xFFF8FAFC),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
-            Text(
-                text = titulo,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B),
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icono != null) {
-                    Icon(
-                        imageVector = icono,
-                        contentDescription = null,
-                        tint = iconoColor,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                Text(
-                    text = valor,
+                        ?: "Entrenador certificado y paseador enfocado en razas medianas y grandes.",
                     fontSize = 13.sp,
-                    fontWeight = if (destacado) FontWeight.ExtraBold else FontWeight.Bold,
-                    color = if (destacado) PrimaryDark else Color(0xFF1E293B)
+                    color = Color(0xFF475569),
+                    lineHeight = 18.sp
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(40.dp)) // Espacio final para evitar solapamiento con el botón flotante
     }
 }

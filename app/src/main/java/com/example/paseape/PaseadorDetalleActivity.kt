@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModelProvider
 import com.example.paseape.data.SessionManager
+import com.example.paseape.ui.screens.PaseadorDetalleScreen
 import com.example.paseape.ui.theme.PaseaPETheme
 
 class PaseadorDetalleActivity : ComponentActivity() {
