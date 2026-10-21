@@ -1,5 +1,6 @@
-package com.example.paseape.ui.screens
+package com.example.paseape
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -9,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -26,8 +26,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.paseape.PaseadorDetalleUiState
-import com.example.paseape.R
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
@@ -453,7 +451,7 @@ fun PaseadorDetalleContent(
                     color = Color(0xFF64748B)
                 )
                 Text(
-                    text = paseador?.biografia ?: "45678912", // O campo DNI si lo tienes en el DTO
+                    text = paseador?.biografia ?: "45678912",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1E293B)
@@ -469,7 +467,7 @@ fun PaseadorDetalleContent(
                 val correoVal = detalle.correo ?: paseador?.correo ?: "correo@example.com"
                 val telVal = detalle.telefono ?: paseador?.telefono ?: "+51 900000000"
                 Text(
-                    text = "$correoVal • $telVal",
+                    text = "$correoVal\n$telVal",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF334155)
@@ -482,7 +480,7 @@ fun PaseadorDetalleContent(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFFF8FAFC),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp)
@@ -525,8 +523,7 @@ fun PaseadorDetalleContent(
                     color = Color(0xFF1E293B)
                 )
 
-                Spacer(modifier = Modifier.height(8.dp)
-                )
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
                     text = paseador?.biografia?.ifBlank { null }
@@ -538,6 +535,6 @@ fun PaseadorDetalleContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp)) // Espacio final para evitar solapamiento con el botón flotante
+        Spacer(modifier = Modifier.height(40.dp))
     }
 }

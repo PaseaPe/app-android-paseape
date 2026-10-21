@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,15 +34,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -59,6 +62,12 @@ import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 class PaseadoresActivity : ComponentActivity() {
 
@@ -79,6 +88,9 @@ class PaseadoresActivity : ComponentActivity() {
                     uiState = uiState,
                     onBackClick = { finish() },
                     onRetry = { cargarDatos() },
+                    onDistritoSelected = { distrito ->
+                        viewModel.filtrarPorDistrito(distrito)
+                    },
                     onPaseadorClick = { usuarioUuid ->
                         val intent = Intent(this, PaseadorDetalleActivity::class.java).apply {
                             putExtra(PaseadorDetalleActivity.EXTRA_USUARIO_UUID, usuarioUuid)
@@ -102,6 +114,7 @@ fun PaseadoresScreen(
     uiState: PaseadoresListUiState,
     onBackClick: () -> Unit,
     onRetry: () -> Unit,
+    onDistritoSelected: (String?) -> Unit,
     onPaseadorClick: (String) -> Unit
 ) {
     Scaffold(
@@ -207,44 +220,123 @@ fun PaseadoresScreen(
                 }
 
                 is PaseadoresListUiState.Success -> {
-                    if (uiState.paseadores.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No hay paseadores disponibles en este momento.",
-                                color = Color(0xFF64748B),
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
-                        ) {
-                            items(
-                                items = uiState.paseadores,
-                                key = { it.usuarioUuid ?: it.uuid ?: it.id.toString() }
-                            ) { paseador ->
-                                PaseadorCard(
-                                    paseador = paseador,
-                                    onClick = {
-                                        val uUuid = paseador.usuarioUuid
-                                        if (!uUuid.isNullOrBlank()) {
-                                            onPaseadorClick(uUuid)
-                                        }
-                                    }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Header con selector de distrito horizontal (Todos, San Borja, etc.)
+                        SelectorDistritoHeader(
+                            distritos = uiState.distritosDisponibles,
+                            distritoSeleccionado = uiState.distritoSeleccionado,
+                            onDistritoSelected = onDistritoSelected
+                        )
+
+                        if (uiState.paseadores.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No hay paseadores disponibles para el distrito seleccionado.",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
                                 )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
+                            ) {
+                                items(
+                                    items = uiState.paseadores,
+                                    key = { it.usuarioUuid ?: it.uuid ?: it.id.toString() }
+                                ) { paseador ->
+                                    PaseadorCard(
+                                        paseador = paseador,
+                                        onClick = {
+                                            val uUuid = paseador.usuarioUuid
+                                            if (!uUuid.isNullOrBlank()) {
+                                                onPaseadorClick(uUuid)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectorDistritoHeader(
+    distritos: List<String>,
+    distritoSeleccionado: String?,
+    onDistritoSelected: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Filtrar por distrito de cobertura",
+            fontSize = 12.sp,
+            color = Color(0xFF64748B),
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = distritoSeleccionado ?: "Todos los distritos",
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color.White)
+            ) {
+                // Opción "Todos"
+                DropdownMenuItem(
+                    text = { Text("Todos los distritos", fontWeight = FontWeight.Bold) },
+                    onClick = {
+                        onDistritoSelected(null)
+                        expanded = false
+                    }
+                )
+
+                // Lista desplegable con los distritos del servidor
+                distritos.forEach { distrito ->
+                    DropdownMenuItem(
+                        text = { Text(distrito) },
+                        onClick = {
+                            onDistritoSelected(distrito)
+                            expanded = false
+                        }
+                    )
                 }
             }
         }

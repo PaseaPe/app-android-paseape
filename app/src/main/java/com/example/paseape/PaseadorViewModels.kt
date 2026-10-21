@@ -1,5 +1,8 @@
 package com.example.paseape
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.PaseadorDto
@@ -14,7 +17,11 @@ import kotlinx.coroutines.withContext
 
 sealed interface PaseadoresListUiState {
     data object Loading : PaseadoresListUiState
-    data class Success(val paseadores: List<PaseadorDto>) : PaseadoresListUiState
+    data class Success(
+        val paseadores: List<PaseadorDto>,
+        val distritosDisponibles: List<String>,
+        val distritoSeleccionado: String?
+    ) : PaseadoresListUiState
     data class Error(val message: String) : PaseadoresListUiState
 }
 
@@ -29,6 +36,9 @@ class PaseadoresViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<PaseadoresListUiState>(PaseadoresListUiState.Loading)
     val uiState: StateFlow<PaseadoresListUiState> = _uiState.asStateFlow()
 
+    private var listaCompletaPaseadores: List<PaseadorDto> = emptyList()
+    var distritoSeleccionadoActual by mutableStateOf<String?>(null) // null representa el filtro "Todos"
+
     fun cargarPaseadores(authHeader: String) {
         _uiState.value = PaseadoresListUiState.Loading
         viewModelScope.launch(Dispatchers.IO) {
@@ -37,8 +47,15 @@ class PaseadoresViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful) {
                         val body = response.body()
-                        val lista = body?.response.orEmpty()
-                        _uiState.value = PaseadoresListUiState.Success(lista)
+                        listaCompletaPaseadores = body?.response.orEmpty()
+
+                        // Extraer distritos de cobertura únicos para el selector de la UI
+                        val distritos = listaCompletaPaseadores
+                            .mapNotNull { it.distritoCoberturaDescripcion }
+                            .distinct()
+                            .sorted()
+
+                        actualizarEstadoConFiltro(distritos)
                     } else {
                         val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
                         val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
@@ -51,6 +68,30 @@ class PaseadoresViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    fun filtrarPorDistrito(distrito: String?) {
+        distritoSeleccionadoActual = if (distrito.equals("Todos", ignoreCase = true)) null else distrito
+        val distritos = listaCompletaPaseadores
+            .mapNotNull { it.distritoCoberturaDescripcion }
+            .distinct()
+            .sorted()
+        actualizarEstadoConFiltro(distritos)
+    }
+
+    private fun actualizarEstadoConFiltro(distritosDisponibles: List<String>) {
+        val filtrados = if (distritoSeleccionadoActual.isNullOrBlank()) {
+            listaCompletaPaseadores
+        } else {
+            listaCompletaPaseadores.filter {
+                it.distritoCoberturaDescripcion.equals(distritoSeleccionadoActual, ignoreCase = true)
+            }
+        }
+        _uiState.value = PaseadoresListUiState.Success(
+            paseadores = filtrados,
+            distritosDisponibles = distritosDisponibles,
+            distritoSeleccionado = distritoSeleccionadoActual
+        )
     }
 }
 

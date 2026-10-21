@@ -61,6 +61,10 @@
             android:theme="@style/Theme.PaseaPE" />
         <activity android:name=".PaseosActivity" />
         <activity android:name=".NotificacionesActivity" />
+        <activity
+            android:name=".ReservaPaseoActivity"
+            android:exported="false" />
+
 
 
 

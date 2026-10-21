@@ -1,5 +1,6 @@
 package com.example.paseape
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,7 +8,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModelProvider
 import com.example.paseape.data.SessionManager
-import com.example.paseape.ui.screens.PaseadorDetalleScreen
 import com.example.paseape.ui.theme.PaseaPETheme
 
 class PaseadorDetalleActivity : ComponentActivity() {
@@ -37,7 +37,11 @@ class PaseadorDetalleActivity : ComponentActivity() {
                 PaseadorDetalleScreen(
                     uiState = uiState,
                     onBackClick = { finish() },
-                    onRetry = { cargarDetalle(usuarioUuid) }
+                    onRetry = { cargarDetalle(usuarioUuid) },
+                    onReservarClick = {
+                        val intent = Intent(this@PaseadorDetalleActivity, ReservaPaseoActivity::class.java)
+                        startActivity(intent)
+                    }
                 )
             }
         }

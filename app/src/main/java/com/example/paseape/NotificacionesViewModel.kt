@@ -1,13 +1,10 @@
-package com.example.paseape.viewmodel
+package com.example.paseape
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.NotificacionDto
-import com.example.paseape.data.network.RetrofitClient
-import kotlinx.coroutines.launch
 
 class NotificacionesViewModel : ViewModel() {
 

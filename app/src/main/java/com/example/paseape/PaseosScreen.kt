@@ -1,4 +1,4 @@
-package com.example.paseape.ui.screens.paseos
+package com.example.paseape
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.paseape.viewmodel.PaseosViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
