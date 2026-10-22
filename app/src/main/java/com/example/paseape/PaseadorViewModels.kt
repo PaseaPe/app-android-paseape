@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.paseape.data.model.DistritoParamDto
+import com.example.paseape.data.model.DisponibilidadPaseadorDto
 import com.example.paseape.data.model.PaseadorDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.data.network.RetrofitClient
@@ -27,7 +29,10 @@ sealed interface PaseadoresListUiState {
 
 sealed interface PaseadorDetalleUiState {
     data object Loading : PaseadorDetalleUiState
-    data class Success(val detalle: UsuarioPaseadorDetalleDto) : PaseadorDetalleUiState
+    data class Success(
+        val detalle: UsuarioPaseadorDetalleDto,
+        val disponibilidad: DisponibilidadPaseadorDto? = null
+    ) : PaseadorDetalleUiState
     data class Error(val message: String) : PaseadorDetalleUiState
 }
 
@@ -36,26 +41,79 @@ class PaseadoresViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<PaseadoresListUiState>(PaseadoresListUiState.Loading)
     val uiState: StateFlow<PaseadoresListUiState> = _uiState.asStateFlow()
 
-    private var listaCompletaPaseadores: List<PaseadorDto> = emptyList()
-    var distritoSeleccionadoActual by mutableStateOf<String?>(null) // null representa el filtro "Todos"
+    private var catalogoDistritos: List<DistritoParamDto> = emptyList()
+    private var listaActualPaseadores: List<PaseadorDto> = emptyList()
+    private var ultimoAuthHeader: String = ""
+    var distritoSeleccionadoActual by mutableStateOf<String?>(null)
 
     fun cargarPaseadores(authHeader: String) {
+        ultimoAuthHeader = authHeader
         _uiState.value = PaseadoresListUiState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.apiService.getPaseadores(token = authHeader)
+                // 1. Cargar catálogo de distritos desde application-parameters si aún no existe
+                if (catalogoDistritos.isEmpty()) {
+                    try {
+                        val paramsRes = RetrofitClient.apiService.getApplicationParameters(authHeader)
+                        if (paramsRes.isSuccessful) {
+                            catalogoDistritos = paramsRes.body()?.response?.distritos.orEmpty()
+                        }
+                    } catch (_: Exception) {
+                        // Fallback a los distritos obtenidos en la lista si falla el catálogo
+                    }
+                }
+
+                // 2. Consulta al backend según el filtro seleccionado
+                val response = if (distritoSeleccionadoActual == null) {
+                    // Inicial: sin query params (el backend resuelve automáticamente el distrito del cliente en sesión)
+                    RetrofitClient.apiService.getPaseadores(token = authHeader)
+                } else if (distritoSeleccionadoActual.equals("Todos", ignoreCase = true)) {
+                    // "Todos los distritos": enviamos todos los IDs del catálogo para que el backend busque globalmente
+                    val todosIds = catalogoDistritos.map { it.id }.filter { it > 0 }
+                    RetrofitClient.apiService.getPaseadores(
+                        token = authHeader,
+                        distritoIds = if (todosIds.isNotEmpty()) todosIds else null
+                    )
+                } else {
+                    // Distrito específico seleccionado en el menú desplegable
+                    val distritoObj = catalogoDistritos.firstOrNull {
+                        it.descripcion.equals(distritoSeleccionadoActual, ignoreCase = true)
+                    }
+                    if (distritoObj != null) {
+                        RetrofitClient.apiService.getPaseadores(
+                            token = authHeader,
+                            distritoId = distritoObj.id
+                        )
+                    } else {
+                        RetrofitClient.apiService.getPaseadores(token = authHeader)
+                    }
+                }
+
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful) {
                         val body = response.body()
-                        listaCompletaPaseadores = body?.response.orEmpty()
+                        listaActualPaseadores = body?.response.orEmpty()
 
-                        // Extraer distritos de cobertura únicos para el selector de la UI
-                        val distritos = listaCompletaPaseadores
-                            .mapNotNull { it.distritoCoberturaDescripcion }
-                            .distinct()
-                            .sorted()
+                        // Generar lista de distritos para el desplegable (todos los distritos disponibles)
+                        val nombresDistritos = if (catalogoDistritos.isNotEmpty()) {
+                            catalogoDistritos.map { it.descripcion.trim().uppercase() }.distinct().sorted()
+                        } else {
+                            listaActualPaseadores.mapNotNull { it.distritoCoberturaDescripcion?.trim()?.uppercase() }.distinct().sorted()
+                        }
 
-                        actualizarEstadoConFiltro(distritos)
+                        // Resolver el nombre del distrito a mostrar en el selector
+                        val nombreMostrar = when {
+                            distritoSeleccionadoActual.equals("Todos", ignoreCase = true) -> null
+                            !distritoSeleccionadoActual.isNullOrBlank() -> distritoSeleccionadoActual?.trim()?.uppercase()
+                            listaActualPaseadores.isNotEmpty() -> listaActualPaseadores.firstOrNull()?.distritoCoberturaDescripcion?.trim()?.uppercase()
+                            else -> null
+                        }
+
+                        _uiState.value = PaseadoresListUiState.Success(
+                            paseadores = listaActualPaseadores,
+                            distritosDisponibles = nombresDistritos,
+                            distritoSeleccionado = nombreMostrar
+                        )
                     } else {
                         val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
                         val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
@@ -71,27 +129,14 @@ class PaseadoresViewModel : ViewModel() {
     }
 
     fun filtrarPorDistrito(distrito: String?) {
-        distritoSeleccionadoActual = if (distrito.equals("Todos", ignoreCase = true)) null else distrito
-        val distritos = listaCompletaPaseadores
-            .mapNotNull { it.distritoCoberturaDescripcion }
-            .distinct()
-            .sorted()
-        actualizarEstadoConFiltro(distritos)
-    }
-
-    private fun actualizarEstadoConFiltro(distritosDisponibles: List<String>) {
-        val filtrados = if (distritoSeleccionadoActual.isNullOrBlank()) {
-            listaCompletaPaseadores
+        distritoSeleccionadoActual = if (distrito.isNullOrBlank() || distrito.equals("Todos", ignoreCase = true)) {
+            "Todos"
         } else {
-            listaCompletaPaseadores.filter {
-                it.distritoCoberturaDescripcion.equals(distritoSeleccionadoActual, ignoreCase = true)
-            }
+            distrito
         }
-        _uiState.value = PaseadoresListUiState.Success(
-            paseadores = filtrados,
-            distritosDisponibles = distritosDisponibles,
-            distritoSeleccionado = distritoSeleccionadoActual
-        )
+        if (ultimoAuthHeader.isNotBlank()) {
+            cargarPaseadores(ultimoAuthHeader)
+        }
     }
 }
 
@@ -115,9 +160,14 @@ class PaseadorDetalleViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful) {
                         val body = response.body()
-                        val detalle = body?.response
-                        if (detalle != null) {
-                            _uiState.value = PaseadorDetalleUiState.Success(detalle)
+                        val detalleData = body?.response
+                        val usuarioDetalle = detalleData?.usuario
+                        val disponibilidad = detalleData?.disponibilidad
+                        if (usuarioDetalle != null) {
+                            _uiState.value = PaseadorDetalleUiState.Success(
+                                detalle = usuarioDetalle,
+                                disponibilidad = disponibilidad
+                            )
                         } else {
                             _uiState.value = PaseadorDetalleUiState.Error("No se encontraron los datos del paseador.")
                         }

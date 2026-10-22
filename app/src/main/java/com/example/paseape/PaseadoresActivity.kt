@@ -221,7 +221,7 @@ fun PaseadoresScreen(
 
                 is PaseadoresListUiState.Success -> {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Header con selector de distrito horizontal (Todos, San Borja, etc.)
+                        // Header con selector de distrito
                         SelectorDistritoHeader(
                             distritos = uiState.distritosDisponibles,
                             distritoSeleccionado = uiState.distritoSeleccionado,
@@ -235,12 +235,22 @@ fun PaseadoresScreen(
                                     .padding(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "No hay paseadores disponibles para el distrito seleccionado.",
-                                    color = Color(0xFF64748B),
-                                    fontSize = 14.sp,
-                                    textAlign = TextAlign.Center
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "No hay paseadores disponibles para el distrito seleccionado.",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 14.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = { onDistritoSelected(null) },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
+                                    ) {
+                                        Text("Ver todos los distritos", fontSize = 13.sp)
+                                    }
+                                }
                             }
                         } else {
                             LazyColumn(

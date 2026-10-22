@@ -30,6 +30,7 @@ data class PaseadorDto(
 data class PaseadoresListResponse(
     @SerializedName("response") val response: List<PaseadorDto>? = null,
     @SerializedName("statusCode") val statusCode: Int? = null,
+    @SerializedName("code") val code: String? = null,
     @SerializedName("message") val message: String? = null
 )
 
@@ -60,8 +61,36 @@ data class UsuarioPaseadorDetalleDto(
         }
 }
 
+data class PaseadorDetalleResponseData(
+    @SerializedName("usuario") val usuario: UsuarioPaseadorDetalleDto? = null,
+    @SerializedName("disponibilidad") val disponibilidad: DisponibilidadPaseadorDto? = null
+)
+
+data class DisponibilidadPaseadorDto(
+    @SerializedName("max_mascotas_predeterminado") val maxMascotasPredeterminado: Int? = null,
+    @SerializedName("slots") val slots: List<DisponibilidadSlotDto>? = null
+)
+
+data class DisponibilidadSlotDto(
+    @SerializedName("id") val id: Long? = null,
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("dia_semana_id") val diaSemanaId: Int? = null,
+    @SerializedName("dia_semana_descripcion") val diaSemanaDescripcion: String? = null,
+    @SerializedName("bloque_horario_id") val bloqueHorarioId: Int? = null,
+    @SerializedName("bloque_codigo") val bloqueCodigo: String? = null,
+    @SerializedName("hora_inicio") val horaInicio: String? = null,
+    @SerializedName("hora_fin") val horaFin: String? = null,
+    @SerializedName("max_mascotas") val maxMascotas: Int? = null,
+    @SerializedName("activo") val activo: Boolean? = null,
+    @SerializedName("mascotas_ocupadas") val mascotasOcupadas: Int? = null,
+    @SerializedName("cupos_disponibles") val cuposDisponibles: Int? = null,
+    @SerializedName("esta_lleno") val estaLleno: Boolean? = null,
+    @SerializedName("disponible") val disponible: Boolean? = null
+)
+
 data class DetallePaseadorResponse(
-    @SerializedName("response") val response: UsuarioPaseadorDetalleDto? = null,
+    @SerializedName("response") val response: PaseadorDetalleResponseData? = null,
     @SerializedName("statusCode") val statusCode: Int? = null,
+    @SerializedName("code") val code: String? = null,
     @SerializedName("message") val message: String? = null
 )

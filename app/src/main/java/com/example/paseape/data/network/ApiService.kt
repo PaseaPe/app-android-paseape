@@ -82,19 +82,23 @@ interface ApiService {
 
     @GET("paseadores")
     suspend fun getPaseadores(
-        @Header("Authorization") token: String
+        @Header("Authorization") token: String,
+        @Query("distrito_id") distritoId: Int? = null,
+        @Query("distrito_ids") distritoIds: List<Int>? = null
     ): Response<PaseadoresListResponse>
 
     @GET("paseadores/{usuario_uuid}")
     suspend fun getPaseadorPorUsuarioUuid(
         @Header("Authorization") token: String,
-        @Path("usuario_uuid") usuarioUuid: String
+        @Path("usuario_uuid") usuarioUuid: String,
+        @Query("fecha") fecha: String? = null
     ): Response<DetallePaseadorResponse>
 
     @GET("paseadores/{uuid}")
     suspend fun getWalkerDetail(
         @Header("Authorization") token: String,
-        @Path("uuid") userUuid: String
+        @Path("uuid") userUuid: String,
+        @Query("fecha") fecha: String? = null
     ): Response<DetallePaseadorResponse>
 
     @PUT("paseadores/distrito-cobertura")

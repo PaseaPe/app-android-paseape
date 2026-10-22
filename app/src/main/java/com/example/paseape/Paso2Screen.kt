@@ -27,6 +27,11 @@ fun Paso2Screen(
 ) {
     val naranja = Color(0xFFE8702A)
 
+    val precio30 = viewModel.formatearPrecio(viewModel.calcularCostoDuracion(30))
+    val precio60 = viewModel.formatearPrecio(viewModel.calcularCostoDuracion(60))
+    val precio90 = viewModel.formatearPrecio(viewModel.calcularCostoDuracion(90))
+    val precio120 = viewModel.formatearPrecio(viewModel.calcularCostoDuracion(120))
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -35,6 +40,16 @@ fun Paso2Screen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
                     }
+                },
+                actions = {
+                    TextButton(onClick = onNext) {
+                        Text(
+                            text = "Ver Paso 3 ➔",
+                            color = naranja,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             )
         },
@@ -42,9 +57,10 @@ fun Paso2Screen(
             Surface(shadowElevation = 8.dp) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Total estimado: S/ ${viewModel.totalEstimado}0 PEN",
+                        text = "Total estimado: ${viewModel.totalEstimadoFormateado} PEN",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 15.sp,
+                        color = Color(0xFF1E293B)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
@@ -53,7 +69,7 @@ fun Paso2Screen(
                         colors = ButtonDefaults.buttonColors(containerColor = naranja),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("Revisar Resumen de Solicitud", color = Color.White)
+                        Text("Revisar Resumen de Solicitud", color = Color.White, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -82,13 +98,13 @@ fun Paso2Screen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DuracionCard(30, "Media hora básica", "S/ 15.00", viewModel.duracionMinutos == 30, Modifier.weight(1f)) { viewModel.duracionMinutos = 30 }
-                DuracionCard(60, "1 bloque", "S/ 25.00", viewModel.duracionMinutos == 60, Modifier.weight(1f), "Recomendado") { viewModel.duracionMinutos = 60 }
+                DuracionCard(30, "Media hora básica", precio30, viewModel.duracionMinutos == 30, Modifier.weight(1f)) { viewModel.duracionMinutos = 30 }
+                DuracionCard(60, "1 bloque horario", precio60, viewModel.duracionMinutos == 60, Modifier.weight(1f), "Recomendado") { viewModel.duracionMinutos = 60 }
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DuracionCard(90, "Requiere 2 slots libres", "S/ 37.50", viewModel.duracionMinutos == 90, Modifier.weight(1f)) { viewModel.duracionMinutos = 90 }
-                DuracionCard(120, "Paseo largo", "S/ 50.00", viewModel.duracionMinutos == 120, Modifier.weight(1f)) { viewModel.duracionMinutos = 120 }
+                DuracionCard(90, "2 bloques contiguos", precio90, viewModel.duracionMinutos == 90, Modifier.weight(1f)) { viewModel.duracionMinutos = 90 }
+                DuracionCard(120, "Paseo largo (2h)", precio120, viewModel.duracionMinutos == 120, Modifier.weight(1f)) { viewModel.duracionMinutos = 120 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

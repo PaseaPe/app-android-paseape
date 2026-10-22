@@ -78,7 +78,7 @@ class WalkerProfileViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful) {
                         val body = response.body()
-                        val detalle = body?.response
+                        val detalle = body?.response?.usuario
                         if (detalle != null) {
                             _uiState.value = WalkerProfileUiState.Success(detalle)
                         } else {

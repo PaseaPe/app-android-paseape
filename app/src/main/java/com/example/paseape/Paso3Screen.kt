@@ -12,10 +12,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +54,7 @@ fun Paso3Screen(
                         colors = ButtonDefaults.buttonColors(containerColor = naranja),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("Confirmar y Enviar Solicitud", color = Color.White)
+                        Text("Confirmar y Enviar Solicitud", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -79,34 +83,61 @@ fun Paso3Screen(
                     Text("Resumen del paseo", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    // Datos del paseador
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(36.dp).background(Color(0xFFFFE8D8), CircleShape), contentAlignment = Alignment.Center) {
-                            Text("RG", fontSize = 12.sp, color = naranja, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFFE8D8)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!viewModel.fotoPerfilUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = viewModel.fotoPerfilUrl,
+                                    contentDescription = "Foto paseador",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    error = painterResource(id = R.drawable.logoperro)
+                                )
+                            } else {
+                                val iniciales = viewModel.paseadorNombre.split(" ")
+                                    .filter { it.isNotBlank() }
+                                    .take(2)
+                                    .map { it.first() }
+                                    .joinToString("")
+                                    .uppercase()
+                                Text(iniciales.ifBlank { "P" }, fontSize = 12.sp, color = naranja, fontWeight = FontWeight.Bold)
+                            }
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(viewModel.paseadorNombre, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("Tarifa base: S/ ${viewModel.tarifaBaseHora}0/h", fontSize = 10.sp, color = Color.Gray)
+                            Text("Tarifa base: ${viewModel.formatearPrecio(viewModel.tarifaBaseHora)}/h", fontSize = 10.sp, color = Color.Gray)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Datos de la mascota
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(36.dp).background(Color(0xFFFFE8D8), CircleShape), contentAlignment = Alignment.Center) {
-                            Text("B", fontSize = 12.sp, color = naranja, fontWeight = FontWeight.Bold)
+                            Text(viewModel.mascotaSeleccionada.take(1).uppercase(), fontSize = 12.sp, color = naranja, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(viewModel.mascotaSeleccionada, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("Golden Retriever • 24.5 kg", fontSize = 10.sp, color = Color.Gray)
+                            Text("Mascota confirmada", fontSize = 10.sp, color = Color.Gray)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("📅 ${viewModel.diaSeleccionado} / ${viewModel.horarioSeleccionado} (${viewModel.duracionMinutos} min)", fontSize = 12.sp)
+                    Text("📅 ${viewModel.diaSeleccionado} / ${viewModel.horarioSeleccionado} (${viewModel.duracionMinutos} min)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("📍 ${viewModel.direccionRecojo}", fontSize = 12.sp, color = Color.Gray)
+                    if (viewModel.referenciaRecojo.isNotBlank()) {
+                        Text("   Ref: ${viewModel.referenciaRecojo}", fontSize = 11.sp, color = Color.Gray)
+                    }
                 }
             }
 
@@ -123,7 +154,7 @@ fun Paso3Screen(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Tarifa ${viewModel.duracionMinutos} min de paseo", fontSize = 12.sp, color = Color.Gray)
-                        Text("S/ ${viewModel.totalEstimado}0", fontSize = 12.sp)
+                        Text(viewModel.totalEstimadoFormateado, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -135,7 +166,7 @@ fun Paso3Screen(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Total a Pagar", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("S/ ${viewModel.totalEstimado}0 PEN", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("${viewModel.totalEstimadoFormateado} PEN", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1E293B))
                     }
                 }
             }
