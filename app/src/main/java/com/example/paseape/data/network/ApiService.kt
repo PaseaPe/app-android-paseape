@@ -10,6 +10,7 @@ import retrofit2.http.POST
 import retrofit2.http.Header
 import com.example.paseape.data.model.PaseadoresResponse
 import com.example.paseape.data.model.LoginRequest
+import com.example.paseape.data.model.AuthResData
 import com.example.paseape.data.model.LoginResponse
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
@@ -120,7 +121,7 @@ interface ApiService {
     @POST("auth/register/local")
     suspend fun registrarUsuario(
         @Body request: RegistroRequest
-    ): GenericResponse
+    ): Response<ResponseDto<AuthResData>>
 
     @POST("auth/login")
     suspend fun iniciarSesion(
@@ -175,13 +176,13 @@ interface ApiService {
     ): Response<GenericApiResponse>
 
     // Métodos de paseos y notificaciones integrados directamente en ApiService
-    @GET("api-paseape/paseos/cliente/{clienteId}")
+    @GET("paseos/cliente/{clienteId}")
     suspend fun obtenerPaseosPorCliente(
         @Header("Authorization") token: String,
         @Path("clienteId") clienteId: Long
     ): Response<List<PaseoResDto>>
 
-    @GET("api-paseape/notificaciones/usuario/{usuarioId}")
+    @GET("notificaciones/usuario/{usuarioId}")
     suspend fun obtenerNotificaciones(
         @Header("Authorization") token: String,
         @Path("usuarioId") usuarioId: Long

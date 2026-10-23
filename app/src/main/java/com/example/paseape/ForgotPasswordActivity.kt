@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.paseape.data.model.ForgotPasswordRequest
 import com.example.paseape.data.model.ResetPasswordRequest
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
@@ -170,11 +172,19 @@ fun ForgotPasswordScreen(
                                     if (response.isSuccessful) {
                                         Toast.makeText(context, "¡Petición enviada con éxito!", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(context, "Error en el servidor (${response.code()})", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            ApiErrorMapper.fromResponse(response, ApiErrorContext.PASSWORD_RESET),
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                 } catch (e: Exception) {
                                     isSendingCode = false
-                                    Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(
+                                        context,
+                                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PASSWORD_RESET),
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 }
                             }
                         },
@@ -332,11 +342,19 @@ fun ForgotPasswordScreen(
                                     if (response.isSuccessful) {
                                         onPasswordResetSuccess()
                                     } else {
-                                        Toast.makeText(context, "Error al restablecer (${response.code()})", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            ApiErrorMapper.fromResponse(response, ApiErrorContext.PASSWORD_RESET),
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                 } catch (e: Exception) {
                                     isResettingPassword = false
-                                    Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(
+                                        context,
+                                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PASSWORD_RESET),
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 }
                             }
                         },

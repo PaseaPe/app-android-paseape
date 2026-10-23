@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.PaseadorDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,14 +59,16 @@ class PaseadoresViewModel : ViewModel() {
 
                         actualizarEstadoConFiltro(distritos)
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
-                        _uiState.value = PaseadoresListUiState.Error("Error al cargar paseadores: $errorMsg")
+                        _uiState.value = PaseadoresListUiState.Error(
+                            ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _uiState.value = PaseadoresListUiState.Error("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                    _uiState.value = PaseadoresListUiState.Error(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                    )
                 }
             }
         }
@@ -102,7 +106,7 @@ class PaseadorDetalleViewModel : ViewModel() {
 
     fun cargarDetalle(authHeader: String, usuarioUuid: String) {
         if (usuarioUuid.isBlank()) {
-            _uiState.value = PaseadorDetalleUiState.Error("Identificador (UUID) del usuario paseador ausente.")
+            _uiState.value = PaseadorDetalleUiState.Error("No se encontró el identificador del paseador.")
             return
         }
         _uiState.value = PaseadorDetalleUiState.Loading
@@ -122,14 +126,16 @@ class PaseadorDetalleViewModel : ViewModel() {
                             _uiState.value = PaseadorDetalleUiState.Error("No se encontraron los datos del paseador.")
                         }
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
-                        _uiState.value = PaseadorDetalleUiState.Error("Error al cargar detalle: $errorMsg")
+                        _uiState.value = PaseadorDetalleUiState.Error(
+                            ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _uiState.value = PaseadorDetalleUiState.Error("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                    _uiState.value = PaseadorDetalleUiState.Error(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                    )
                 }
             }
         }

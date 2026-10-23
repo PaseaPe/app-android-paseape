@@ -7,6 +7,8 @@ import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateCoverageRequestDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -62,7 +64,7 @@ class WalkerProfileViewModel : ViewModel() {
         cargarParametros(token)
 
         if (usuarioUuid.isBlank()) {
-            _uiState.value = WalkerProfileUiState.Error("Identificador del usuario paseador no encontrado en sesión.")
+            _uiState.value = WalkerProfileUiState.Error("No se encontró el identificador del paseador.")
             return
         }
 
@@ -85,14 +87,16 @@ class WalkerProfileViewModel : ViewModel() {
                             _uiState.value = WalkerProfileUiState.Error("No se encontraron los datos del perfil de paseador.")
                         }
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
-                        _uiState.value = WalkerProfileUiState.Error("Error al cargar perfil: $errorMsg")
+                        _uiState.value = WalkerProfileUiState.Error(
+                            ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _uiState.value = WalkerProfileUiState.Error("Error de red: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                    _uiState.value = WalkerProfileUiState.Error(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                    )
                 }
             }
         }
@@ -120,15 +124,17 @@ class WalkerProfileViewModel : ViewModel() {
                         onSuccess()
                         cargarPerfil(token, usuarioUuid)
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
-                        _userMessage.emit("Error al actualizar perfil: $errorMsg")
+                        _userMessage.emit(
+                            ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isOperationLoading.value = false
-                    _userMessage.emit("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                    _userMessage.emit(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                    )
                 }
             }
         }
@@ -160,15 +166,17 @@ class WalkerProfileViewModel : ViewModel() {
                         onSuccess()
                         cargarPerfil(token, usuarioUuid)
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        val errorMsg = rawError ?: "HTTP ${response.code()} ${response.message()}".trim()
-                        _userMessage.emit("Error al actualizar cobertura: $errorMsg")
+                        _userMessage.emit(
+                            ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                        )
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isOperationLoading.value = false
-                    _userMessage.emit("Error de conexión: ${e.localizedMessage ?: "No se pudo conectar al servidor"}")
+                    _userMessage.emit(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                    )
                 }
             }
         }

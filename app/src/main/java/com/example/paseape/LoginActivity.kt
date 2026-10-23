@@ -37,6 +37,8 @@ import com.example.paseape.data.model.GoogleAuthReq
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.paseape.data.model.LoginRequest
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
@@ -165,17 +167,29 @@ fun LoginContent(
 
                 } else {
                     isLoading = false
-                    Toast.makeText(context, "Tipo de credencial no soportado", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        "No pudimos iniciar sesión con Google. Inténtalo de nuevo.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
 
             } catch (e: GetCredentialCancellationException) {
                 isLoading = false
             } catch (e: GetCredentialException) {
                 isLoading = false
-                Toast.makeText(context, "Error Credenciales Google: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    "No pudimos iniciar sesión con Google. Inténtalo de nuevo.",
+                    Toast.LENGTH_LONG
+                ).show()
             } catch (e: Exception) {
                 isLoading = false
-                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.LOGIN),
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -344,18 +358,29 @@ fun LoginContent(
                                     onLoginSuccess(userRole, userUuid)
                                 } else {
                                     isLoading = false
-                                    Toast.makeText(context, "Credenciales incorrectas o token vacío", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(
+                                        context,
+                                        "Correo o contraseña incorrectos.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 }
 
                             } catch (e: retrofit2.HttpException) {
                                 isLoading = false
-                                val errorBody = e.response()?.errorBody()?.string() ?: "Sin detalle"
-                                Log.e("LOGIN_ERROR", "HTTP ${e.code()} Body: $errorBody", e)
-                                Toast.makeText(context, "Error servidor (${e.code()}): $errorBody", Toast.LENGTH_LONG).show()
+                                Log.e("LOGIN_ERROR", "HTTP ${e.code()} al iniciar sesión", e)
+                                Toast.makeText(
+                                    context,
+                                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.LOGIN),
+                                    Toast.LENGTH_LONG
+                                ).show()
                             } catch (e: Exception) {
                                 isLoading = false
-                                Log.e("LOGIN_ERROR", "Error de conexión: ${e.localizedMessage}", e)
-                                Toast.makeText(context, "Error de conexión: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                Log.e("LOGIN_ERROR", "Error al iniciar sesión", e)
+                                Toast.makeText(
+                                    context,
+                                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.LOGIN),
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     },
