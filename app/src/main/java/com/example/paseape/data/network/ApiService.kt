@@ -41,6 +41,8 @@ import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
 import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PaseoResDto
+import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
+import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
@@ -217,6 +219,13 @@ interface ApiService {
         @Path("paseador_uuid") paseadorUuid: String,
         @Body request: ActualizarVerificacionPaseadorRequest
     ): Response<GenericApiResponse>
+
+    // Solicitud inmediata (HU15 - Modalidad Tipo Taxi / InDrive)
+    @POST("cliente/solicitudes/inmediata")
+    suspend fun crearSolicitudInmediata(
+        @Header("Authorization") token: String,
+        @Body request: CrearSolicitudInmediataReqDto
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
 
     // Métodos de paseos y notificaciones integrados directamente en ApiService
     @GET("paseos/cliente/{clienteId}")
