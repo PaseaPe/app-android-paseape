@@ -16,7 +16,9 @@ data class ApplicationParametersData(
     @SerializedName("razas") val razas: List<RazaParamDto>? = null,
     @SerializedName("generos_mascota") val generosMascota: List<GeneroMascotaParamDto>? = null,
     @SerializedName("tamanos_mascota") val tamanosMascota: List<TamanoMascotaParamDto>? = null,
-    @SerializedName("niveles_energia") val nivelesEnergia: List<NivelEnergiaParamDto>? = null
+    @SerializedName("niveles_energia") val nivelesEnergia: List<NivelEnergiaParamDto>? = null,
+    @SerializedName("dias_semana") val diasSemana: List<DiaSemanaParamDto>? = null,
+    @SerializedName("bloques_horario") val bloquesHorario: List<BloqueHorarioParamDto>? = null
 )
 
 data class DistritoParamDto(
@@ -66,6 +68,18 @@ data class TamanoMascotaParamDto(
 )
 
 data class NivelEnergiaParamDto(
+    @SerializedName("id") val id: Int,
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("descripcion") val descripcion: String
+)
+
+data class DiaSemanaParamDto(
+    @SerializedName("id") val id: Int,
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("descripcion") val descripcion: String
+)
+
+data class BloqueHorarioParamDto(
     @SerializedName("id") val id: Int,
     @SerializedName("uuid") val uuid: String? = null,
     @SerializedName("descripcion") val descripcion: String

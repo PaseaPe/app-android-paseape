@@ -21,6 +21,10 @@ class WalkerDashboardActivity : ComponentActivity() {
         ViewModelProvider(this)[WalkerProfileViewModel::class.java]
     }
 
+    private val disponibilidadViewModel by lazy {
+        ViewModelProvider(this)[DisponibilidadViewModel::class.java]
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -36,6 +40,7 @@ class WalkerDashboardActivity : ComponentActivity() {
                     token = token,
                     usuarioUuid = userUuid,
                     viewModel = viewModel,
+                    disponibilidadViewModel = disponibilidadViewModel,
                     onLogoutClick = { cerrarSesionYRedirigir() }
                 )
             }

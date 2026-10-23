@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -64,6 +65,7 @@ fun WalkerDashboardScreen(
     token: String,
     usuarioUuid: String,
     viewModel: WalkerProfileViewModel,
+    disponibilidadViewModel: DisponibilidadViewModel,
     onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -116,6 +118,25 @@ fun WalkerDashboardScreen(
                     onClick = { selectedTab = 1 },
                     icon = {
                         Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = "Horario"
+                        )
+                    },
+                    label = { Text("Horario", fontWeight = FontWeight.Medium) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = PrimaryDark,
+                        selectedTextColor = PrimaryDark,
+                        indicatorColor = PrimaryDark.copy(alpha = 0.12f),
+                        unselectedIconColor = Color(0xFF64748B),
+                        unselectedTextColor = Color(0xFF64748B)
+                    )
+                )
+
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = {
+                        Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = "Perfil"
                         )
@@ -143,7 +164,11 @@ fun WalkerDashboardScreen(
                     uiState = uiState,
                     onLogoutClick = onLogoutClick
                 )
-                1 -> WalkerProfileScreen(
+                1 -> DisponibilidadScreen(
+                    token = token,
+                    viewModel = disponibilidadViewModel
+                )
+                2 -> WalkerProfileScreen(
                     uiState = uiState,
                     distritos = distritos,
                     isOperationLoading = isOperationLoading,
