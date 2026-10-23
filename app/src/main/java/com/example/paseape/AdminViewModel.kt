@@ -9,6 +9,8 @@ import com.example.paseape.data.model.ClienteAdminDto
 import com.example.paseape.data.model.EstadoVerificacionPaseador
 import com.example.paseape.data.model.PaseadorAdminDto
 import com.example.paseape.data.model.UsuarioEstado
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -85,16 +87,35 @@ class AdminViewModel : ViewModel() {
                     emptyList()
                 }
 
+                val paseadoresError = if (!responsePaseadores.isSuccessful) {
+                    ApiErrorMapper.fromResponse(responsePaseadores, ApiErrorContext.ADMIN)
+                } else {
+                    null
+                }
+
+                val clientesError = if (!responseClientes.isSuccessful) {
+                    ApiErrorMapper.fromResponse(responseClientes, ApiErrorContext.ADMIN)
+                } else {
+                    null
+                }
+
+                val loadError = paseadoresError ?: clientesError
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         paseadores = paseadoresList,
-                        clientes = clientesList
+                        clientes = clientesList,
+                        errorMessage = loadError
                     )
+                }
+
+                if (loadError != null) {
+                    _snackbarEvent.emit(loadError)
                 }
             } catch (e: Exception) {
                 Log.e("ADMIN_VM", "Error al cargar datos de admin", e)
-                val msg = "Error al cargar datos: ${e.localizedMessage ?: "Error de red"}"
+                val msg = ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -140,13 +161,13 @@ class AdminViewModel : ViewModel() {
                     }
                     _snackbarEvent.emit(message)
                 } else {
-                    val errorMsg = "Error al actualizar estado (HTTP ${response.code()})"
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.ADMIN)
                     _uiState.update { it.copy(isUpdating = false) }
                     _snackbarEvent.emit(errorMsg)
                 }
             } catch (e: Exception) {
                 Log.e("ADMIN_VM", "Error al actualizar estado de usuario", e)
-                val errorMsg = "Error de conexión: ${e.localizedMessage}"
+                val errorMsg = ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN)
                 _uiState.update { it.copy(isUpdating = false) }
                 _snackbarEvent.emit(errorMsg)
             }
@@ -187,13 +208,13 @@ class AdminViewModel : ViewModel() {
                     }
                     _snackbarEvent.emit(message)
                 } else {
-                    val errorMsg = "Error al actualizar verificación (HTTP ${response.code()})"
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.ADMIN)
                     _uiState.update { it.copy(isUpdating = false) }
                     _snackbarEvent.emit(errorMsg)
                 }
             } catch (e: Exception) {
                 Log.e("ADMIN_VM", "Error al actualizar verificación de paseador", e)
-                val errorMsg = "Error de conexión: ${e.localizedMessage}"
+                val errorMsg = ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN)
                 _uiState.update { it.copy(isUpdating = false) }
                 _snackbarEvent.emit(errorMsg)
             }

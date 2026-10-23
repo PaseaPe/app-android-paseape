@@ -10,6 +10,7 @@ import retrofit2.http.POST
 import retrofit2.http.Header
 import com.example.paseape.data.model.PaseadoresResponse
 import com.example.paseape.data.model.LoginRequest
+import com.example.paseape.data.model.AuthResData
 import com.example.paseape.data.model.LoginResponse
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
@@ -30,6 +31,11 @@ import com.example.paseape.data.model.DetallePaseadorResponse
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UpdateCoverageRequestDto
 import com.example.paseape.data.model.ApplicationParametersResponse
+import com.example.paseape.data.model.ActualizarBloqueDisponibilidadRequestDto
+import com.example.paseape.data.model.ActualizarCapacidadBaseRequestDto
+import com.example.paseape.data.model.DisponibilidadAccionResponseDto
+import com.example.paseape.data.model.DisponibilidadResponseDto
+import com.example.paseape.data.model.GuardarDisponibilidadRequestDto
 import com.example.paseape.data.model.RazasResponse
 import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
@@ -37,6 +43,7 @@ import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -118,13 +125,46 @@ interface ApiService {
         @Path("tipoMascotaId") tipoMascotaId: Int
     ): Response<RazasResponse>
 
+    /**
+     * Catálogos de días y bloques horarios. El backend actual los expone en
+     * /application-parameters/horario; se usa como respaldo de compatibilidad.
+     */
+    @GET("application-parameters/horario")
+    suspend fun getHorarioParameters(
+        @Header("Authorization") token: String? = null
+    ): Response<ApplicationParametersResponse>
+
+    // Disponibilidad semanal del paseador
+    @GET("paseador/disponibilidad")
+    suspend fun getMiDisponibilidad(
+        @Header("Authorization") token: String
+    ): Response<DisponibilidadResponseDto>
+
+    @PUT("paseador/disponibilidad")
+    suspend fun sincronizarDisponibilidad(
+        @Header("Authorization") token: String,
+        @Body request: GuardarDisponibilidadRequestDto
+    ): Response<DisponibilidadResponseDto>
+
+    @PATCH("paseador/disponibilidad/bloque")
+    suspend fun actualizarBloqueDisponibilidad(
+        @Header("Authorization") token: String,
+        @Body request: ActualizarBloqueDisponibilidadRequestDto
+    ): Response<DisponibilidadAccionResponseDto>
+
+    @PATCH("paseador/disponibilidad/capacidad-base")
+    suspend fun actualizarCapacidadBase(
+        @Header("Authorization") token: String,
+        @Body request: ActualizarCapacidadBaseRequestDto
+    ): Response<DisponibilidadAccionResponseDto>
+
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse
 
     @POST("auth/register/local")
     suspend fun registrarUsuario(
         @Body request: RegistroRequest
-    ): GenericResponse
+    ): Response<ResponseDto<AuthResData>>
 
     @POST("auth/login")
     suspend fun iniciarSesion(
@@ -179,13 +219,13 @@ interface ApiService {
     ): Response<GenericApiResponse>
 
     // Métodos de paseos y notificaciones integrados directamente en ApiService
-    @GET("api-paseape/paseos/cliente/{clienteId}")
+    @GET("paseos/cliente/{clienteId}")
     suspend fun obtenerPaseosPorCliente(
         @Header("Authorization") token: String,
         @Path("clienteId") clienteId: Long
     ): Response<List<PaseoResDto>>
 
-    @GET("api-paseape/notificaciones/usuario/{usuarioId}")
+    @GET("notificaciones/usuario/{usuarioId}")
     suspend fun obtenerNotificaciones(
         @Header("Authorization") token: String,
         @Path("usuarioId") usuarioId: Long
