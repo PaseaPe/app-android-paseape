@@ -41,7 +41,6 @@ import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
 import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PageResponseDto
-import com.example.paseape.data.model.PaseoResDto
 import com.example.paseape.data.model.RechazarSolicitudRequest
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
@@ -217,13 +216,7 @@ interface ApiService {
         @Body request: ActualizarVerificacionPaseadorRequest
     ): Response<GenericApiResponse>
 
-    // Métodos de paseos y notificaciones integrados directamente en ApiService
-    @GET("paseos/cliente/{clienteId}")
-    suspend fun obtenerPaseosPorCliente(
-        @Header("Authorization") token: String,
-        @Path("clienteId") clienteId: Long
-    ): Response<List<PaseoResDto>>
-
+    // Notificaciones integradas directamente en ApiService
     @GET("notificaciones/usuario/{usuarioId}")
     suspend fun obtenerNotificaciones(
         @Header("Authorization") token: String,
