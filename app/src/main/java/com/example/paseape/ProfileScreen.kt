@@ -3,16 +3,17 @@ package com.example.paseape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,7 +43,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,7 +56,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -76,8 +80,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.paseape.data.model.ActualizarPerfilReqDto
-import com.example.paseape.data.model.CrearMascotaPayload
 import com.example.paseape.data.model.CrearMascotaRequest
+import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.ui.theme.BackgroundOffWhite
@@ -88,6 +92,7 @@ import com.example.paseape.ui.theme.PrimaryDark
 @Composable
 fun ProfileScreen(
     uiState: ProfileUiState,
+    distritos: List<DistritoParamDto> = emptyList(),
     onRetry: () -> Unit,
     onLogoutClick: () -> Unit = {},
     onLogout: () -> Unit = onLogoutClick,
@@ -155,6 +160,7 @@ fun ProfileScreen(
                 is ProfileUiState.Success -> {
                     ProfileSuccessContent(
                         usuario = uiState.data,
+                        distritos = distritos,
                         onLogout = onLogoutClick,
                         onGuardarPerfil = onGuardarPerfil,
                         onCrearMascota = onCrearMascota,
@@ -288,6 +294,7 @@ fun ProfileErrorContent(
 @Composable
 fun ProfileSuccessContent(
     usuario: UsuarioClienteData,
+    distritos: List<DistritoParamDto> = emptyList(),
     onLogout: () -> Unit,
     onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit,
     onCrearMascota: (CrearMascotaRequest) -> Unit,
@@ -307,7 +314,7 @@ fun ProfileSuccessContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
-        // ENCABEZADO: INFORMACIÓN DEL USUARIO CLIENTE
+        // ENCABEZADO: INFORMACIÓN DEL USUARIO CLIENTE (Alineado con Foto de Perfil)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -316,26 +323,43 @@ fun ProfileSuccessContent(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val fotoPerfilUrl = usuario.fotoUrlEfectiva
                     val inicialNombre = usuario.nombres?.firstOrNull()?.toString() ?: "U"
                     val inicialApellido = usuario.apellidos?.firstOrNull()?.toString() ?: ""
                     val avatarText = "$inicialNombre$inicialApellido".uppercase()
 
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
+                            .size(90.dp)
                             .clip(CircleShape)
-                            .background(PrimaryDark),
+                            .background(
+                                if (!fotoPerfilUrl.isNullOrBlank()) Color(0xFFF1F5F9) else PrimaryDark
+                            )
+                            .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = avatarText,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        if (!fotoPerfilUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = fotoPerfilUrl,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                placeholder = painterResource(id = R.drawable.logoperro),
+                                error = painterResource(id = R.drawable.logoperro)
+                            )
+                        } else {
+                            Text(
+                                text = avatarText,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -627,6 +651,7 @@ fun ProfileSuccessContent(
     if (showEditProfileDialog) {
         EditarPerfilDialog(
             usuario = usuario,
+            distritos = distritos,
             onDismiss = { showEditProfileDialog = false },
             onConfirm = { req ->
                 showEditProfileDialog = false
@@ -647,9 +672,11 @@ fun ProfileSuccessContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditarPerfilDialog(
     usuario: UsuarioClienteData,
+    distritos: List<DistritoParamDto> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (ActualizarPerfilReqDto) -> Unit
 ) {
@@ -658,10 +685,21 @@ fun EditarPerfilDialog(
     var nombres by remember { mutableStateOf(usuario.nombres ?: "") }
     var apellidos by remember { mutableStateOf(usuario.apellidos ?: "") }
     var telefono by remember { mutableStateOf(usuario.telefono ?: "") }
+    var fotoPerfilUrl by remember { mutableStateOf(usuario.fotoUrlEfectiva.orEmpty()) }
     var direccion by remember { mutableStateOf(detalle?.direccionReferencia ?: "") }
     var contactoEmergenciaNombre by remember { mutableStateOf(detalle?.contactoEmergenciaNombre ?: "") }
     var contactoEmergenciaTelefono by remember { mutableStateOf(detalle?.contactoEmergenciaTelefono ?: "") }
     var notasAdicionales by remember { mutableStateOf(detalle?.notasAdicionales ?: "") }
+
+    val currentDistritoId = detalle?.distritoId
+    val currentDistritoDesc = detalle?.distritoDescripcion
+    var selectedDistrito by remember(distritos, currentDistritoId, currentDistritoDesc) {
+        mutableStateOf(
+            distritos.find { it.id == currentDistritoId }
+                ?: distritos.find { it.descripcion.equals(currentDistritoDesc, ignoreCase = true) }
+        )
+    }
+    var dropdownExpanded by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -713,6 +751,56 @@ fun EditarPerfilDialog(
                 )
 
                 OutlinedTextField(
+                    value = fotoPerfilUrl,
+                    onValueChange = { fotoPerfilUrl = it },
+                    label = { Text("Foto de perfil URL (Opcional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                // Selector de Distrito
+                ExposedDropdownMenuBox(
+                    expanded = dropdownExpanded,
+                    onExpandedChange = { if (distritos.isNotEmpty()) dropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = selectedDistrito?.descripcion
+                            ?: currentDistritoDesc?.takeIf { it.isNotBlank() }
+                            ?: if (distritos.isEmpty()) "Cargando distritos..." else "Selecciona tu distrito",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Distrito") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                enabled = distritos.isNotEmpty()
+                            ),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        distritos.forEach { distrito ->
+                            DropdownMenuItem(
+                                text = { Text(distrito.descripcion, fontSize = 13.sp) },
+                                onClick = {
+                                    selectedDistrito = distrito
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
                     value = direccion,
                     onValueChange = { direccion = it },
                     label = { Text("Dirección de referencia") },
@@ -761,6 +849,8 @@ fun EditarPerfilDialog(
                                 nombres = nombres.trim().ifBlank { null },
                                 apellidos = apellidos.trim().ifBlank { null },
                                 telefono = telefono.trim().ifBlank { null },
+                                fotoPerfilUrl = fotoPerfilUrl.trim().ifBlank { null },
+                                distritoId = selectedDistrito?.id,
                                 direccionReferencia = direccion.trim().ifBlank { null },
                                 contactoEmergenciaNombre = contactoEmergenciaNombre.trim().ifBlank { null },
                                 contactoEmergenciaTelefono = contactoEmergenciaTelefono.trim().ifBlank { null },

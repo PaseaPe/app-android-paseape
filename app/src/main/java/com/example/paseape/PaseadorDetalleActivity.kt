@@ -42,12 +42,13 @@ class PaseadorDetalleActivity : ComponentActivity() {
                         val detalle = (uiState as? PaseadorDetalleUiState.Success)?.detalle
                         val paseador = detalle?.paseador
                         val intent = Intent(this@PaseadorDetalleActivity, ReservaPaseoActivity::class.java).apply {
-                            putExtra(ReservaPaseoActivity.EXTRA_PASEADOR_UUID, usuarioUuid)
+                            putExtra(ReservaPaseoActivity.EXTRA_PASEADOR_UUID, paseador?.uuid ?: usuarioUuid)
                             putExtra(ReservaPaseoActivity.EXTRA_PASEADOR_NOMBRE, detalle?.nombreCompleto ?: "Paseador")
                             putExtra(ReservaPaseoActivity.EXTRA_TARIFA_HORA, paseador?.tarifaHoraPen ?: 25.0)
                             putExtra(ReservaPaseoActivity.EXTRA_FOTO_URL, detalle?.fotoPerfilUrl)
                             putExtra(ReservaPaseoActivity.EXTRA_BIOGRAFIA, paseador?.biografia)
                             putExtra(ReservaPaseoActivity.EXTRA_DISTRITO, paseador?.distritoCoberturaDescripcion)
+                            putExtra(ReservaPaseoActivity.EXTRA_DISTRITO_ID, paseador?.distritoCoberturaId ?: 0)
                         }
                         startActivity(intent)
                     }

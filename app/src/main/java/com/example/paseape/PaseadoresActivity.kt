@@ -104,7 +104,8 @@ class PaseadoresActivity : ComponentActivity() {
 
     private fun cargarDatos() {
         val authHeader = SessionManager.getAuthHeader(this)
-        viewModel.cargarPaseadores(authHeader)
+        val userUuid = SessionManager.getUserUuid(this)
+        viewModel.cargarPaseadores(authHeader, userUuid)
     }
 }
 
@@ -225,6 +226,7 @@ fun PaseadoresScreen(
                         SelectorDistritoHeader(
                             distritos = uiState.distritosDisponibles,
                             distritoSeleccionado = uiState.distritoSeleccionado,
+                            distritoClienteDefault = uiState.distritoClienteDefault,
                             onDistritoSelected = onDistritoSelected
                         )
 
@@ -236,19 +238,26 @@ fun PaseadoresScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val mensajeVacio = if (!uiState.distritoSeleccionado.isNullOrBlank()) {
+                                        "No hay paseadores disponibles en ${uiState.distritoSeleccionado}."
+                                    } else {
+                                        "No hay paseadores disponibles en este momento."
+                                    }
                                     Text(
-                                        text = "No hay paseadores disponibles para el distrito seleccionado.",
+                                        text = mensajeVacio,
                                         color = Color(0xFF64748B),
                                         fontSize = 14.sp,
                                         textAlign = TextAlign.Center
                                     )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = { onDistritoSelected(null) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
-                                    ) {
-                                        Text("Ver todos los distritos", fontSize = 13.sp)
+                                    if (!uiState.distritoSeleccionado.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Button(
+                                            onClick = { onDistritoSelected(null) },
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
+                                        ) {
+                                            Text("Ver todos los distritos", fontSize = 13.sp)
+                                        }
                                     }
                                 }
                             }
@@ -288,6 +297,7 @@ fun PaseadoresScreen(
 fun SelectorDistritoHeader(
     distritos: List<String>,
     distritoSeleccionado: String?,
+    distritoClienteDefault: String?,
     onDistritoSelected: (String?) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -309,8 +319,16 @@ fun SelectorDistritoHeader(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded }
         ) {
+            val textoSeleccionado = when {
+                distritoSeleccionado.isNullOrBlank() -> "Todos los distritos"
+                !distritoClienteDefault.isNullOrBlank() &&
+                    distritoSeleccionado.equals(distritoClienteDefault, ignoreCase = true) ->
+                    "$distritoSeleccionado (Tu distrito)"
+                else -> distritoSeleccionado
+            }
+
             OutlinedTextField(
-                value = distritoSeleccionado ?: "Todos los distritos",
+                value = textoSeleccionado,
                 onValueChange = {},
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -329,6 +347,23 @@ fun SelectorDistritoHeader(
                 onDismissRequest = { expanded = false },
                 modifier = Modifier.background(Color.White)
             ) {
+                // Opción rápida: Mi distrito
+                if (!distritoClienteDefault.isNullOrBlank()) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "📍 Mi distrito ($distritoClienteDefault)",
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryDark
+                            )
+                        },
+                        onClick = {
+                            onDistritoSelected(distritoClienteDefault)
+                            expanded = false
+                        }
+                    )
+                }
+
                 // Opción "Todos"
                 DropdownMenuItem(
                     text = { Text("Todos los distritos", fontWeight = FontWeight.Bold) },

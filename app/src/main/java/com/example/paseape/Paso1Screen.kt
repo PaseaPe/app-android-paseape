@@ -276,22 +276,28 @@ fun Paso1Screen(
                         val fin = slot.horaFin?.take(5).orEmpty()
                         val horaTexto = if (ini.isNotBlank() && fin.isNotBlank()) "$ini - $fin" else slot.bloqueCodigo.orEmpty()
 
-                        val isSelected = viewModel.bloqueSeleccionado?.id == slot.id &&
-                                viewModel.bloqueSeleccionado?.bloqueHorarioId == slot.bloqueHorarioId
+                        val isSelected = viewModel.bloqueSeleccionado != null && (
+                                (viewModel.bloqueSeleccionado?.bloqueHorarioId != null &&
+                                        viewModel.bloqueSeleccionado?.bloqueHorarioId == slot.bloqueHorarioId) ||
+                                (!viewModel.bloqueSeleccionado?.bloqueCodigo.isNullOrBlank() &&
+                                        viewModel.bloqueSeleccionado?.bloqueCodigo == slot.bloqueCodigo)
+                        )
 
                         val cupoTexto = when {
                             slot.disponible == true -> {
                                 val c = slot.cuposDisponibles ?: 1
                                 if (c == 1) "1 cupo libre" else "$c cupos libres"
                             }
-                            slot.estaLleno == true -> "Completo"
+                            slot.estaLleno == true || slot.motivoNoDisponible == "SIN_CUPOS" -> "Completo"
+                            slot.motivoNoDisponible == "HORARIO_EXPIRADO" -> "Expirado"
                             else -> "No disponible"
                         }
 
                         val subTexto = when {
                             isSelected -> "Horario seleccionado"
                             slot.disponible == true -> "Disponible"
-                            slot.estaLleno == true -> "Sin cupos disponibles"
+                            slot.estaLleno == true || slot.motivoNoDisponible == "SIN_CUPOS" -> "Sin cupos disponibles"
+                            slot.motivoNoDisponible == "HORARIO_EXPIRADO" -> "Horario expirado hoy"
                             else -> "Turno fuera de horario"
                         }
 

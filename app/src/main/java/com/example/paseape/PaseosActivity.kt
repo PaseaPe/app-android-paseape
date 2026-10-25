@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.example.paseape.data.SessionManager
+import com.example.paseape.data.repository.PaseosRepository
 import com.example.paseape.ui.theme.PaseaPETheme
 
 class PaseosActivity : ComponentActivity() {
@@ -20,6 +21,7 @@ class PaseosActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        PaseosRepository.inicializarCache(this)
         val authHeader = SessionManager.getAuthHeader(this)
         val userUuid = intent.getStringExtra("EXTRA_USER_UUID")
             ?: intent.getStringExtra("user_uuid")

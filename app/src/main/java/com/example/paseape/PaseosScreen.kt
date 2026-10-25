@@ -64,7 +64,7 @@ fun PaseosScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (selectedTab == 3) "Paseo Inmediato (InDrive)" else "Mis Paseos",
+                        text = if (selectedTab == 3) "Paseo Inmediato" else "Mis Paseos",
                         fontWeight = FontWeight.Bold,
                         fontSize = 19.sp
                     )
@@ -321,7 +321,7 @@ fun FormularioSolicitudInmediata(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Solicitud Inmediata • Modalidad Tipo Taxi",
+                            text = "Solicitud Inmediata ",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
@@ -427,7 +427,7 @@ fun FormularioSolicitudInmediata(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "2. Propón tu tarifa por hora (Modo InDrive)",
+                        text = "2. Propón tu tarifa por hora",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = azulOscuro,
@@ -879,6 +879,8 @@ fun CardSolicitudInmediataReal(
         .orEmpty()
         .ifBlank { "Mascota(s) seleccionada(s)" }
 
+    val esProgramado = solicitud.tipoModalidadPaseoId == 1 || !solicitud.paseadorNombreCompleto.isNullOrBlank()
+    val tituloModalidad = if (esProgramado) "Paseo Programado" else "Paseo Inmediato"
     val tarifaHora = solicitud.tarifaHoraPenSnapshot ?: 0.0
     val montoTotal = solicitud.montoTotal ?: 0.0
 
@@ -905,14 +907,14 @@ fun CardSolicitudInmediataReal(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Paseo Inmediato • $nombresMascotas",
+                            text = "$tituloModalidad • $nombresMascotas",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color(0xFF1E293B)
                         )
                     }
                     Text(
-                        text = solicitud.codigoReserva ?: "PAS-INM",
+                        text = solicitud.codigoReserva ?: "PAS-SOL",
                         color = Color.Gray,
                         fontSize = 12.sp
                     )
@@ -922,7 +924,7 @@ fun CardSolicitudInmediataReal(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = solicitud.estadoDescripcion ?: "BUSCANDO PASEADOR",
+                        text = solicitud.estadoDescripcion ?: if (esProgramado) "PENDIENTE" else "BUSCANDO PASEADOR",
                         color = Color(0xFFE65100),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -932,6 +934,26 @@ fun CardSolicitudInmediataReal(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
+
+            if (!solicitud.paseadorNombreCompleto.isNullOrBlank()) {
+                Text(
+                    text = "👤 Paseador: ${solicitud.paseadorNombreCompleto}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            if (!solicitud.fechaProgramada.isNullOrBlank()) {
+                val bloqueTxt = solicitud.bloqueHorarioCodigo?.let { " • $it" }.orEmpty()
+                Text(
+                    text = "📅 Fecha: ${solicitud.fechaProgramada}$bloqueTxt",
+                    fontSize = 12.sp,
+                    color = Color(0xFF334155)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             Text(
                 text = "📍 ${solicitud.direccionRecojo.orEmpty()} (${solicitud.distritoDescripcion ?: "Lima"})",
@@ -960,7 +982,7 @@ fun CardSolicitudInmediataReal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Tu oferta: ${formatearMoneda(tarifaHora)}/h",
+                        text = if (esProgramado) "Tarifa: ${formatearMoneda(tarifaHora)}/h" else "Tu oferta: ${formatearMoneda(tarifaHora)}/h",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF9A3412)

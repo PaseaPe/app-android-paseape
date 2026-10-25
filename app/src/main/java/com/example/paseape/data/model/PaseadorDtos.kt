@@ -15,6 +15,7 @@ data class PaseadorDto(
     @SerializedName("experiencia_anos") val experienciaAnos: Int? = null,
     @SerializedName("biografia") val biografia: String? = null,
     @SerializedName("tarifa_hora_pen") val tarifaHoraPen: Double? = null,
+    @SerializedName("max_mascotas_predeterminado") val maxMascotasPredeterminado: Int? = null,
     @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null,
     @SerializedName("distrito_cobertura_descripcion") val distritoCoberturaDescripcion: String? = null,
     @SerializedName("estado_verificacion_id") val estadoVerificacionId: Int? = null,
@@ -61,10 +62,57 @@ data class UsuarioPaseadorDetalleDto(
         }
 }
 
+/**
+ * Soporta tanto la respuesta directa `UsuarioResDto` de `GET /paseadores/{uuid}` (actual)
+ * como el envoltorio `{ usuario, disponibilidad }` por retrocompatibilidad.
+ */
 data class PaseadorDetalleResponseData(
     @SerializedName("usuario") val usuario: UsuarioPaseadorDetalleDto? = null,
-    @SerializedName("disponibilidad") val disponibilidad: DisponibilidadPaseadorDto? = null
-)
+    @SerializedName("disponibilidad") val disponibilidad: DisponibilidadPaseadorDto? = null,
+    @SerializedName("id") val id: Int? = null,
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("nombres") val nombres: String? = null,
+    @SerializedName("apellidos") val apellidos: String? = null,
+    @SerializedName("correo") val correo: String? = null,
+    @SerializedName("correo_verificado") val correoVerificado: Int? = null,
+    @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
+    @SerializedName("tipo_usuario_id") val tipoUsuarioId: Int? = null,
+    @SerializedName("tipo_usuario_descripcion") val tipoUsuarioDescripcion: String? = null,
+    @SerializedName("usuario_estado_id") val usuarioEstadoId: Int? = null,
+    @SerializedName("usuario_estado_descripcion") val usuarioEstadoDescripcion: String? = null,
+    @SerializedName("tipo_proveedor_auth_id") val tipoProveedorAuthId: Int? = null,
+    @SerializedName("tipo_proveedor_auth_descripcion") val tipoProveedorAuthDescripcion: String? = null,
+    @SerializedName("estado") val estado: Int? = null,
+    @SerializedName("cliente") val cliente: Any? = null,
+    @SerializedName("paseador") val paseador: PaseadorDto? = null
+) {
+    fun extraerUsuario(): UsuarioPaseadorDetalleDto? {
+        if (usuario != null) return usuario
+        if (!uuid.isNullOrBlank() || !nombres.isNullOrBlank() || paseador != null) {
+            return UsuarioPaseadorDetalleDto(
+                id = id,
+                uuid = uuid,
+                nombres = nombres,
+                apellidos = apellidos,
+                correo = correo,
+                correoVerificado = correoVerificado,
+                telefono = telefono,
+                fotoPerfilUrl = fotoPerfilUrl,
+                tipoUsuarioId = tipoUsuarioId,
+                tipoUsuarioDescripcion = tipoUsuarioDescripcion,
+                usuarioEstadoId = usuarioEstadoId,
+                usuarioEstadoDescripcion = usuarioEstadoDescripcion,
+                tipoProveedorAuthId = tipoProveedorAuthId,
+                tipoProveedorAuthDescripcion = tipoProveedorAuthDescripcion,
+                estado = estado,
+                cliente = cliente,
+                paseador = paseador
+            )
+        }
+        return null
+    }
+}
 
 data class DisponibilidadPaseadorDto(
     @SerializedName("max_mascotas_predeterminado") val maxMascotasPredeterminado: Int? = null,

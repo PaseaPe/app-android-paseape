@@ -17,6 +17,24 @@ data class DisponibilidadDataDto(
     @SerializedName("slots") val slots: List<DisponibilidadSlotDto>? = null
 )
 
+/**
+ * Respuesta de GET /paseadores/{paseadorUuid}/disponibilidad?fecha=YYYY-MM-DD (HU12).
+ */
+data class DisponibilidadPaseadorFechaResponseDto(
+    @SerializedName("statusCode", alternate = ["status_code"]) val statusCode: Int? = null,
+    @SerializedName("code") val code: String? = null,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("response") val response: DisponibilidadPaseadorFechaDataDto? = null
+)
+
+data class DisponibilidadPaseadorFechaDataDto(
+    @SerializedName("paseador_uuid") val paseadorUuid: String? = null,
+    @SerializedName("fecha") val fecha: String? = null,
+    @SerializedName("dia_semana_id") val diaSemanaId: Int? = null,
+    @SerializedName("dia_semana_descripcion") val diaSemanaDescripcion: String? = null,
+    @SerializedName("bloques") val bloques: List<DisponibilidadSlotDto>? = null
+)
+
 data class DisponibilidadSlotDto(
     @SerializedName("id") val id: Long? = null,
     @SerializedName("uuid") val uuid: String? = null,
@@ -28,11 +46,12 @@ data class DisponibilidadSlotDto(
     @SerializedName("hora_fin") val horaFin: String? = null,
     @SerializedName("max_mascotas") val maxMascotas: Int? = null,
     @SerializedName("activo") val activo: Boolean? = null,
-    // Campos de ocupación: pueden venir null y no se muestran en la pantalla.
+    // Campos de ocupación y vigencia por fecha
     @SerializedName("mascotas_ocupadas") val mascotasOcupadas: Int? = null,
     @SerializedName("cupos_disponibles") val cuposDisponibles: Int? = null,
     @SerializedName("esta_lleno") val estaLleno: Boolean? = null,
-    @SerializedName("disponible") val disponible: Boolean? = null
+    @SerializedName("disponible") val disponible: Boolean? = null,
+    @SerializedName("motivo_no_disponible") val motivoNoDisponible: String? = null
 )
 
 /** Body de PUT /paseador/disponibilidad. */

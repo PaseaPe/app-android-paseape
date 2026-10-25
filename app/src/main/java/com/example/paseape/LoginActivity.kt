@@ -7,9 +7,11 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -34,16 +36,15 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import com.example.paseape.data.model.GoogleAuthReq
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.paseape.data.model.LoginRequest
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.BackgroundOffWhite
-import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,9 +105,34 @@ fun LoginContent(
     var passwordInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
-    var showRoleDialog by remember { mutableStateOf(false) }
 
-    fun launchGoogleLoginFlow(selectedRole: Int) {
+    fun guardarSesionLocal(tokenJwt: String, userUuid: String, userRole: Int) {
+        val roleString = when (userRole) {
+            99 -> "ADMIN"
+            2 -> "PASEADOR"
+            else -> "CLIENTE"
+        }
+
+        val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
+        paseaPrefs.edit()
+            .putString("user_uuid", userUuid)
+            .putString("auth_token", tokenJwt)
+            .putString("JWT_TOKEN", tokenJwt)
+            .putInt("USER_ROLE", userRole)
+            .putString("user_role", roleString)
+            .commit()
+
+        val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
+        sharedPref.edit()
+            .putString("user_uuid", userUuid)
+            .putString("auth_token", tokenJwt)
+            .putString("JWT_TOKEN", tokenJwt)
+            .putInt("USER_ROLE", userRole)
+            .putString("user_role", roleString)
+            .commit()
+    }
+
+    fun launchGoogleLoginFlow() {
         if (isLoading) return
         isLoading = true
 
@@ -114,6 +140,7 @@ fun LoginContent(
             try {
                 val credentialManager = CredentialManager.create(context)
                 val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
+
 
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)
@@ -125,7 +152,7 @@ fun LoginContent(
                     .addCredentialOption(googleIdOption)
                     .build()
 
-                val result: GetCredentialResponse = credentialManager.getCredential(
+                val result = credentialManager.getCredential(
                     context = context,
                     request = request
                 )
@@ -143,48 +170,54 @@ fun LoginContent(
                         RetrofitClient.apiService.loginWithGoogle(googleRequest)
                     }
 
-                    val tokenJwt = apiResponse.token ?: ""
+                    val tokenJwt = apiResponse.effectiveToken.orEmpty()
+                    val userUuid = apiResponse.effectiveUuid.orEmpty()
+                    val roleFromResponse = apiResponse.effectiveRole?.uppercase()
+                    val userTypeId = apiResponse.effectiveUserTypeId
 
                     if (tokenJwt.isNotEmpty()) {
-                        val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                        sharedPref.edit()
-                            .putString("auth_token", tokenJwt)
-                            .putString("JWT_TOKEN", tokenJwt)
-                            .putInt("USER_ROLE", selectedRole)
-                            .commit()
+                        val userRole = when {
+                            roleFromResponse == "ADMIN" -> 99
+                            roleFromResponse == "PASEADOR" || userTypeId == 2 -> 2
+                            else -> 1
+                        }
 
-                        val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
-                        paseaPrefs.edit()
-                            .putString("auth_token", tokenJwt)
-                            .putString("JWT_TOKEN", tokenJwt)
-                            .putInt("USER_ROLE", selectedRole)
-                            .commit()
+                        guardarSesionLocal(
+                            tokenJwt = tokenJwt,
+                            userUuid = userUuid,
+                            userRole = userRole
+                        )
+
+                        isLoading = false
+                        Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
+                        onLoginSuccess(userRole, userUuid)
+                    } else {
+                        isLoading = false
+                        val msg = apiResponse.message?.takeIf { it.isNotBlank() }
+                            ?: "No pudimos iniciar sesión con Google. Inténtalo de nuevo."
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                     }
-
-                    isLoading = false
-                    Toast.makeText(context, "¡Ingreso con Google exitoso!", Toast.LENGTH_SHORT).show()
-                    onLoginSuccess(selectedRole, null)
-
                 } else {
                     isLoading = false
                     Toast.makeText(
                         context,
-                        "No pudimos iniciar sesión con Google. Inténtalo de nuevo.",
+                        "No pudimos obtener las credenciales de Google. Inténtalo de nuevo.",
                         Toast.LENGTH_LONG
                     ).show()
                 }
-
             } catch (e: GetCredentialCancellationException) {
                 isLoading = false
             } catch (e: GetCredentialException) {
                 isLoading = false
+                Log.e("GOOGLE_LOGIN", "Error CredentialManager: ${e.type} - ${e.message}", e)
                 Toast.makeText(
                     context,
-                    "No pudimos iniciar sesión con Google. Inténtalo de nuevo.",
+                    "No se pudo conectar con Google. Verifica tu cuenta o configuración OAuth.",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
                 isLoading = false
+                Log.e("GOOGLE_LOGIN", "Error al autenticar con Google en backend", e)
                 Toast.makeText(
                     context,
                     ApiErrorMapper.fromThrowable(e, ApiErrorContext.LOGIN),
@@ -326,29 +359,12 @@ fun LoginContent(
                                         roleFromResponse == "PASEADOR" || userTypeId == 2 -> 2
                                         else -> 1
                                     }
-                                    val roleString = when (userRole) {
-                                        99 -> "ADMIN"
-                                        2 -> "PASEADOR"
-                                        else -> "CLIENTE"
-                                    }
 
-                                    val paseaPrefs = context.getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE)
-                                    paseaPrefs.edit()
-                                        .putString("user_uuid", userUuid)
-                                        .putString("auth_token", tokenJwt)
-                                        .putString("JWT_TOKEN", tokenJwt)
-                                        .putInt("USER_ROLE", userRole)
-                                        .putString("user_role", roleString)
-                                        .commit()
-
-                                    val sharedPref = context.getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE)
-                                    sharedPref.edit()
-                                        .putString("user_uuid", userUuid)
-                                        .putString("auth_token", tokenJwt)
-                                        .putString("JWT_TOKEN", tokenJwt)
-                                        .putInt("USER_ROLE", userRole)
-                                        .putString("user_role", roleString)
-                                        .commit()
+                                    guardarSesionLocal(
+                                        tokenJwt = tokenJwt,
+                                        userUuid = userUuid,
+                                        userRole = userRole
+                                    )
 
                                     Log.d("LOGIN_TEST", "¡Token, UUID y Rol guardados exitosamente!")
 
@@ -398,30 +414,44 @@ fun LoginContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // ----------------------------------------------------------------------
-                // BOTÓN TEMPORAL DE PRUEBA (BORRAR DESPUÉS)
-                // ----------------------------------------------------------------------
+                // Botón Continuar con Google
                 OutlinedButton(
-                    onClick = {
-                        onLoginSuccess(1, "mock-uuid-test-123")
-                    },
+                    onClick = { launchGoogleLoginFlow() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.White,
+                        contentColor = PrimaryDark
+                    ),
+                    enabled = !isLoading
                 ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEA4335).copy(alpha = 0.12f),
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "G",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFEA4335)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "[PRUEBA] Omitir Login e Ir al Dashboard",
-                        fontSize = 13.sp,
+                        text = "Continuar con Google",
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Red
+                        color = PrimaryDark
                     )
                 }
-                // ----------------------------------------------------------------------
-
             }
 
             Row(
@@ -434,43 +464,5 @@ fun LoginContent(
                 }
             }
         }
-    }
-
-    if (showRoleDialog) {
-        AlertDialog(
-            onDismissRequest = { showRoleDialog = false },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = Color.White,
-            title = {
-                Text(text = "¿Cómo deseas ingresar?", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = PrimaryDark)
-            },
-            text = {
-                Text(text = "Selecciona el tipo de cuenta para tu perfil en PaseaPE:", fontSize = 14.sp, color = Color.DarkGray)
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showRoleDialog = false
-                        launchGoogleLoginFlow(selectedRole = 1)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
-                ) {
-                    Text("Cliente (Dueño)", color = Color.White)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = {
-                        showRoleDialog = false
-                        launchGoogleLoginFlow(selectedRole = 2)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryDark)
-                ) {
-                    Text("Paseador")
-                }
-            }
-        )
     }
 }

@@ -15,6 +15,7 @@ data class ClienteProfileResponse(
     @SerializedName("apellidos") val apellidos: String? = null,
     @SerializedName("correo") val correo: String? = null,
     @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
     @SerializedName("tipo_usuario_descripcion") val tipoUsuarioDescripcion: String? = null,
     @SerializedName("usuario_estado_descripcion") val usuarioEstadoDescripcion: String? = null,
     @SerializedName("cliente") val cliente: ClienteDetalleData? = null,
@@ -32,6 +33,7 @@ data class ClienteProfileResponse(
                 apellidos = apellidos,
                 correo = correo,
                 telefono = telefono,
+                fotoPerfilUrl = fotoPerfilUrl,
                 tipoUsuarioDescripcion = tipoUsuarioDescripcion,
                 usuarioEstadoDescripcion = usuarioEstadoDescripcion,
                 cliente = cliente ?: clienteDetalle ?: detalle
@@ -48,6 +50,7 @@ data class UsuarioClienteData(
     @SerializedName("apellidos") val apellidos: String? = null,
     @SerializedName("correo") val correo: String? = null,
     @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
     @SerializedName("tipo_usuario_descripcion") val tipoUsuarioDescripcion: String? = null,
     @SerializedName("usuario_estado_descripcion") val usuarioEstadoDescripcion: String? = null,
     @SerializedName("cliente") val cliente: ClienteDetalleData? = null,
@@ -56,12 +59,18 @@ data class UsuarioClienteData(
 ) {
     val detalleCliente: ClienteDetalleData?
         get() = cliente ?: clienteDetalle ?: detalle
+
+    val fotoUrlEfectiva: String?
+        get() = fotoPerfilUrl?.takeIf { it.isNotBlank() }
+            ?: detalleCliente?.fotoPerfilUrl?.takeIf { it.isNotBlank() }
 }
 
 data class ClienteDetalleData(
     @SerializedName("id") val id: Long? = null,
     @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
     @SerializedName("direccion_referencia") val direccionReferencia: String? = null,
+    @SerializedName("distrito_id") val distritoId: Int? = null,
     @SerializedName("distrito_descripcion") val distritoDescripcion: String? = null,
     @SerializedName("contacto_emergencia_nombre") val contactoEmergenciaNombre: String? = null,
     @SerializedName("contacto_emergencia_telefono") val contactoEmergenciaTelefono: String? = null,

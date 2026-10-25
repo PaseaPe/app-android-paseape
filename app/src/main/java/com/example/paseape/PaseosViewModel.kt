@@ -67,6 +67,11 @@ class PaseosViewModel : ViewModel() {
 
     init {
         cargarPaseosMock()
+        viewModelScope.launch {
+            PaseosRepository.solicitudesCreadasSesion.collect { lista ->
+                solicitudesInmediatasCreadas = lista
+            }
+        }
     }
 
     val minutosSeleccionados: Int
@@ -234,7 +239,6 @@ class PaseosViewModel : ViewModel() {
             withContext(Dispatchers.Main) {
                 enviandoSolicitudInmediata = false
                 result.onSuccess { nuevaSolicitud ->
-                    solicitudesInmediatasCreadas = listOf(nuevaSolicitud) + solicitudesInmediatasCreadas
                     exitoSolicitudMensaje =
                         "¡Solicitud ${nuevaSolicitud.codigoReserva.orEmpty()} creada! Buscando paseadores en ${nuevaSolicitud.distritoDescripcion ?: distrito.descripcion}."
                     onSuccess(nuevaSolicitud)

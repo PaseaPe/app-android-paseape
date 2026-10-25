@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarPerfilReqDto
 import com.example.paseape.data.model.CrearMascotaRequest
+import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.data.network.ApiErrorContext
@@ -32,17 +33,23 @@ sealed interface ProfileUiState {
 class AccountActivity : ComponentActivity() {
 
     private var uiState by mutableStateOf<ProfileUiState>(ProfileUiState.Loading)
+    private var distritosDisponibles by mutableStateOf<List<DistritoParamDto>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        cargarDistritosCatalogo()
         cargarPerfilCliente()
 
         setContent {
             PaseaPETheme {
                 ProfileScreen(
                     uiState = uiState,
-                    onRetry = { cargarPerfilCliente() },
+                    distritos = distritosDisponibles,
+                    onRetry = {
+                        cargarDistritosCatalogo()
+                        cargarPerfilCliente()
+                    },
                     onLogoutClick = { cerrarSesionYRedirigir() },
                     onLogout = { cerrarSesionYRedirigir() },
                     onBack = { finish() },
@@ -55,6 +62,23 @@ class AccountActivity : ComponentActivity() {
                         startActivity(intent)
                     }
                 )
+            }
+        }
+    }
+
+    private fun cargarDistritosCatalogo() {
+        if (distritosDisponibles.isNotEmpty()) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val res = RetrofitClient.apiService.getApplicationParameters()
+                if (res.isSuccessful) {
+                    val lista = res.body()?.response?.distritos ?: emptyList()
+                    withContext(Dispatchers.Main) {
+                        distritosDisponibles = lista
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("ACCOUNT_DEBUG", "No se pudieron cargar distritos de catálogo", e)
             }
         }
     }

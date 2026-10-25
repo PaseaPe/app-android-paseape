@@ -24,6 +24,18 @@ data class CrearSolicitudInmediataReqDto(
     @SerializedName("referencia_direccion") val referenciaDireccion: String? = null
 )
 
+data class CrearSolicitudProgramadaReqDto(
+    @SerializedName("paseador_uuid") val paseadorUuid: String,
+    @SerializedName("mascota_uuids") val mascotaUuids: List<String>,
+    @SerializedName("distrito_id") val distritoId: Int,
+    @SerializedName("fecha_programada") val fechaProgramada: String,
+    @SerializedName("bloque_horario_id") val bloqueHorarioId: Int,
+    @SerializedName("tipo_duracion_paseo_id") val tipoDuracionPaseoId: Int,
+    @SerializedName("tipo_metodo_pago_id") val tipoMetodoPagoId: Int,
+    @SerializedName("direccion_recojo") val direccionRecojo: String,
+    @SerializedName("referencia_direccion") val referenciaDireccion: String? = null
+)
+
 data class SolicitudMascotaResDto(
     @SerializedName("uuid") val uuid: String? = null,
     @SerializedName("nombre") val nombre: String? = null,
@@ -47,6 +59,9 @@ data class SolicitudPaseoResDto(
     @SerializedName("distrito_descripcion") val distritoDescripcion: String? = null,
     @SerializedName("direccion_recojo") val direccionRecojo: String? = null,
     @SerializedName("referencia_direccion") val referenciaDireccion: String? = null,
+    @SerializedName("fecha_programada") val fechaProgramada: String? = null,
+    @SerializedName("bloque_horario_id") val bloqueHorarioId: Int? = null,
+    @SerializedName("bloque_horario_codigo") val bloqueHorarioCodigo: String? = null,
     @SerializedName("tarifa_hora_pen_snapshot") val tarifaHoraPenSnapshot: Double? = null,
     @SerializedName("monto_total") val montoTotal: Double? = null,
     @SerializedName("paseador_uuid") val paseadorUuid: String? = null,
@@ -54,5 +69,6 @@ data class SolicitudPaseoResDto(
     @SerializedName("cliente_uuid") val clienteUuid: String? = null,
     @SerializedName("cliente_nombre_completo") val clienteNombreCompleto: String? = null,
     @SerializedName("mascotas") val mascotas: List<SolicitudMascotaResDto>? = emptyList(),
+    @SerializedName("hora_vencimiento") val horaVencimiento: String? = null,
     @SerializedName("creado_el") val creadoEl: String? = null
 )

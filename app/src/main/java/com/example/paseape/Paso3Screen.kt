@@ -25,8 +25,9 @@ import coil.compose.AsyncImage
 @Composable
 fun Paso3Screen(
     viewModel: ReservaPaseoViewModel,
+    authHeader: String = "",
     onBack: () -> Unit,
-    onConfirmSuccess: () -> Unit
+    onConfirmSuccess: (String?) -> Unit
 ) {
     val naranja = Color(0xFFE8702A)
 
@@ -44,17 +45,47 @@ fun Paso3Screen(
         bottomBar = {
             Surface(shadowElevation = 8.dp) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    viewModel.errorEnvio?.let { msgError ->
+                        Surface(
+                            color = Color(0xFFFEF2F2),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                        ) {
+                            Text(
+                                text = msgError,
+                                color = Color(0xFFDC2626),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+
                     Button(
                         onClick = {
-                            viewModel.enviarSolicitud {
-                                onConfirmSuccess()
+                            viewModel.enviarSolicitud(authHeader) { codigoReserva ->
+                                onConfirmSuccess(codigoReserva)
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        enabled = !viewModel.enviandoSolicitud,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = naranja),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("Confirmar y Enviar Solicitud", color = Color.White, fontWeight = FontWeight.Bold)
+                        if (viewModel.enviandoSolicitud) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Enviando solicitud...", color = Color.White, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("Confirmar y Enviar Solicitud", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -119,20 +150,32 @@ fun Paso3Screen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Datos de la mascota
+                    // Datos de las mascotas seleccionadas
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(36.dp).background(Color(0xFFFFE8D8), CircleShape), contentAlignment = Alignment.Center) {
-                            Text(viewModel.mascotaSeleccionada.take(1).uppercase(), fontSize = 12.sp, color = naranja, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFFFFE8D8), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = viewModel.nombresMascotasSeleccionadas.take(1).uppercase(),
+                                fontSize = 12.sp,
+                                color = naranja,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text(viewModel.mascotaSeleccionada, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("Mascota confirmada", fontSize = 10.sp, color = Color.Gray)
+                            Text(viewModel.nombresMascotasSeleccionadas, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("${viewModel.cantidadMascotasSeleccionadas} mascota(s) confirmada(s)", fontSize = 10.sp, color = Color.Gray)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("📅 ${viewModel.diaSeleccionado} / ${viewModel.horarioSeleccionado} (${viewModel.duracionMinutos} min)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("💳 Método de pago: ${viewModel.metodoPagoDescripcion}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF334155))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("📍 ${viewModel.direccionRecojo}", fontSize = 12.sp, color = Color.Gray)
                     if (viewModel.referenciaRecojo.isNotBlank()) {
@@ -153,8 +196,17 @@ fun Paso3Screen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Tarifa ${viewModel.duracionMinutos} min de paseo", fontSize = 12.sp, color = Color.Gray)
+                        Text(
+                            text = "Tarifa (${viewModel.duracionMinutos} min × ${viewModel.cantidadMascotasSeleccionadas} mascota(s))",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
                         Text(viewModel.totalEstimadoFormateado, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Método de pago seleccionado", fontSize = 12.sp, color = Color.Gray)
+                        Text(viewModel.metodoPagoDescripcion, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

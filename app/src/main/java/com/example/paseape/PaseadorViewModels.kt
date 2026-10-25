@@ -24,7 +24,8 @@ sealed interface PaseadoresListUiState {
     data class Success(
         val paseadores: List<PaseadorDto>,
         val distritosDisponibles: List<String>,
-        val distritoSeleccionado: String?
+        val distritoSeleccionado: String?,
+        val distritoClienteDefault: String? = null
     ) : PaseadoresListUiState
     data class Error(val message: String) : PaseadoresListUiState
 }
@@ -46,40 +47,66 @@ class PaseadoresViewModel : ViewModel() {
     private var catalogoDistritos: List<DistritoParamDto> = emptyList()
     private var listaActualPaseadores: List<PaseadorDto> = emptyList()
     private var ultimoAuthHeader: String = ""
+    private var ultimoUserUuid: String? = null
+    private var distritoClienteDefault: String? = null
     var distritoSeleccionadoActual by mutableStateOf<String?>(null)
 
-    fun cargarPaseadores(authHeader: String) {
+    fun cargarPaseadores(authHeader: String, userUuid: String? = ultimoUserUuid) {
         ultimoAuthHeader = authHeader
+        if (!userUuid.isNullOrBlank()) {
+            ultimoUserUuid = userUuid
+        }
         _uiState.value = PaseadoresListUiState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // 1. Cargar catálogo de distritos desde application-parameters si aún no existe
                 if (catalogoDistritos.isEmpty()) {
-                    try {
+                    runCatching {
                         val paramsRes = RetrofitClient.apiService.getApplicationParameters(authHeader)
                         if (paramsRes.isSuccessful) {
                             catalogoDistritos = paramsRes.body()?.response?.distritos.orEmpty()
                         }
-                    } catch (_: Exception) {
-                        // Fallback a los distritos obtenidos en la lista si falla el catálogo
                     }
                 }
 
-                // 2. Consulta al backend según el filtro seleccionado
+                // 2. Obtener el distrito registrado del cliente para mostrarlo por defecto al entrar
+                if (distritoClienteDefault == null && !ultimoUserUuid.isNullOrBlank()) {
+                    runCatching {
+                        val clienteRes = RetrofitClient.apiService.getClientePorUuid(
+                            token = authHeader,
+                            uuid = ultimoUserUuid!!
+                        )
+                        val desc = clienteRes.body()
+                            ?.extraerUsuarioCliente()
+                            ?.detalleCliente
+                            ?.distritoDescripcion
+                            ?.trim()
+                            ?.uppercase()
+                        if (!desc.isNullOrBlank()) {
+                            distritoClienteDefault = desc
+                        }
+                    }
+                }
+
+                // Si es la carga inicial (sin filtro manual todavía) y conocemos el distrito del cliente,
+                // lo fijamos como el distrito seleccionado por defecto.
+                if (distritoSeleccionadoActual == null && !distritoClienteDefault.isNullOrBlank()) {
+                    distritoSeleccionadoActual = distritoClienteDefault
+                }
+
+                // 3. Consulta al backend según el filtro seleccionado
                 val response = if (distritoSeleccionadoActual == null) {
-                    // Inicial: sin query params (el backend resuelve automáticamente el distrito del cliente en sesión)
+                    // Sin query params: el backend también filtra automáticamente por el distrito del cliente en sesión
                     RetrofitClient.apiService.getPaseadores(token = authHeader)
                 } else if (distritoSeleccionadoActual.equals("Todos", ignoreCase = true)) {
-                    // "Todos los distritos": enviamos todos los IDs del catálogo para que el backend busque globalmente
                     val todosIds = catalogoDistritos.map { it.id }.filter { it > 0 }
                     RetrofitClient.apiService.getPaseadores(
                         token = authHeader,
                         distritoIds = if (todosIds.isNotEmpty()) todosIds else null
                     )
                 } else {
-                    // Distrito específico seleccionado en el menú desplegable
                     val distritoObj = catalogoDistritos.firstOrNull {
-                        it.descripcion.equals(distritoSeleccionadoActual, ignoreCase = true)
+                        it.descripcion.trim().equals(distritoSeleccionadoActual?.trim(), ignoreCase = true)
                     }
                     if (distritoObj != null) {
                         RetrofitClient.apiService.getPaseadores(
@@ -96,17 +123,16 @@ class PaseadoresViewModel : ViewModel() {
                         val body = response.body()
                         listaActualPaseadores = body?.response.orEmpty()
 
-                        // Generar lista de distritos para el desplegable (todos los distritos disponibles)
                         val nombresDistritos = if (catalogoDistritos.isNotEmpty()) {
                             catalogoDistritos.map { it.descripcion.trim().uppercase() }.distinct().sorted()
                         } else {
                             listaActualPaseadores.mapNotNull { it.distritoCoberturaDescripcion?.trim()?.uppercase() }.distinct().sorted()
                         }
 
-                        // Resolver el nombre del distrito a mostrar en el selector
                         val nombreMostrar = when {
                             distritoSeleccionadoActual.equals("Todos", ignoreCase = true) -> null
                             !distritoSeleccionadoActual.isNullOrBlank() -> distritoSeleccionadoActual?.trim()?.uppercase()
+                            !distritoClienteDefault.isNullOrBlank() -> distritoClienteDefault
                             listaActualPaseadores.isNotEmpty() -> listaActualPaseadores.firstOrNull()?.distritoCoberturaDescripcion?.trim()?.uppercase()
                             else -> null
                         }
@@ -114,7 +140,8 @@ class PaseadoresViewModel : ViewModel() {
                         _uiState.value = PaseadoresListUiState.Success(
                             paseadores = listaActualPaseadores,
                             distritosDisponibles = nombresDistritos,
-                            distritoSeleccionado = nombreMostrar
+                            distritoSeleccionado = nombreMostrar,
+                            distritoClienteDefault = distritoClienteDefault
                         )
                     } else {
                         _uiState.value = PaseadoresListUiState.Error(
@@ -139,7 +166,7 @@ class PaseadoresViewModel : ViewModel() {
             distrito
         }
         if (ultimoAuthHeader.isNotBlank()) {
-            cargarPaseadores(ultimoAuthHeader)
+            cargarPaseadores(ultimoAuthHeader, ultimoUserUuid)
         }
     }
 }
@@ -157,16 +184,46 @@ class PaseadorDetalleViewModel : ViewModel() {
         _uiState.value = PaseadorDetalleUiState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // 1. Obtener perfil del paseador (GET /paseadores/{uuid})
                 val response = RetrofitClient.apiService.getPaseadorPorUsuarioUuid(
                     token = authHeader,
                     usuarioUuid = usuarioUuid
                 )
+
+                // 2. Obtener bloques de disponibilidad del día desde el nuevo endpoint especializado
+                //    (GET /paseadores/{paseadorUuid}/disponibilidad)
+                val dispFechaResponse = runCatching {
+                    RetrofitClient.apiService.getDisponibilidadPaseadorPorFecha(
+                        token = authHeader,
+                        paseadorUuid = usuarioUuid
+                    )
+                }.getOrNull()
+
                 withContext(Dispatchers.Main) {
                     if (response.isSuccessful) {
                         val body = response.body()
                         val detalleData = body?.response
-                        val usuarioDetalle = detalleData?.usuario
-                        val disponibilidad = detalleData?.disponibilidad
+                        val usuarioDetalle = detalleData?.extraerUsuario()
+
+                        val dispFechaData = dispFechaResponse?.body()?.response
+                        val bloquesFecha = dispFechaData?.bloques?.map { slot ->
+                            if (slot.diaSemanaId == null && dispFechaData.diaSemanaId != null) {
+                                slot.copy(
+                                    diaSemanaId = dispFechaData.diaSemanaId,
+                                    diaSemanaDescripcion = dispFechaData.diaSemanaDescripcion
+                                )
+                            } else {
+                                slot
+                            }
+                        }
+
+                        val disponibilidad = detalleData?.disponibilidad ?: bloquesFecha?.let {
+                            DisponibilidadPaseadorDto(
+                                maxMascotasPredeterminado = usuarioDetalle?.paseador?.maxMascotasPredeterminado,
+                                slots = it
+                            )
+                        }
+
                         if (usuarioDetalle != null) {
                             _uiState.value = PaseadorDetalleUiState.Success(
                                 detalle = usuarioDetalle,

@@ -34,6 +34,7 @@ import com.example.paseape.data.model.ApplicationParametersResponse
 import com.example.paseape.data.model.ActualizarBloqueDisponibilidadRequestDto
 import com.example.paseape.data.model.ActualizarCapacidadBaseRequestDto
 import com.example.paseape.data.model.DisponibilidadAccionResponseDto
+import com.example.paseape.data.model.DisponibilidadPaseadorFechaResponseDto
 import com.example.paseape.data.model.DisponibilidadResponseDto
 import com.example.paseape.data.model.GuardarDisponibilidadRequestDto
 import com.example.paseape.data.model.RazasResponse
@@ -42,6 +43,7 @@ import com.example.paseape.data.model.GenericApiResponse
 import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PaseoResDto
 import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
+import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
@@ -102,6 +104,13 @@ interface ApiService {
         @Path("usuario_uuid") usuarioUuid: String,
         @Query("fecha") fecha: String? = null
     ): Response<DetallePaseadorResponse>
+
+    @GET("paseadores/{paseador_uuid}/disponibilidad")
+    suspend fun getDisponibilidadPaseadorPorFecha(
+        @Header("Authorization") token: String,
+        @Path("paseador_uuid") paseadorUuid: String,
+        @Query("fecha") fecha: String? = null
+    ): Response<DisponibilidadPaseadorFechaResponseDto>
 
     @GET("paseadores/{uuid}")
     suspend fun getWalkerDetail(
@@ -225,6 +234,13 @@ interface ApiService {
     suspend fun crearSolicitudInmediata(
         @Header("Authorization") token: String,
         @Body request: CrearSolicitudInmediataReqDto
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Solicitud programada (HU16 - Reserva con paseador, fecha y bloque horario)
+    @POST("cliente/solicitudes/programada")
+    suspend fun crearSolicitudProgramada(
+        @Header("Authorization") token: String,
+        @Body request: CrearSolicitudProgramadaReqDto
     ): Response<ResponseDto<SolicitudPaseoResDto>>
 
     // Métodos de paseos y notificaciones integrados directamente en ApiService
