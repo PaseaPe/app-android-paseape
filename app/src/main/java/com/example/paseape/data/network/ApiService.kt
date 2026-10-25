@@ -40,7 +40,10 @@ import com.example.paseape.data.model.RazasResponse
 import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
 import com.example.paseape.data.model.NotificacionDto
+import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.PaseoResDto
+import com.example.paseape.data.model.RechazarSolicitudRequest
+import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
@@ -226,5 +229,43 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("usuarioId") usuarioId: Long
     ): Response<List<NotificacionDto>>
+
+    // Bandeja de solicitudes/paseos del paseador
+    @GET("paseador/solicitudes")
+    suspend fun obtenerBandejaPaseador(
+        @Header("Authorization") token: String,
+        @Query("tab") tab: String,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): Response<ResponseDto<PageResponseDto<SolicitudPaseoResDto>>>
+
+    /** Inmediata en SOLICITADA_BUSCANDO -> ACEPTADA. */
+    @PATCH("paseador/solicitudes/{uuid}/tomar")
+    suspend fun tomarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Oculta la solicitud solo para este paseador (no la cancela para los demás). */
+    @PATCH("paseador/solicitudes/{uuid}/descartar")
+    suspend fun descartarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<Any?>>
+
+    /** Programada PENDIENTE -> ACEPTADA. */
+    @PATCH("paseador/solicitudes/{uuid}/aceptar")
+    suspend fun aceptarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Programada PENDIENTE -> RECHAZADA. El motivo es opcional. */
+    @PATCH("paseador/solicitudes/{uuid}/rechazar")
+    suspend fun rechazarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body body: RechazarSolicitudRequest
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
 
 }
