@@ -13,7 +13,10 @@ import com.example.paseape.data.model.GuardarDisponibilidadRequestDto
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -22,7 +25,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import retrofit2.Response
 
 /** Identifica una celda del grid: día de la semana + bloque horario. */
 data class SlotKey(
@@ -43,26 +49,37 @@ sealed interface DisponibilidadUiState {
         val capacidadBaseGuardada: Int,
         val slots: Map<SlotKey, Int>,
         val slotsGuardados: Map<SlotKey, Int>,
+        /** Bloques agregados localmente que aún no se han persistido. */
+        val slotsPendientes: Set<SlotKey> = emptySet(),
         val isSaving: Boolean = false
     ) : DisponibilidadUiState {
-
-        val sinGuardar: Boolean
-            get() = capacidadBase != capacidadBaseGuardada || slots != slotsGuardados
 
         val estaVacia: Boolean
             get() = slots.isEmpty()
 
-        val puedeGuardar: Boolean
-            get() = !isSaving && (slots.isNotEmpty() || slotsGuardados.isNotEmpty())
+        val hayCambiosSinGuardar: Boolean
+            get() = slotsPendientes.isNotEmpty()
     }
 }
 
-/** Mensaje para el Snackbar. retry = true cuando conviene ofrecer "Reintentar". */
+/**
+ * Mensaje para el Snackbar. Si [retry] no es null, la pantalla muestra la acción
+ * "Reintentar" y ejecuta ese bloque cuando el usuario la pulsa.
+ */
 data class DisponibilidadMessage(
     val text: String,
-    val retry: Boolean = false
+    val retry: (() -> Unit)? = null
 )
 
+/**
+ * Disponibilidad semanal:
+ * - Capacidad base: PATCH propio, con debounce, sin tocar los bloques.
+ * - Editar un bloque: PATCH GUARDAR_CUPO automático solo para esa celda.
+ * - Quitar un bloque: PATCH CANCELAR inmediato (valida reservas).
+ * - Agregar celdas y chips: solo estado local hasta pulsar "Guardar Cambios",
+ *   que sincroniza todo con un PUT.
+ * - Limpiar semana: PATCH CANCELAR por cada bloque activo.
+ */
 class DisponibilidadViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow<DisponibilidadUiState>(DisponibilidadUiState.Loading)
@@ -72,11 +89,20 @@ class DisponibilidadViewModel : ViewModel() {
     val messages: SharedFlow<DisponibilidadMessage> = _messages.asSharedFlow()
 
     private var tokenCargado: String? = null
+    private var authHeaderActual: String = ""
+
+    private val mutexEscritura = Mutex()
+    private var jobCapacidad: Job? = null
+    private var jobGuardado: Job? = null
+    private val jobsSlot = mutableMapOf<SlotKey, Job>()
+
+    private val operacionesActivas = mutableSetOf<Long>()
+    private var secuenciaOperacion = 0L
 
     /**
      * Carga catálogos y disponibilidad. Si ya se cargó con el mismo token y el
-     * estado sigue siendo exitoso, no vuelve a consultar (conserva cambios sin
-     * guardar al cambiar de pestaña).
+     * estado sigue siendo exitoso, no vuelve a consultar (conserva el estado
+     * mientras se navega entre pestañas).
      */
     fun cargar(token: String, force: Boolean = false) {
         val authHeader = construirAuthHeader(token)
@@ -86,9 +112,11 @@ class DisponibilidadViewModel : ViewModel() {
                 IllegalStateException("Token vacío"),
                 ApiErrorContext.WALKER
             )
-            setError(message, retry = true)
+            setError(message) { cargar(token, force = true) }
             return
         }
+
+        authHeaderActual = authHeader
 
         if (!force &&
             authHeader == tokenCargado &&
@@ -98,6 +126,7 @@ class DisponibilidadViewModel : ViewModel() {
         }
 
         tokenCargado = authHeader
+        cancelarOperacionesPendientes()
         _uiState.value = DisponibilidadUiState.Loading
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -112,7 +141,9 @@ class DisponibilidadViewModel : ViewModel() {
                         parametrosResponse,
                         ApiErrorContext.WALKER
                     )
-                    withContext(Dispatchers.Main) { setError(message, retry = true) }
+                    withContext(Dispatchers.Main) {
+                        setError(message) { cargar(token, force = true) }
+                    }
                     return@launch
                 }
 
@@ -145,7 +176,9 @@ class DisponibilidadViewModel : ViewModel() {
                         disponibilidadResponse,
                         ApiErrorContext.WALKER
                     )
-                    withContext(Dispatchers.Main) { setError(message, retry = true) }
+                    withContext(Dispatchers.Main) {
+                        setError(message) { cargar(token, force = true) }
+                    }
                     return@launch
                 }
 
@@ -163,7 +196,9 @@ class DisponibilidadViewModel : ViewModel() {
                         IllegalStateException("Catálogos o disponibilidad vacíos"),
                         ApiErrorContext.WALKER
                     )
-                    withContext(Dispatchers.Main) { setError(message, retry = true) }
+                    withContext(Dispatchers.Main) {
+                        setError(message) { cargar(token, force = true) }
+                    }
                     return@launch
                 }
 
@@ -186,192 +221,183 @@ class DisponibilidadViewModel : ViewModel() {
                     TAG,
                     "Disponibilidad cargada: ${slots.size} bloques, capacidad base=$base"
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error al cargar la disponibilidad semanal", e)
                 withContext(Dispatchers.Main) {
-                    setError(
-                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER),
-                        retry = true
-                    )
+                    setError(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)) {
+                        cargar(token, force = true)
+                    }
                 }
             }
-        }
-    }
-
-    fun activarSlot(slot: SlotKey) {
-        updateSuccess { state ->
-            if (state.isSaving || state.slots.containsKey(slot)) {
-                state
-            } else {
-                state.copy(slots = state.slots + (slot to state.capacidadBase))
-            }
-        }
-    }
-
-    fun actualizarCupo(slot: SlotKey, cupo: Int) {
-        val cupoValido = cupo.coerceIn(MIN_CAPACIDAD, MAX_CAPACIDAD)
-        updateSuccess { state ->
-            if (state.isSaving) {
-                state
-            } else {
-                state.copy(slots = state.slots + (slot to cupoValido))
-            }
-        }
-    }
-
-    fun quitarSlot(slot: SlotKey) {
-        updateSuccess { state ->
-            if (state.isSaving) state else state.copy(slots = state.slots - slot)
         }
     }
 
     /**
-     * Cambia la capacidad base. Las celdas que estaban en estado BASE (su cupo
-     * era igual al base anterior) pasan a mostrar el nuevo valor; las celdas
-     * personalizadas conservan su cupo.
+     * Activa una celda vacía con el cupo base. Queda pendiente hasta que el
+     * usuario pulse "Guardar Cambios".
      */
-    fun ajustarCapacidadBase(delta: Int) {
-        updateSuccess { state ->
-            if (state.isSaving) return@updateSuccess state
+    fun activarSlot(slot: SlotKey) {
+        val state = successActual() ?: return
+        if (state.slots.containsKey(slot)) return
 
-            val nuevaCapacidad = (state.capacidadBase + delta)
-                .coerceIn(MIN_CAPACIDAD, MAX_CAPACIDAD)
-            if (nuevaCapacidad == state.capacidadBase) {
-                state
-            } else {
-                val slotsActualizados = state.slots.mapValues { (_, cupo) ->
-                    if (cupo == state.capacidadBase) nuevaCapacidad else cupo
-                }
-                state.copy(
-                    capacidadBase = nuevaCapacidad,
-                    slots = slotsActualizados
-                )
+        val cupo = state.capacidadBase
+        updateSuccess {
+            it.copy(
+                slots = it.slots + (slot to cupo),
+                slotsPendientes = it.slotsPendientes + slot
+            )
+        }
+    }
+
+    /** Cambia el cupo de un bloque marcado; solo ese bloque se persiste. */
+    fun actualizarCupo(slot: SlotKey, cupo: Int) {
+        val state = successActual() ?: return
+        if (!state.slots.containsKey(slot)) return
+
+        val cupoValido = cupo.coerceIn(MIN_CAPACIDAD, MAX_CAPACIDAD)
+        if (state.slots[slot] == cupoValido) return
+
+        updateSuccess { it.copy(slots = it.slots + (slot to cupoValido)) }
+        programarGuardadoSlot(slot, cupoValido)
+    }
+
+    /**
+     * Quita el bloque. Si ya estaba guardado en el servidor se cancela al
+     * instante con PATCH CANCELAR; si solo era local, se descarta sin llamar a la API.
+     */
+    fun quitarSlot(slot: SlotKey) {
+        val state = successActual() ?: return
+        if (!state.slots.containsKey(slot)) return
+
+        val estabaGuardado = state.slotsGuardados.containsKey(slot)
+        jobsSlot.remove(slot)?.cancel()
+        updateSuccess {
+            it.copy(
+                slots = it.slots - slot,
+                slotsPendientes = it.slotsPendientes - slot
+            )
+        }
+
+        if (!estabaGuardado) return
+
+        val id = nuevaOperacion()
+        viewModelScope.launch {
+            try {
+                persistirCancelacion(slot)
+            } finally {
+                terminarOperacion(id)
             }
         }
+    }
+
+    /**
+     * Cambia la capacidad base y la guarda con debounce. No modifica los bloques
+     * existentes: el nuevo valor solo se usa al activar bloques nuevos.
+     */
+    fun ajustarCapacidadBase(delta: Int) {
+        val state = successActual() ?: return
+
+        val nuevaCapacidad = (state.capacidadBase + delta)
+            .coerceIn(MIN_CAPACIDAD, MAX_CAPACIDAD)
+        if (nuevaCapacidad == state.capacidadBase) return
+
+        updateSuccess { it.copy(capacidadBase = nuevaCapacidad) }
+        programarGuardadoCapacidad(nuevaCapacidad)
     }
 
     fun marcarLunesAViernes() {
-        aplicarChip { dias -> dias.take(5).map { it.id }.toSet() }
+        rellenarDias { dias -> dias.take(5).map { it.id }.toSet() }
     }
 
     fun marcarFinesDeSemana() {
-        aplicarChip { dias -> dias.drop(5).map { it.id }.toSet() }
+        rellenarDias { dias -> dias.drop(5).map { it.id }.toSet() }
     }
 
+    /** Limpia la semana y cancela cada bloque guardado con PATCH CANCELAR. */
     fun limpiarSemana() {
-        updateSuccess { state ->
-            if (state.isSaving) state else state.copy(slots = emptyMap())
-        }
-    }
+        val state = successActual() ?: return
+        val objetivos = state.slotsGuardados.keys
+        if (objetivos.isEmpty() && state.slots.isEmpty()) return
 
-    /**
-     * Descarta los cambios pendientes y vuelve al último estado confirmado por
-     * el backend. No realiza llamadas a la API.
-     */
-    fun descartarCambios() {
-        val state = _uiState.value as? DisponibilidadUiState.Success ?: return
-        if (state.isSaving || !state.sinGuardar) return
+        jobsSlot.values.forEach { it.cancel() }
+        jobsSlot.clear()
+        jobGuardado?.cancel()
+        jobGuardado = null
 
-        _uiState.value = state.copy(
-            capacidadBase = state.capacidadBaseGuardada,
-            slots = state.slotsGuardados
-        )
-        _messages.tryEmit(DisponibilidadMessage("Cambios descartados"))
-    }
-
-    /**
-     * Guarda la semana:
-     * - con bloques: PUT completo + PATCH de capacidad base si cambió.
-     * - sin bloques y con bloques guardados: PATCH CANCELAR por cada bloque activo
-     *   (el backend rechaza un PUT vacío). Si algún bloque tiene reservas, se
-     *   conserva marcado y se muestra el mensaje del backend.
-     */
-    fun guardar(token: String) {
-        val state = _uiState.value as? DisponibilidadUiState.Success ?: return
-        if (state.isSaving) return
-
-        if (state.slots.isEmpty() && state.slotsGuardados.isEmpty()) {
-            _messages.tryEmit(
-                DisponibilidadMessage("Selecciona al menos un bloque")
+        updateSuccess {
+            it.copy(
+                slots = emptyMap(),
+                slotsPendientes = emptySet()
             )
-            return
         }
 
-        val authHeader = construirAuthHeader(token)
-        if (authHeader.isBlank()) {
-            Log.e(TAG, "No hay token para guardar la disponibilidad del paseador")
-            _messages.tryEmit(
-                DisponibilidadMessage(
-                    ApiErrorMapper.fromThrowable(
-                        IllegalStateException("Token vacío"),
-                        ApiErrorContext.WALKER
-                    )
-                )
-            )
-            return
-        }
+        if (objetivos.isEmpty()) return
 
-        updateSuccess { it.copy(isSaving = true) }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            var baseGuardada = state.capacidadBaseGuardada
+        val id = nuevaOperacion()
+        viewModelScope.launch {
             try {
-                if (state.capacidadBase != state.capacidadBaseGuardada) {
-                    val capacidadResponse =
-                        RetrofitClient.apiService.actualizarCapacidadBase(
-                            token = authHeader,
-                            request = ActualizarCapacidadBaseRequestDto(state.capacidadBase)
-                        )
-
-                    if (!capacidadResponse.isSuccessful) {
-                        Log.e(
-                            TAG,
-                            "HTTP ${capacidadResponse.code()} al actualizar capacidad base"
-                        )
-                        val message = ApiErrorMapper.fromResponse(
-                            capacidadResponse,
-                            ApiErrorContext.WALKER
-                        )
-                        withContext(Dispatchers.Main) {
-                            updateSuccess { it.copy(isSaving = false) }
-                            _messages.tryEmit(DisponibilidadMessage(message))
-                        }
-                        return@launch
-                    }
-
-                    baseGuardada = state.capacidadBase
-                    withContext(Dispatchers.Main) {
-                        updateSuccess { it.copy(capacidadBaseGuardada = baseGuardada) }
-                    }
-                    Log.d(TAG, "Capacidad base actualizada: $baseGuardada")
-                }
-
-                if (state.slots.isEmpty()) {
-                    cancelarTodos(authHeader, state, baseGuardada)
-                } else {
-                    sincronizar(authHeader, state, baseGuardada)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error de red al guardar la disponibilidad", e)
-                withContext(Dispatchers.Main) {
-                    updateSuccess { it.copy(isSaving = false) }
-                    _messages.tryEmit(
-                        DisponibilidadMessage(
-                            ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
-                        )
-                    )
-                }
+                cancelarBloques(objetivos)
+            } finally {
+                terminarOperacion(id)
             }
         }
     }
 
-    private suspend fun sincronizar(
-        authHeader: String,
-        snapshot: DisponibilidadUiState.Success,
-        baseGuardada: Int
-    ) {
-        val bloques = snapshot.slots.entries
-            .sortedBy { it.key.diaSemanaId * 100 + it.key.bloqueHorarioId }
+    private fun rellenarDias(seleccionar: (List<DiaSemanaParamDto>) -> Set<Int>) {
+        val state = successActual() ?: return
+
+        val diasSeleccionados = seleccionar(state.diasSemana)
+        if (diasSeleccionados.isEmpty()) return
+
+        val nuevos = mutableMapOf<SlotKey, Int>()
+        state.diasSemana
+            .filter { it.id in diasSeleccionados }
+            .forEach { dia ->
+                state.bloquesHorario.forEach { bloque ->
+                    val slot = SlotKey(dia.id, bloque.id)
+                    if (!state.slots.containsKey(slot)) {
+                        nuevos[slot] = state.capacidadBase
+                    }
+                }
+            }
+
+        if (nuevos.isEmpty()) return
+        updateSuccess {
+            it.copy(
+                slots = it.slots + nuevos,
+                slotsPendientes = it.slotsPendientes + nuevos.keys
+            )
+        }
+    }
+
+    /**
+     * Guarda manualmente todos los bloques con un PUT. Solo se ejecuta si hay
+     * celdas agregadas localmente y no hay otra escritura en curso.
+     */
+    fun guardarCambios() {
+        val state = successActual() ?: return
+        if (state.isSaving || !state.hayCambiosSinGuardar) return
+
+        jobGuardado?.cancel()
+        val objetivo = state.slots
+
+        val id = nuevaOperacion()
+        jobGuardado = viewModelScope.launch {
+            try {
+                persistirMapa(objetivo)
+            } finally {
+                terminarOperacion(id)
+            }
+        }
+    }
+
+    private suspend fun persistirMapa(objetivo: Map<SlotKey, Int>) {
+        val header = headerActual() ?: return
+
+        val bloques = objetivo.entries
+            .sortedWith(compareBy({ it.key.diaSemanaId }, { it.key.bloqueHorarioId }))
             .map { (slot, cupo) ->
                 DisponibilidadBloqueRequestDto(
                     diaSemanaId = slot.diaSemanaId,
@@ -380,123 +406,260 @@ class DisponibilidadViewModel : ViewModel() {
                 )
             }
 
-        val response = RetrofitClient.apiService.sincronizarDisponibilidad(
-            token = authHeader,
-            request = GuardarDisponibilidadRequestDto(bloques = bloques)
-        )
-
-        if (!response.isSuccessful) {
-            Log.e(TAG, "HTTP ${response.code()} al sincronizar disponibilidad")
-            val message = ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
-            withContext(Dispatchers.Main) {
-                updateSuccess { it.copy(isSaving = false) }
-                _messages.tryEmit(DisponibilidadMessage(message))
-            }
-            return
+        val resultado = llamarApi("guardar la disponibilidad") {
+            RetrofitClient.apiService.sincronizarDisponibilidad(
+                token = header,
+                request = GuardarDisponibilidadRequestDto(bloques = bloques)
+            )
         }
 
-        val data = response.body()?.response
-        withContext(Dispatchers.Main) {
-            if (data != null && data.slots != null) {
-                val base = (data.maxMascotasPredeterminado ?: baseGuardada)
-                    .coerceIn(MIN_CAPACIDAD, MAX_CAPACIDAD)
-                val slotsConfirmados = mapearSlots(data, base)
-                updateSuccess {
-                    it.copy(
-                        isSaving = false,
-                        capacidadBase = base,
-                        capacidadBaseGuardada = base,
-                        slots = slotsConfirmados,
-                        slotsGuardados = slotsConfirmados
-                    )
-                }
-            } else {
-                updateSuccess {
-                    it.copy(
-                        isSaving = false,
-                        capacidadBaseGuardada = snapshot.capacidadBase,
-                        slotsGuardados = snapshot.slots
-                    )
-                }
+        when (resultado) {
+            is ResultadoApi.Error -> {
+                // Se conservan los cambios locales para poder reintentar.
+                emitirError(resultado.mensaje) { guardarCambios() }
             }
-            _messages.tryEmit(DisponibilidadMessage("Disponibilidad guardada"))
+
+            is ResultadoApi.Exito -> {
+                val base = successActual()?.capacidadBase ?: CAPACIDAD_BASE_DEFAULT
+                val data = resultado.response.body()?.response
+                val confirmados = if (data != null && data.slots != null) {
+                    mapearSlots(data, base)
+                } else {
+                    objetivo
+                }
+                updateSuccess { state ->
+                    state.copy(
+                        slotsGuardados = confirmados,
+                        // Solo siguen pendientes las celdas agregadas durante el envío.
+                        slotsPendientes = (state.slotsPendientes - objetivo.keys)
+                            .filter { it in state.slots }
+                            .toSet()
+                    )
+                }
+                emitirInfo("Disponibilidad guardada")
+                Log.d(TAG, "Disponibilidad sincronizada: ${bloques.size} bloques")
+            }
         }
-        Log.d(TAG, "Disponibilidad sincronizada: ${bloques.size} bloques")
     }
 
-    private suspend fun cancelarTodos(
-        authHeader: String,
-        snapshot: DisponibilidadUiState.Success,
-        baseGuardada: Int
-    ) {
-        var primerError: String? = null
-        val bloquesQueSiguenActivos = mutableMapOf<SlotKey, Int>()
+    private fun programarGuardadoSlot(slot: SlotKey, cupo: Int) {
+        jobsSlot.remove(slot)?.cancel()
 
-        for ((slot, cupo) in snapshot.slotsGuardados) {
-            val response = RetrofitClient.apiService.actualizarBloqueDisponibilidad(
-                token = authHeader,
+        val id = nuevaOperacion()
+        val job = viewModelScope.launch {
+            try {
+                delay(DEBOUNCE_GUARDADO_MS)
+                persistirSlot(slot, cupo)
+            } finally {
+                terminarOperacion(id)
+            }
+        }
+        jobsSlot[slot] = job
+    }
+
+    private suspend fun persistirSlot(slot: SlotKey, cupo: Int) {
+        val header = headerActual() ?: return
+
+        val resultado = llamarApi("guardar el bloque") {
+            RetrofitClient.apiService.actualizarBloqueDisponibilidad(
+                token = header,
+                request = ActualizarBloqueDisponibilidadRequestDto(
+                    diaSemanaId = slot.diaSemanaId,
+                    bloqueHorarioId = slot.bloqueHorarioId,
+                    accion = ACCION_GUARDAR_CUPO,
+                    maxMascotas = cupo
+                )
+            )
+        }
+
+        when (resultado) {
+            is ResultadoApi.Error -> {
+                revertirSlot(slot, cupo)
+                emitirError(resultado.mensaje) { reintentarSlot(slot, cupo) }
+            }
+
+            is ResultadoApi.Exito -> {
+                updateSuccess { state ->
+                    if (state.slots[slot] == cupo) {
+                        state.copy(
+                            slotsGuardados = state.slotsGuardados + (slot to cupo),
+                            slotsPendientes = state.slotsPendientes - slot
+                        )
+                    } else {
+                        state
+                    }
+                }
+                Log.d(
+                    TAG,
+                    "Bloque guardado: día ${slot.diaSemanaId}, bloque ${slot.bloqueHorarioId}, cupo $cupo"
+                )
+            }
+        }
+    }
+
+    private suspend fun persistirCancelacion(slot: SlotKey) {
+        val header = headerActual() ?: return
+
+        val resultado = llamarApi("cancelar el bloque") {
+            RetrofitClient.apiService.actualizarBloqueDisponibilidad(
+                token = header,
                 request = ActualizarBloqueDisponibilidadRequestDto(
                     diaSemanaId = slot.diaSemanaId,
                     bloqueHorarioId = slot.bloqueHorarioId,
                     accion = ACCION_CANCELAR
                 )
             )
+        }
 
-            if (response.isSuccessful) {
+        when (resultado) {
+            is ResultadoApi.Error -> {
+                // Si el bloque ya se volvió a activar, no pisamos el nuevo estado.
+                val confirmado = successActual()?.slotsGuardados?.get(slot)
+                if (confirmado != null) {
+                    updateSuccess { state ->
+                        if (state.slots.containsKey(slot)) {
+                            state
+                        } else {
+                            state.copy(slots = state.slots + (slot to confirmado))
+                        }
+                    }
+                }
+                emitirError(resultado.mensaje) { quitarSlot(slot) }
+            }
+
+            is ResultadoApi.Exito -> {
+                updateSuccess { it.copy(slotsGuardados = it.slotsGuardados - slot) }
                 Log.d(
                     TAG,
                     "Bloque cancelado: día ${slot.diaSemanaId}, bloque ${slot.bloqueHorarioId}"
                 )
-            } else {
-                val message = ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
-                Log.e(
-                    TAG,
-                    "No se pudo cancelar el bloque ${slot.diaSemanaId}-${slot.bloqueHorarioId}: " +
-                        "HTTP ${response.code()} - $message"
-                )
-                bloquesQueSiguenActivos[slot] = cupo
-                if (primerError == null) primerError = message
-            }
-        }
-
-        withContext(Dispatchers.Main) {
-            updateSuccess {
-                it.copy(
-                    isSaving = false,
-                    capacidadBaseGuardada = baseGuardada,
-                    slots = bloquesQueSiguenActivos,
-                    slotsGuardados = bloquesQueSiguenActivos
-                )
-            }
-
-            val error = primerError
-            if (error == null) {
-                _messages.tryEmit(DisponibilidadMessage("Disponibilidad guardada"))
-            } else {
-                _messages.tryEmit(DisponibilidadMessage(error))
             }
         }
     }
 
-    private fun aplicarChip(seleccionarDias: (List<DiaSemanaParamDto>) -> Set<Int>) {
-        updateSuccess { state ->
-            if (state.isSaving) return@updateSuccess state
+    private fun programarGuardadoCapacidad(valor: Int) {
+        jobCapacidad?.cancel()
 
-            val diasSeleccionados = seleccionarDias(state.diasSemana)
-            if (diasSeleccionados.isEmpty()) return@updateSuccess state
+        val id = nuevaOperacion()
+        jobCapacidad = viewModelScope.launch {
+            try {
+                delay(DEBOUNCE_GUARDADO_MS)
+                persistirCapacidad(valor)
+            } finally {
+                terminarOperacion(id)
+            }
+        }
+    }
 
-            val slotsActualizados = state.slots.toMutableMap()
-            state.diasSemana
-                .filter { it.id in diasSeleccionados }
-                .forEach { dia ->
-                    state.bloquesHorario.forEach { bloque ->
-                        val slot = SlotKey(dia.id, bloque.id)
-                        if (!slotsActualizados.containsKey(slot)) {
-                            slotsActualizados[slot] = state.capacidadBase
-                        }
+    private suspend fun persistirCapacidad(valor: Int) {
+        val header = headerActual() ?: return
+
+        val resultado = llamarApi("actualizar la capacidad base") {
+            RetrofitClient.apiService.actualizarCapacidadBase(
+                token = header,
+                request = ActualizarCapacidadBaseRequestDto(valor)
+            )
+        }
+
+        when (resultado) {
+            is ResultadoApi.Error -> {
+                updateSuccess { state ->
+                    if (state.capacidadBase == valor) {
+                        state.copy(capacidadBase = state.capacidadBaseGuardada)
+                    } else {
+                        state
                     }
                 }
-            state.copy(slots = slotsActualizados)
+                emitirError(resultado.mensaje) { reintentarCapacidad(valor) }
+            }
+
+            is ResultadoApi.Exito -> {
+                updateSuccess { state ->
+                    if (state.capacidadBase == valor) {
+                        state.copy(capacidadBaseGuardada = valor)
+                    } else {
+                        state
+                    }
+                }
+                Log.d(TAG, "Capacidad base actualizada: $valor")
+            }
+        }
+    }
+
+    private fun reintentarCapacidad(valor: Int) {
+        if (successActual() == null) return
+        updateSuccess { it.copy(capacidadBase = valor) }
+        programarGuardadoCapacidad(valor)
+    }
+
+    private fun reintentarSlot(slot: SlotKey, cupo: Int) {
+        if (successActual() == null) return
+        updateSuccess { it.copy(slots = it.slots + (slot to cupo)) }
+        programarGuardadoSlot(slot, cupo)
+    }
+
+    private suspend fun revertirSlot(slot: SlotKey, cupoEnviado: Int) {
+        updateSuccess { state ->
+            if (state.slots[slot] != cupoEnviado) {
+                state
+            } else {
+                val confirmado = state.slotsGuardados[slot]
+                state.copy(
+                    slots = if (confirmado == null) {
+                        state.slots - slot
+                    } else {
+                        state.slots + (slot to confirmado)
+                    },
+                    slotsPendientes = if (confirmado == null) {
+                        state.slotsPendientes - slot
+                    } else {
+                        state.slotsPendientes
+                    }
+                )
+            }
+        }
+    }
+
+    private suspend fun cancelarBloques(objetivos: Set<SlotKey>) {
+        val header = headerActual() ?: return
+
+        val guardados = successActual()?.slotsGuardados.orEmpty()
+        val locales = successActual()?.slots.orEmpty()
+        val base = successActual()?.capacidadBase ?: CAPACIDAD_BASE_DEFAULT
+        val fallidos = mutableMapOf<SlotKey, Int>()
+        var primerError: String? = null
+
+        for (slot in objetivos.sortedWith(compareBy({ it.diaSemanaId }, { it.bloqueHorarioId }))) {
+            val resultado = llamarApi("cancelar el bloque") {
+                RetrofitClient.apiService.actualizarBloqueDisponibilidad(
+                    token = header,
+                    request = ActualizarBloqueDisponibilidadRequestDto(
+                        diaSemanaId = slot.diaSemanaId,
+                        bloqueHorarioId = slot.bloqueHorarioId,
+                        accion = ACCION_CANCELAR
+                    )
+                )
+            }
+
+            if (resultado is ResultadoApi.Error) {
+                fallidos[slot] = guardados[slot] ?: locales[slot] ?: base
+                if (primerError == null) primerError = resultado.mensaje
+            }
+        }
+
+        updateSuccess {
+            it.copy(
+                slots = fallidos,
+                slotsGuardados = fallidos
+            )
+        }
+
+        val error = primerError
+        if (error == null) {
+            emitirInfo("Disponibilidad guardada")
+            Log.d(TAG, "Semana despejada: ${objetivos.size} bloques cancelados")
+        } else {
+            emitirError(error) { limpiarSemana() }
         }
     }
 
@@ -516,10 +679,66 @@ class DisponibilidadViewModel : ViewModel() {
             .toMap()
     }
 
-    private fun setError(message: String, retry: Boolean) {
-        _uiState.value = DisponibilidadUiState.Error(message)
-        _messages.tryEmit(DisponibilidadMessage(message, retry = retry))
+    /**
+     * Ejecuta una escritura serializada: un PUT de guardado nunca se cruza con
+     * un PATCH de bloque o de capacidad base.
+     */
+    private suspend fun <T> llamarApi(
+        descripcion: String,
+        llamada: suspend () -> Response<T>
+    ): ResultadoApi<T> = withContext(Dispatchers.IO) {
+        mutexEscritura.withLock {
+            try {
+                val response = llamada()
+                if (response.isSuccessful) {
+                    ResultadoApi.Exito(response)
+                } else {
+                    Log.e(TAG, "HTTP ${response.code()} al $descripcion")
+                    ResultadoApi.Error(
+                        ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Error de red al $descripcion", e)
+                ResultadoApi.Error(
+                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+                )
+            }
+        }
     }
+
+    private fun headerActual(): String? {
+        if (authHeaderActual.isNotBlank()) return authHeaderActual
+
+        Log.e(TAG, "No hay token para guardar la disponibilidad del paseador")
+        _messages.tryEmit(
+            DisponibilidadMessage(
+                ApiErrorMapper.fromThrowable(
+                    IllegalStateException("Token vacío"),
+                    ApiErrorContext.WALKER
+                )
+            )
+        )
+        return null
+    }
+
+    private fun emitirInfo(mensaje: String) {
+        _messages.tryEmit(DisponibilidadMessage(mensaje))
+    }
+
+    private fun emitirError(mensaje: String, retry: (() -> Unit)? = null) {
+        _messages.tryEmit(DisponibilidadMessage(mensaje, retry))
+    }
+
+    private fun setError(message: String, retry: (() -> Unit)? = null) {
+        _uiState.value = DisponibilidadUiState.Error(message)
+        _messages.tryEmit(DisponibilidadMessage(message, retry))
+    }
+
+    private fun successActual(): DisponibilidadUiState.Success? =
+        _uiState.value as? DisponibilidadUiState.Success
 
     private fun updateSuccess(
         transform: (DisponibilidadUiState.Success) -> DisponibilidadUiState.Success
@@ -527,6 +746,34 @@ class DisponibilidadViewModel : ViewModel() {
         _uiState.update { current ->
             if (current is DisponibilidadUiState.Success) transform(current) else current
         }
+    }
+
+    private fun nuevaOperacion(): Long {
+        val id = ++secuenciaOperacion
+        operacionesActivas += id
+        actualizarIndicador()
+        return id
+    }
+
+    private fun terminarOperacion(id: Long) {
+        operacionesActivas -= id
+        actualizarIndicador()
+    }
+
+    private fun actualizarIndicador() {
+        val activas = operacionesActivas.isNotEmpty()
+        updateSuccess { it.copy(isSaving = activas) }
+    }
+
+    private fun cancelarOperacionesPendientes() {
+        jobCapacidad?.cancel()
+        jobCapacidad = null
+        jobGuardado?.cancel()
+        jobGuardado = null
+        jobsSlot.values.forEach { it.cancel() }
+        jobsSlot.clear()
+        operacionesActivas.clear()
+        actualizarIndicador()
     }
 
     private fun construirAuthHeader(token: String): String {
@@ -538,11 +785,18 @@ class DisponibilidadViewModel : ViewModel() {
         }
     }
 
+    private sealed interface ResultadoApi<out T> {
+        data class Exito<T>(val response: Response<T>) : ResultadoApi<T>
+        data class Error(val mensaje: String) : ResultadoApi<Nothing>
+    }
+
     private companion object {
         private const val TAG = "WALKER_DISPONIBILIDAD"
         private const val MIN_CAPACIDAD = 1
         private const val MAX_CAPACIDAD = 6
         private const val CAPACIDAD_BASE_DEFAULT = 3
+        private const val DEBOUNCE_GUARDADO_MS = 600L
+        private const val ACCION_GUARDAR_CUPO = "GUARDAR_CUPO"
         private const val ACCION_CANCELAR = "CANCELAR"
     }
 }
