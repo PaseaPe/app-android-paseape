@@ -939,9 +939,8 @@ private fun etiquetaEstado(estado: Int?): String = when (estado) {
     else -> "SIN ESTADO"
 }
 
-private fun formatearMonto(monto: String?): String? {
-    val valor = monto?.trim()?.takeIf { it.isNotBlank() } ?: return null
-    val numero = valor.toDoubleOrNull() ?: return "S/ --"
+private fun formatearMonto(monto: Double?): String? {
+    val numero = monto ?: return null
     return String.format(Locale.US, "S/ %.2f PEN", numero)
 }
 
