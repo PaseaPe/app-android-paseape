@@ -59,6 +59,7 @@
             android:name=".WalkerDashboardActivity"
             android:exported="false"
             android:theme="@style/Theme.PaseaPE" />
+        <activity android:name=".PaseosActivity" />
         <activity android:name=".NotificacionesActivity" />
         <activity
             android:name=".ReservaPaseoActivity"
