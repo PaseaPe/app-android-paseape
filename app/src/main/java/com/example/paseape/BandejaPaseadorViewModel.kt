@@ -82,7 +82,7 @@ data class PaseosMessage(
  * - Las escrituras (tomar/descartar/aceptar/rechazar) se serializan con un Mutex
  *   y, si fallan, revierten el cambio visual mínimo y ofrecen "Reintentar".
  */
-class PaseosViewModel : ViewModel() {
+class BandejaPaseadorViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow<PaseosUiState>(PaseosUiState.Loading)
     val uiState: StateFlow<PaseosUiState> = _uiState.asStateFlow()

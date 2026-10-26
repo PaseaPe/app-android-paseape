@@ -66,7 +66,7 @@ fun WalkerDashboardScreen(
     usuarioUuid: String,
     viewModel: WalkerProfileViewModel,
     disponibilidadViewModel: DisponibilidadViewModel,
-    paseosViewModel: PaseosViewModel,
+    paseosViewModel: BandejaPaseadorViewModel,
     onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -184,7 +184,7 @@ fun WalkerDashboardScreen(
                     uiState = uiState,
                     onLogoutClick = onLogoutClick
                 )
-                1 -> PaseosScreen(
+                1 -> BandejaPaseadorScreen(
                     token = token,
                     viewModel = paseosViewModel
                 )

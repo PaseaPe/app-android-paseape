@@ -90,9 +90,9 @@ private val PuntoRojo = Color(0xFFF44336)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PaseosScreen(
+fun BandejaPaseadorScreen(
     token: String,
-    viewModel: PaseosViewModel
+    viewModel: BandejaPaseadorViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val accionesEnCurso by viewModel.accionesEnCurso.collectAsState()
@@ -563,8 +563,8 @@ private fun SolicitudPaseoCard(
 
     val estado = solicitud.estadoId
     val muestraAcciones = solicitud.uuid != null && when {
-        tab == TabPaseos.INMEDIATOS && estado == PaseosViewModel.ESTADO_BUSCANDO -> true
-        tab == TabPaseos.MIS_PASEOS && estado == PaseosViewModel.ESTADO_PENDIENTE -> true
+        tab == TabPaseos.INMEDIATOS && estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO -> true
+        tab == TabPaseos.MIS_PASEOS && estado == BandejaPaseadorViewModel.ESTADO_PENDIENTE -> true
         else -> false
     }
     val textoSecundario = if (tab == TabPaseos.INMEDIATOS) "Descartar" else "Rechazar"
@@ -770,26 +770,26 @@ private fun EstadoBadge(
     descripcion: String?
 ) {
     val fondo = when (estado) {
-        PaseosViewModel.ESTADO_PENDIENTE -> FondoPendiente
-        PaseosViewModel.ESTADO_ACEPTADA,
-        PaseosViewModel.ESTADO_BUSCANDO -> FondoAceptada
+        BandejaPaseadorViewModel.ESTADO_PENDIENTE -> FondoPendiente
+        BandejaPaseadorViewModel.ESTADO_ACEPTADA,
+        BandejaPaseadorViewModel.ESTADO_BUSCANDO -> FondoAceptada
 
-        PaseosViewModel.ESTADO_EN_CURSO -> FondoEnCurso
-        PaseosViewModel.ESTADO_RECHAZADA,
-        PaseosViewModel.ESTADO_CANCELADA,
-        PaseosViewModel.ESTADO_VENCIDA -> FondoRechazada
+        BandejaPaseadorViewModel.ESTADO_EN_CURSO -> FondoEnCurso
+        BandejaPaseadorViewModel.ESTADO_RECHAZADA,
+        BandejaPaseadorViewModel.ESTADO_CANCELADA,
+        BandejaPaseadorViewModel.ESTADO_VENCIDA -> FondoRechazada
 
         else -> FondoFinalizada
     }
     val colorTexto = when (estado) {
-        PaseosViewModel.ESTADO_PENDIENTE -> TextoPendiente
-        PaseosViewModel.ESTADO_ACEPTADA,
-        PaseosViewModel.ESTADO_BUSCANDO -> VerdeAceptar
+        BandejaPaseadorViewModel.ESTADO_PENDIENTE -> TextoPendiente
+        BandejaPaseadorViewModel.ESTADO_ACEPTADA,
+        BandejaPaseadorViewModel.ESTADO_BUSCANDO -> VerdeAceptar
 
-        PaseosViewModel.ESTADO_EN_CURSO -> TextoEnCurso
-        PaseosViewModel.ESTADO_RECHAZADA,
-        PaseosViewModel.ESTADO_CANCELADA,
-        PaseosViewModel.ESTADO_VENCIDA -> RojoEliminar
+        BandejaPaseadorViewModel.ESTADO_EN_CURSO -> TextoEnCurso
+        BandejaPaseadorViewModel.ESTADO_RECHAZADA,
+        BandejaPaseadorViewModel.ESTADO_CANCELADA,
+        BandejaPaseadorViewModel.ESTADO_VENCIDA -> RojoEliminar
 
         else -> TextoGris
     }
@@ -890,14 +890,14 @@ private fun mensajeVacio(tab: TabPaseos): String = when (tab) {
 
 private fun textoVigencia(solicitud: SolicitudPaseoResDto): String {
     return when (solicitud.estadoId) {
-        PaseosViewModel.ESTADO_PENDIENTE -> "Pendiente de confirmación"
-        PaseosViewModel.ESTADO_ACEPTADA -> "Paseo confirmado"
-        PaseosViewModel.ESTADO_EN_CURSO -> "En progreso"
-        PaseosViewModel.ESTADO_BUSCANDO -> tiempoDesdeCreacion(solicitud.creadoEl)
-        PaseosViewModel.ESTADO_RECHAZADA,
-        PaseosViewModel.ESTADO_CANCELADA,
-        PaseosViewModel.ESTADO_FINALIZADA,
-        PaseosViewModel.ESTADO_VENCIDA -> {
+        BandejaPaseadorViewModel.ESTADO_PENDIENTE -> "Pendiente de confirmación"
+        BandejaPaseadorViewModel.ESTADO_ACEPTADA -> "Paseo confirmado"
+        BandejaPaseadorViewModel.ESTADO_EN_CURSO -> "En progreso"
+        BandejaPaseadorViewModel.ESTADO_BUSCANDO -> tiempoDesdeCreacion(solicitud.creadoEl)
+        BandejaPaseadorViewModel.ESTADO_RECHAZADA,
+        BandejaPaseadorViewModel.ESTADO_CANCELADA,
+        BandejaPaseadorViewModel.ESTADO_FINALIZADA,
+        BandejaPaseadorViewModel.ESTADO_VENCIDA -> {
             val estado = solicitud.estadoDescripcion?.trim()?.takeIf { it.isNotBlank() }
                 ?: etiquetaEstado(solicitud.estadoId)
             "Estado: $estado"
@@ -928,14 +928,14 @@ private fun tiempoDesdeCreacion(creadoEl: String?): String {
 }
 
 private fun etiquetaEstado(estado: Int?): String = when (estado) {
-    PaseosViewModel.ESTADO_PENDIENTE -> "PENDIENTE"
-    PaseosViewModel.ESTADO_ACEPTADA -> "ACEPTADA"
-    PaseosViewModel.ESTADO_RECHAZADA -> "RECHAZADA"
-    PaseosViewModel.ESTADO_CANCELADA -> "CANCELADA"
-    PaseosViewModel.ESTADO_EN_CURSO -> "EN CURSO"
-    PaseosViewModel.ESTADO_FINALIZADA -> "FINALIZADA"
-    PaseosViewModel.ESTADO_VENCIDA -> "VENCIDA"
-    PaseosViewModel.ESTADO_BUSCANDO -> "BUSCANDO"
+    BandejaPaseadorViewModel.ESTADO_PENDIENTE -> "PENDIENTE"
+    BandejaPaseadorViewModel.ESTADO_ACEPTADA -> "ACEPTADA"
+    BandejaPaseadorViewModel.ESTADO_RECHAZADA -> "RECHAZADA"
+    BandejaPaseadorViewModel.ESTADO_CANCELADA -> "CANCELADA"
+    BandejaPaseadorViewModel.ESTADO_EN_CURSO -> "EN CURSO"
+    BandejaPaseadorViewModel.ESTADO_FINALIZADA -> "FINALIZADA"
+    BandejaPaseadorViewModel.ESTADO_VENCIDA -> "VENCIDA"
+    BandejaPaseadorViewModel.ESTADO_BUSCANDO -> "BUSCANDO"
     else -> "SIN ESTADO"
 }
 

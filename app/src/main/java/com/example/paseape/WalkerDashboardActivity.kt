@@ -26,7 +26,7 @@ class WalkerDashboardActivity : ComponentActivity() {
     }
 
     private val paseosViewModel by lazy {
-        ViewModelProvider(this)[PaseosViewModel::class.java]
+        ViewModelProvider(this)[BandejaPaseadorViewModel::class.java]
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
