@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.data.model.DisponibilidadPaseadorDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
@@ -181,7 +182,10 @@ fun PaseadorDetalleScreen(
                 }
 
                 is PaseadorDetalleUiState.Success -> {
-                    PaseadorDetalleContent(detalle = uiState.detalle)
+                    PaseadorDetalleContent(
+                        detalle = uiState.detalle,
+                        disponibilidad = uiState.disponibilidad
+                    )
                 }
             }
         }
@@ -190,7 +194,8 @@ fun PaseadorDetalleScreen(
 
 @Composable
 fun PaseadorDetalleContent(
-    detalle: UsuarioPaseadorDetalleDto
+    detalle: UsuarioPaseadorDetalleDto,
+    disponibilidad: DisponibilidadPaseadorDto? = null
 ) {
     val paseador = detalle.paseador
     val scrollState = rememberScrollState()
@@ -532,6 +537,81 @@ fun PaseadorDetalleContent(
                     color = Color(0xFF475569),
                     lineHeight = 18.sp
                 )
+            }
+        }
+
+        // ==========================================
+        // 5. TARJETA DISPONIBILIDAD Y CUPOS (SPRINT 2)
+        // ==========================================
+        val slotsActivos = disponibilidad?.slots?.filter { it.activo == true }.orEmpty()
+        if (slotsActivos.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Horarios y Disponibilidad",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1E293B)
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val capacidadBase = disponibilidad?.maxMascotasPredeterminado ?: 3
+                    Text(
+                        text = "Capacidad base: hasta $capacidadBase mascotas por turno",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val diasAgrupados = slotsActivos.groupBy { it.diaSemanaDescripcion ?: "SEMANAL" }
+
+                    diasAgrupados.forEach { (dia, slotsDelDia) ->
+                        Text(
+                            text = dia.uppercase(),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryDark,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            slotsDelDia.forEach { slot ->
+                                val inicio = slot.horaInicio?.take(5) ?: ""
+                                val fin = slot.horaFin?.take(5) ?: ""
+                                val textoHora = if (inicio.isNotBlank() && fin.isNotBlank()) "$inicio-$fin" else slot.bloqueCodigo.orEmpty()
+                                val libre = slot.disponible == true && slot.estaLleno != true
+
+                                Surface(
+                                    color = if (libre) Color(0xFFEFF6FF) else Color(0xFFF1F5F9),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, if (libre) Color(0xFF93C5FD) else Color(0xFFCBD5E1))
+                                ) {
+                                    Text(
+                                        text = textoHora,
+                                        fontSize = 11.sp,
+                                        color = if (libre) Color(0xFF1E40AF) else Color(0xFF64748B),
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

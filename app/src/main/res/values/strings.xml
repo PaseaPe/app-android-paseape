@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">PaseaPE</string>
-    <string name="default_web_client_id">990768552615-m4ukkjgqvvam2h4t10blkfku8i87t9sc.apps.googleusercontent.com</string>
+    <!--
+    <string name="default_web_client_id">1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com</string>
+    -->
+    <string name="default_web_client_id">990768552615-qpumun0g4c011eh73pk6thsf2ioqeafi.apps.googleusercontent.com</string>
 </resources>
