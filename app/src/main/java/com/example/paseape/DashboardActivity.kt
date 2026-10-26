@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
@@ -48,6 +49,10 @@ class DashboardActivity : ComponentActivity() {
                 DashboardMainScreen(
                     onPaseadoresClick = {
                         val intent = Intent(this@DashboardActivity, PaseadoresActivity::class.java)
+                        startActivity(intent)
+                    },
+                    onPaseosClick = {
+                        val intent = Intent(this@DashboardActivity, PaseosActivity::class.java)
                         startActivity(intent)
                     },
                     onNotificacionesClick = {
@@ -93,6 +98,7 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 fun DashboardMainScreen(
     onPaseadoresClick: () -> Unit,
+    onPaseosClick: () -> Unit,
     onNotificacionesClick: () -> Unit,
     onProfileClick: () -> Unit,
     onLogoutClick: () -> Unit
@@ -132,7 +138,8 @@ fun DashboardMainScreen(
             onTabSelected = { index ->
                 when (index) {
                     1 -> onPaseadoresClick()
-                    2 -> onProfileClick()
+                    2 -> onPaseosClick()
+                    3 -> onProfileClick()
                     else -> selectedTab = index
                 }
             }
@@ -410,10 +417,17 @@ fun BottomNavigationBar(
             )
 
             BottomItem(
-                icon = Icons.Default.Person,
-                text = "Perfil",
+                icon = Icons.Default.DateRange,
+                text = "Mis Paseos",
                 selected = selectedTab == 2,
                 onClick = { onTabSelected(2) }
+            )
+
+            BottomItem(
+                icon = Icons.Default.Person,
+                text = "Perfil",
+                selected = selectedTab == 3,
+                onClick = { onTabSelected(3) }
             )
         }
     }
