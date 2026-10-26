@@ -139,8 +139,7 @@ fun LoginContent(
         coroutineScope.launch {
             try {
                 val credentialManager = CredentialManager.create(context)
-                //val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
-                val serverClientId = "990768552615-qpumun0g4c011eh73pk6thsf2ioqeafi.apps.googleusercontent.com"
+                val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
 
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)

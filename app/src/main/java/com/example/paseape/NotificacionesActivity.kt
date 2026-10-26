@@ -17,6 +17,8 @@ class NotificacionesActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val authHeader = SessionManager.getAuthHeader(this)
+        val userUuid = SessionManager.getUserUuid(this)
+        NotificacionesViewModel.inicializarContexto(this, userUuid)
         viewModel.cargarNotificaciones(authHeader)
 
         setContent {

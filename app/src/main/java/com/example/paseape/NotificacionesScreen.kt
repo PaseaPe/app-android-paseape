@@ -2,6 +2,7 @@ package com.example.paseape
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,7 +14,6 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,45 +45,49 @@ fun NotificacionesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notificaciones", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = "Notificaciones",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Regresar"
+                        )
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.cargarNotificaciones(authHeader) },
-                        enabled = !viewModel.isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
-                    }
-                    if (notificaciones.isNotEmpty()) {
-                        TextButton(
-                            onClick = {
-                                viewModel.marcarTodasComoLeidas(
-                                    authHeader = authHeader,
-                                    onSuccess = {
-                                        Toast.makeText(
-                                            context,
-                                            "Todas las notificaciones fueron marcadas como leídas",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    },
-                                    onError = { err ->
-                                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
-                                    }
-                                )
-                            },
-                            enabled = !viewModel.marcandoLeidas
-                        ) {
-                            Text(
-                                text = if (viewModel.marcandoLeidas) "Marcando..." else "Marcar todas leídas",
-                                color = naranja,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                    TextButton(
+                        onClick = {
+                            viewModel.marcarTodasComoLeidas(
+                                authHeader = authHeader,
+                                onSuccess = {
+                                    Toast.makeText(
+                                        context,
+                                        "Todas las notificaciones fueron marcadas como leídas",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
                             )
-                        }
+                        },
+                        enabled = !viewModel.marcandoLeidas && notificaciones.isNotEmpty()
+                    ) {
+                        Text(
+                            text = if (viewModel.marcandoLeidas) {
+                                "Marcando..."
+                            } else {
+                                "Marcar todas como leídas"
+                            },
+                            color = naranja,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             )
@@ -117,8 +121,11 @@ fun NotificacionesScreen(
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedButton(onClick = { viewModel.cargarNotificaciones(authHeader) }) {
-                            Text("Reintentar", color = naranja)
+                        Button(
+                            onClick = { viewModel.cargarNotificaciones(authHeader, incluirLeidas = true) },
+                            colors = ButtonDefaults.buttonColors(containerColor = naranja)
+                        ) {
+                            Text("Reintentar", color = Color.White)
                         }
                     }
                 }
@@ -133,14 +140,21 @@ fun NotificacionesScreen(
                         Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = null,
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(44.dp)
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(56.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "No tienes notificaciones nuevas.",
+                            text = "No tienes notificaciones pendientes",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color(0xFF1E293B)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Cuando haya novedades sobre tus paseos aparecerán aquí.",
+                            fontSize = 13.sp,
                             color = Color.Gray,
-                            fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -157,7 +171,17 @@ fun NotificacionesScreen(
                             items = notificaciones,
                             key = { it.uuid ?: "${it.titulo}-${it.creadoEl}" }
                         ) { notif ->
-                            CardNotificacionReal(notificacion = notif)
+                            CardNotificacionReal(
+                                notificacion = notif,
+                                onClick = {
+                                    if (notif.leido != true) {
+                                        viewModel.marcarNotificacionIndividualComoLeida(
+                                            authHeader = authHeader,
+                                            notificacion = notif
+                                        )
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -167,7 +191,10 @@ fun NotificacionesScreen(
 }
 
 @Composable
-fun CardNotificacionReal(notificacion: NotificacionDto) {
+fun CardNotificacionReal(
+    notificacion: NotificacionDto,
+    onClick: () -> Unit = {}
+) {
     // 1=SOLICITUD_RECIBIDA, 2=SOLICITUD_ACEPTADA, 3=SOLICITUD_RECHAZADA,
     // 4=PASEO_INICIADO, 5=PASEO_FINALIZADO, 6=SOLICITUD_CANCELADA
     val tipoIcono = when (notificacion.tipoNotificacionId) {
@@ -192,7 +219,9 @@ fun CardNotificacionReal(notificacion: NotificacionDto) {
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = esNueva, onClick = onClick)
     ) {
         Row(
             modifier = Modifier

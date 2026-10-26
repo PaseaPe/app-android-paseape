@@ -50,23 +50,70 @@ fun PaseosScreen(
     val naranja = Color(0xFFFF6B00)
     val azulOscuro = Color(0xFF1E293B)
 
-    // 0: Activos, 1: Pendientes, 2: Historial, 3: Solicitud Inmediata (Modo InDrive)
-    var selectedTab by remember { mutableIntStateOf(if (abrirInmediataInicial) 3 else tabInicial.coerceIn(0, 3)) }
+    // Si se abrió desde el inicio como "Paseo Inmediato", mostrar como ventana independiente
+    var modoVentanaInmediata by remember { mutableStateOf(abrirInmediataInicial) }
+
+    // 0: Activos, 1: Pendientes, 2: Historial (Mis Paseos sin la pestaña Inmediato)
+    var selectedTab by remember { mutableIntStateOf(tabInicial.coerceIn(0, 2)) }
     var solicitudParaCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
 
     val tabs = listOf(
         "Activos (${viewModel.totalActivos})",
         "Pendientes (${viewModel.totalPendientes})",
-        "Historial (${viewModel.totalHistorial})",
-        "⚡ Inmediato"
+        "Historial (${viewModel.totalHistorial})"
     )
+
+    if (modoVentanaInmediata) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Paseo Inmediato",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(Color(0xFFF8F9FA))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                FormularioSolicitudInmediata(
+                    viewModel = viewModel,
+                    authHeader = authHeader,
+                    userUuid = userUuid,
+                    onSolicitudCreada = { nueva ->
+                        Toast.makeText(
+                            context,
+                            "Solicitud ${nueva.codigoReserva ?: ""} enviada a los paseadores del distrito",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        modoVentanaInmediata = false
+                        selectedTab = 1
+                    }
+                )
+            }
+        }
+        return
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (selectedTab == 3) "Paseo Inmediato" else "Mis Paseos",
+                        text = "Mis Paseos",
                         fontWeight = FontWeight.Bold,
                         fontSize = 19.sp
                     )
@@ -77,35 +124,12 @@ fun PaseosScreen(
                     }
                 },
                 actions = {
-                    if (selectedTab != 3) {
-                        IconButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Actualizar bandeja",
-                                tint = azulOscuro
-                            )
-                        }
-                        Button(
-                            onClick = { selectedTab = 3 },
-                            colors = ButtonDefaults.buttonColors(containerColor = naranja),
-                            shape = RoundedCornerShape(20.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Pedir Ahora",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    IconButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Actualizar bandeja",
+                            tint = azulOscuro
+                        )
                     }
                 }
             )
@@ -182,128 +206,105 @@ fun PaseosScreen(
             }
 
             // =========================================================================
-            // CONTENIDO POR PESTAÑA
+            // CONTENIDO POR PESTAÑA (ACTIVOS, PENDIENTES, HISTORIAL)
             // =========================================================================
-            if (selectedTab == 3) {
-                FormularioSolicitudInmediata(
-                    viewModel = viewModel,
-                    authHeader = authHeader,
-                    userUuid = userUuid,
-                    onSolicitudCreada = { nueva ->
-                        Toast.makeText(
-                            context,
-                            "Solicitud ${nueva.codigoReserva ?: ""} enviada a los paseadores del distrito",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        selectedTab = 1 // Pasar a la pestaña Pendientes para ver la solicitud creada
-                    }
-                )
-            } else {
-                val listaActual = when (selectedTab) {
-                    0 -> viewModel.solicitudesActivas
-                    1 -> viewModel.solicitudesPendientes
-                    else -> viewModel.solicitudesHistorial
-                }
+            val listaActual = when (selectedTab) {
+                0 -> viewModel.solicitudesActivas
+                1 -> viewModel.solicitudesPendientes
+                else -> viewModel.solicitudesHistorial
+            }
 
-                val mensajeVacio = when (selectedTab) {
-                    0 -> "No tienes paseos en curso en este momento."
-                    1 -> "No tienes solicitudes pendientes ni aceptadas por iniciar."
-                    else -> "Aún no tienes paseos registrados en tu historial."
-                }
+            val mensajeVacio = when (selectedTab) {
+                0 -> "No tienes paseos en curso en este momento."
+                1 -> "No tienes solicitudes pendientes ni aceptadas por iniciar."
+                else -> "Aún no tienes paseos registrados en tu historial."
+            }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Tarjeta rápida de acceso a Solicitud Inmediata tipo InDrive
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (viewModel.cargandoBandeja && listaActual.isEmpty()) {
                     item {
-                        BannerAccesoSolicitudInmediata(
-                            onClick = { selectedTab = 3 }
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = naranja)
+                        }
                     }
-
-                    if (viewModel.cargandoBandeja && listaActual.isEmpty()) {
-                        item {
-                            Box(
+                } else if (viewModel.errorBandeja != null && listaActual.isEmpty()) {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 48.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                CircularProgressIndicator(color = naranja)
-                            }
-                        }
-                    } else if (viewModel.errorBandeja != null && listaActual.isEmpty()) {
-                        item {
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(20.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = viewModel.errorBandeja ?: "Error al cargar la bandeja",
-                                        color = Color(0xFFDC2626),
-                                        fontSize = 13.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OutlinedButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
-                                        Text("Reintentar", color = naranja)
-                                    }
+                                Text(
+                                    text = viewModel.errorBandeja ?: "Error al cargar la bandeja",
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 13.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
+                                    Text("Reintentar", color = naranja)
                                 }
                             }
-                        }
-                    } else if (listaActual.isEmpty()) {
-                        item {
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(28.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Pets,
-                                        contentDescription = null,
-                                        tint = Color(0xFF94A3B8),
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = mensajeVacio,
-                                        color = Color(0xFF64748B),
-                                        fontSize = 13.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        items(listaActual, key = { it.uuid ?: it.codigoReserva ?: it.hashCode().toString() }) { solicitudReal ->
-                            val permiteCancelar = selectedTab == 1 &&
-                                (solicitudReal.estadoId == 1 || solicitudReal.estadoId == 2 || solicitudReal.estadoId == 8)
-                            CardSolicitudInmediataReal(
-                                solicitud = solicitudReal,
-                                formatearMoneda = { viewModel.formatearMoneda(it) },
-                                permiteCancelar = permiteCancelar,
-                                cancelando = viewModel.cancelandoUuid == solicitudReal.uuid,
-                                onCancelarClick = { solicitudParaCancelar = solicitudReal }
-                            )
                         }
                     }
-
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                } else if (listaActual.isEmpty()) {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Pets,
+                                    contentDescription = null,
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = mensajeVacio,
+                                    color = Color(0xFF64748B),
+                                    fontSize = 13.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(listaActual, key = { it.uuid ?: it.codigoReserva ?: it.hashCode().toString() }) { solicitudReal ->
+                        val permiteCancelar = selectedTab == 1 &&
+                            (solicitudReal.estadoId == 1 || solicitudReal.estadoId == 2 || solicitudReal.estadoId == 8)
+                        CardSolicitudInmediataReal(
+                            solicitud = solicitudReal,
+                            formatearMoneda = { viewModel.formatearMoneda(it) },
+                            permiteCancelar = permiteCancelar,
+                            cancelando = viewModel.cancelandoUuid == solicitudReal.uuid,
+                            onCancelarClick = { solicitudParaCancelar = solicitudReal }
+                        )
+                    }
                 }
+
+                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
         }
     }

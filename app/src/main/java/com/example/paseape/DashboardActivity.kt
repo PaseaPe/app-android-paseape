@@ -15,8 +15,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
@@ -31,13 +31,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.example.paseape.data.SessionManager
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class DashboardActivity : ComponentActivity() {
 
@@ -49,6 +54,12 @@ class DashboardActivity : ComponentActivity() {
                 DashboardMainScreen(
                     onPaseadoresClick = {
                         val intent = Intent(this@DashboardActivity, PaseadoresActivity::class.java)
+                        startActivity(intent)
+                    },
+                    onPaseoInmediatoClick = {
+                        val intent = Intent(this@DashboardActivity, PaseosActivity::class.java).apply {
+                            putExtra(PaseosActivity.EXTRA_ABRIR_SOLICITUD_INMEDIATA, true)
+                        }
                         startActivity(intent)
                     },
                     onPaseosClick = {
@@ -84,6 +95,19 @@ class DashboardActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        val authHeader = SessionManager.getAuthHeader(this)
+        val userUuid = SessionManager.getUserUuid(this)
+        lifecycleScope.launch {
+            NotificacionesViewModel.sincronizarContadorRemoto(
+                context = this@DashboardActivity,
+                authHeader = authHeader,
+                userUuid = userUuid
+            )
+        }
+    }
+
     private fun cerrarSesion() {
         getSharedPreferences("paseape_prefs", Context.MODE_PRIVATE).edit().clear().apply()
         getSharedPreferences("PaseaPePrefs", Context.MODE_PRIVATE).edit().clear().apply()
@@ -98,12 +122,29 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 fun DashboardMainScreen(
     onPaseadoresClick: () -> Unit,
+    onPaseoInmediatoClick: () -> Unit = {},
     onPaseosClick: () -> Unit,
     onNotificacionesClick: () -> Unit,
     onProfileClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
+
+    // Sondeo periódico del endpoint GET /notificaciones para mantener el contador actualizado en cualquier pestaña
+    LaunchedEffect(Unit) {
+        while (true) {
+            val authHeader = SessionManager.getAuthHeader(context)
+            val userUuid = SessionManager.getUserUuid(context)
+            NotificacionesViewModel.sincronizarContadorRemoto(
+                context = context,
+                authHeader = authHeader,
+                userUuid = userUuid
+            )
+            delay(15_000L)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -118,13 +159,17 @@ fun DashboardMainScreen(
         ) {
             when (selectedTab) {
                 0 -> DashboardHomeContent(
+                    unreadCount = unreadCount,
                     onPaseadoresClick = onPaseadoresClick,
+                    onPaseoInmediatoClick = onPaseoInmediatoClick,
                     onNotificacionesClick = onNotificacionesClick,
                     onProfileClick = onProfileClick,
                     onLogoutClick = onLogoutClick
                 )
                 else -> DashboardHomeContent(
+                    unreadCount = unreadCount,
                     onPaseadoresClick = onPaseadoresClick,
+                    onPaseoInmediatoClick = onPaseoInmediatoClick,
                     onNotificacionesClick = onNotificacionesClick,
                     onProfileClick = onProfileClick,
                     onLogoutClick = onLogoutClick
@@ -153,7 +198,9 @@ fun DashboardMainScreen(
 
 @Composable
 fun DashboardHomeContent(
+    unreadCount: Int = 0,
     onPaseadoresClick: () -> Unit,
+    onPaseoInmediatoClick: () -> Unit = {},
     onNotificacionesClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onLogoutClick: () -> Unit = {}
@@ -224,13 +271,30 @@ fun DashboardHomeContent(
                 )
             }
 
-            // BOTÓN DE NOTIFICACIONES
+            // BOTÓN DE NOTIFICACIONES CON INSIGNIA NUMÉRICA (BADGE)
             IconButton(onClick = onNotificacionesClick) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notificaciones",
-                    tint = PrimaryDark
-                )
+                BadgedBox(
+                    badge = {
+                        if (unreadCount > 0) {
+                            Badge(
+                                containerColor = Color(0xFFFF6B00),
+                                contentColor = Color.White
+                            ) {
+                                Text(
+                                    text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Notificaciones",
+                        tint = PrimaryDark
+                    )
+                }
             }
         }
 
@@ -309,35 +373,73 @@ fun DashboardHomeContent(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // RECOMENDACIÓN
+        // PASEO INMEDIATO (VENTANA INDEPENDIENTE - REEMPLAZA "RECOMENDACIÓN PARA TI")
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onPaseoInmediatoClick),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFFFE8D8)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = "🐾", fontSize = 20.sp)
+                    Text(text = "⚡", fontSize = 26.sp)
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Recomendación para ti", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PrimaryDark)
-                    Text(text = "Encuentra el paseo ideal para tu mascota", fontSize = 10.sp, color = Color.Gray)
+                    Text(
+                        text = "Paseo Inmediato",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "¿Necesitas un paseo ahora mismo? Propón tu tarifa por hora y encuentra un paseador al instante.",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        lineHeight = 15.sp
+                    )
                 }
 
-                IconButton(onClick = onPaseadoresClick) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Ver paseadores", tint = PrimaryDark)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFFFF6B00)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pedir",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Solicitar paseo inmediato",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
