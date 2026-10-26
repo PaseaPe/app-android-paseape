@@ -3,6 +3,7 @@ package com.example.paseape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -10,11 +11,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
-import com.example.paseape.data.model.PaseoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.data.repository.PaseosRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -25,17 +26,28 @@ class PaseosViewModel : ViewModel() {
     private val repository = PaseosRepository()
     private val apiService = RetrofitClient.apiService
 
-    // --- ESTADO GENERAL DE PASEOS ---
-    var isLoading by mutableStateOf(false)
+    // --- BANDEJA DE SOLICITUDES DEL CLIENTE (HU21 - API REAL) ---
+    var cargandoBandeja by mutableStateOf(false)
         private set
-    var errorMessage by mutableStateOf<String?>(null)
-        private set
-
-    var listaPaseos by mutableStateOf<List<PaseoResDto>>(emptyList())
+    var errorBandeja by mutableStateOf<String?>(null)
         private set
 
-    // Solicitudes inmediatas reales creadas en el backend (HU15)
-    var solicitudesInmediatasCreadas by mutableStateOf<List<SolicitudPaseoResDto>>(emptyList())
+    var solicitudesActivas by mutableStateOf<List<SolicitudPaseoResDto>>(emptyList())
+        private set
+    var totalActivos by mutableLongStateOf(0L)
+        private set
+
+    var solicitudesPendientes by mutableStateOf<List<SolicitudPaseoResDto>>(emptyList())
+        private set
+    var totalPendientes by mutableLongStateOf(0L)
+        private set
+
+    var solicitudesHistorial by mutableStateOf<List<SolicitudPaseoResDto>>(emptyList())
+        private set
+    var totalHistorial by mutableLongStateOf(0L)
+        private set
+
+    var cancelandoUuid by mutableStateOf<String?>(null)
         private set
 
     // --- DATOS DEL CLIENTE Y CATÁLOGOS PARA SOLICITUD INMEDIATA (MODO INDRIVE) ---
@@ -64,15 +76,6 @@ class PaseosViewModel : ViewModel() {
     var exitoSolicitudMensaje by mutableStateOf<String?>(null)
 
     private var datosInicializados = false
-
-    init {
-        cargarPaseosMock()
-        viewModelScope.launch {
-            PaseosRepository.solicitudesCreadasSesion.collect { lista ->
-                solicitudesInmediatasCreadas = lista
-            }
-        }
-    }
 
     val minutosSeleccionados: Int
         get() = when (tipoDuracionPaseoId) {
@@ -133,7 +136,77 @@ class PaseosViewModel : ViewModel() {
         errorSolicitudInmediata = null
     }
 
+    fun cargarBandejaCliente(authHeader: String) {
+        if (authHeader.isBlank()) return
+        cargandoBandeja = true
+        errorBandeja = null
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val defActivos = async { repository.obtenerBandejaCliente(authHeader, "ACTIVOS", 0, 30) }
+            val defPendientes = async { repository.obtenerBandejaCliente(authHeader, "PENDIENTES", 0, 30) }
+            val defHistorial = async { repository.obtenerBandejaCliente(authHeader, "HISTORIAL", 0, 30) }
+
+            val resActivos = defActivos.await()
+            val resPendientes = defPendientes.await()
+            val resHistorial = defHistorial.await()
+
+            withContext(Dispatchers.Main) {
+                cargandoBandeja = false
+
+                resActivos.onSuccess { page ->
+                    val items = page.items.orEmpty()
+                    solicitudesActivas = items
+                    totalActivos = page.totalElements ?: items.size.toLong()
+                }
+
+                resPendientes.onSuccess { page ->
+                    val items = page.items.orEmpty()
+                    solicitudesPendientes = items
+                    totalPendientes = page.totalElements ?: items.size.toLong()
+                }
+
+                resHistorial.onSuccess { page ->
+                    val items = page.items.orEmpty()
+                    solicitudesHistorial = items
+                    totalHistorial = page.totalElements ?: items.size.toLong()
+                }
+
+                if (resActivos.isFailure && resPendientes.isFailure && resHistorial.isFailure) {
+                    errorBandeja = resPendientes.exceptionOrNull()?.message
+                        ?: "No se pudo cargar la bandeja de paseos."
+                }
+            }
+        }
+    }
+
+    fun cancelarSolicitud(
+        authHeader: String,
+        solicitudUuid: String,
+        motivo: String?,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (solicitudUuid.isBlank()) return
+        cancelandoUuid = solicitudUuid
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = repository.cancelarSolicitudCliente(authHeader, solicitudUuid, motivo)
+            withContext(Dispatchers.Main) {
+                cancelandoUuid = null
+                result.onSuccess { cancelada ->
+                    exitoSolicitudMensaje = "La solicitud ${cancelada.codigoReserva.orEmpty()} fue cancelada."
+                    cargarBandejaCliente(authHeader)
+                    onSuccess()
+                }.onFailure { err ->
+                    onError(err.message ?: "No se pudo cancelar la solicitud.")
+                }
+            }
+        }
+    }
+
     fun inicializarDatosCliente(authHeader: String, userUuid: String?) {
+        cargarBandejaCliente(authHeader)
+
         if (datosInicializados && mascotasCliente.isNotEmpty() && distritosDisponibles.isNotEmpty()) {
             return
         }
@@ -241,50 +314,12 @@ class PaseosViewModel : ViewModel() {
                 result.onSuccess { nuevaSolicitud ->
                     exitoSolicitudMensaje =
                         "¡Solicitud ${nuevaSolicitud.codigoReserva.orEmpty()} creada! Buscando paseadores en ${nuevaSolicitud.distritoDescripcion ?: distrito.descripcion}."
+                    cargarBandejaCliente(authHeader)
                     onSuccess(nuevaSolicitud)
                 }.onFailure { err ->
                     errorSolicitudInmediata = err.message ?: "No se pudo registrar la solicitud inmediata."
                 }
             }
         }
-    }
-
-    // --- MOCK DATA (Conservado hasta que se implemente HU21 GET /cliente/solicitudes) ---
-    fun cargarPaseosMock() {
-        listaPaseos = listOf(
-            PaseoResDto(
-                id = 1,
-                clienteId = 101L,
-                distritoId = 1,
-                mascotaId = 10,
-                mascotaNombre = "Luna",
-                paseadorId = 5L,
-                fechaProgramada = "2026-10-25 10:00 AM",
-                tarifaPen = 25.0,
-                estadoPaseoId = 1
-            ),
-            PaseoResDto(
-                id = 2,
-                clienteId = 101L,
-                distritoId = 1,
-                mascotaId = 11,
-                mascotaNombre = "Max",
-                paseadorId = 6L,
-                fechaProgramada = "2026-10-26 03:30 PM",
-                tarifaPen = 30.0,
-                estadoPaseoId = 2
-            ),
-            PaseoResDto(
-                id = 3,
-                clienteId = 101L,
-                distritoId = 2,
-                mascotaId = 12,
-                mascotaNombre = "Rocky",
-                paseadorId = 5L,
-                fechaProgramada = "2026-10-27 09:00 AM",
-                tarifaPen = 20.0,
-                estadoPaseoId = 3
-            )
-        )
     }
 }

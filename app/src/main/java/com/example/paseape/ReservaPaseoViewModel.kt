@@ -339,50 +339,8 @@ class ReservaPaseoViewModel : ViewModel() {
                 result.onSuccess { creada ->
                     onSuccess(creada.codigoReserva)
                 }.onFailure { err ->
-                    // Si el backend local aún no tiene fusionada la rama feat/sprint-2-hu16 (404),
-                    // registramos la solicitud programada en la sesión para que igual aparezca en Mis Paseos
                     val msg = err.message.orEmpty()
-                    if (msg.contains("No encontramos la información", ignoreCase = true)) {
-                        val codigoLocal = "PAS-202610-" + UUID.randomUUID().toString().take(4).uppercase()
-                        val mascotasDtos = mascotasCliente
-                            .filter { !it.uuid.isNullOrBlank() && uuids.contains(it.uuid) }
-                            .map {
-                                SolicitudMascotaResDto(
-                                    uuid = it.uuid,
-                                    nombre = it.nombre,
-                                    raza = it.tipoRazaDescripcion,
-                                    tamano = it.tipoTamanoMascotaDescripcion
-                                )
-                            }
-                        val localDto = SolicitudPaseoResDto(
-                            uuid = UUID.randomUUID().toString(),
-                            codigoReserva = codigoLocal,
-                            tipoModalidadPaseoId = 1,
-                            tipoModalidadPaseoDescripcion = "PROGRAMADO",
-                            estadoId = 1,
-                            estadoDescripcion = "PENDIENTE",
-                            tipoMetodoPagoId = tipoMetodoPagoId,
-                            tipoMetodoPagoDescripcion = metodoPagoDescripcion.uppercase(),
-                            tipoDuracionPaseoId = tipoDuracionPaseoId,
-                            tipoDuracionPaseoDescripcion = "$duracionMinutos MINUTOS",
-                            distritoId = idDistritoFinal,
-                            distritoDescripcion = distrito ?: "LIMA",
-                            direccionRecojo = direccionLimpia,
-                            referenciaDireccion = referenciaRecojo.trim().ifBlank { null },
-                            fechaProgramada = diaSeleccionadoIso,
-                            bloqueHorarioId = bloqueId,
-                            bloqueHorarioCodigo = horarioSeleccionado,
-                            tarifaHoraPenSnapshot = tarifaBaseHora,
-                            montoTotal = totalEstimado,
-                            paseadorUuid = paseadorUuid,
-                            paseadorNombreCompleto = paseadorNombre,
-                            mascotas = mascotasDtos
-                        )
-                        PaseosRepository.registrarSolicitudCreada(localDto)
-                        onSuccess(codigoLocal)
-                    } else {
-                        errorEnvio = msg.ifBlank { "No se pudo registrar la solicitud programada." }
-                    }
+                    errorEnvio = msg.ifBlank { "No se pudo registrar la solicitud programada." }
                 }
             }
         }

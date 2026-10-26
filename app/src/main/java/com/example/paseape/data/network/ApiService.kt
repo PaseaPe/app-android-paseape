@@ -44,6 +44,8 @@ import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PaseoResDto
 import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
 import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
+import com.example.paseape.data.model.CancelarSolicitudReqDto
+import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
@@ -242,6 +244,34 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Body request: CrearSolicitudProgramadaReqDto
     ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Bandeja de solicitudes del cliente (HU21)
+    @GET("cliente/solicitudes")
+    suspend fun obtenerBandejaCliente(
+        @Header("Authorization") token: String,
+        @Query("tab") tab: String = "PENDIENTES",
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): Response<ResponseDto<PageResponseDto<SolicitudPaseoResDto>>>
+
+    // Cancelación de solicitud por el cliente (HU21)
+    @PATCH("cliente/solicitudes/{uuid}/cancelar")
+    suspend fun cancelarSolicitudCliente(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Notificaciones internas activas (HU22 y HU23)
+    @GET("notificaciones")
+    suspend fun listarNotificaciones(
+        @Header("Authorization") token: String
+    ): Response<ResponseDto<List<NotificacionDto>>>
+
+    @PATCH("notificaciones/marcar-todas-leidas")
+    suspend fun marcarTodasNotificacionesLeidas(
+        @Header("Authorization") token: String
+    ): Response<ResponseDto<Unit>>
 
     // Métodos de paseos y notificaciones integrados directamente en ApiService
     @GET("paseos/cliente/{clienteId}")

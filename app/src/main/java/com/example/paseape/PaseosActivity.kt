@@ -12,6 +12,7 @@ class PaseosActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_ABRIR_SOLICITUD_INMEDIATA = "extra_abrir_solicitud_inmediata"
+        const val EXTRA_TAB_INICIAL = "extra_tab_inicial"
     }
 
     private val viewModel by lazy {
@@ -27,6 +28,7 @@ class PaseosActivity : ComponentActivity() {
             ?: intent.getStringExtra("user_uuid")
             ?: SessionManager.getUserUuid(this)
         val abrirInmediata = intent.getBooleanExtra(EXTRA_ABRIR_SOLICITUD_INMEDIATA, false)
+        val tabInicial = intent.getIntExtra(EXTRA_TAB_INICIAL, if (abrirInmediata) 3 else 1)
 
         viewModel.inicializarDatosCliente(authHeader, userUuid)
 
@@ -37,6 +39,7 @@ class PaseosActivity : ComponentActivity() {
                     authHeader = authHeader,
                     userUuid = userUuid,
                     abrirInmediataInicial = abrirInmediata,
+                    tabInicial = tabInicial,
                     onBack = { finish() }
                 )
             }

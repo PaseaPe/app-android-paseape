@@ -1,8 +1,10 @@
 package com.example.paseape.data.repository
 
 import android.content.Context
+import com.example.paseape.data.model.CancelarSolicitudReqDto
 import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
 import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
+import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.PaseoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.data.network.ApiErrorContext
@@ -118,6 +120,56 @@ class PaseosRepository {
 
             if (response.isSuccessful && body?.response != null) {
                 registrarSolicitudCreada(body.response)
+                Result.success(body.response)
+            } else if (body != null && !body.message.isNullOrBlank()) {
+                Result.failure(Exception(body.message))
+            } else {
+                Result.failure(
+                    Exception(ApiErrorMapper.fromResponse(response, ApiErrorContext.WALK))
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALK)))
+        }
+    }
+
+    suspend fun obtenerBandejaCliente(
+        token: String,
+        tab: String,
+        page: Int = 0,
+        size: Int = 20
+    ): Result<PageResponseDto<SolicitudPaseoResDto>> {
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val response = apiService.obtenerBandejaCliente(authHeader, tab, page, size)
+            val body = response.body()
+
+            if (response.isSuccessful && body?.response != null) {
+                Result.success(body.response)
+            } else if (body != null && !body.message.isNullOrBlank()) {
+                Result.failure(Exception(body.message))
+            } else {
+                Result.failure(
+                    Exception(ApiErrorMapper.fromResponse(response, ApiErrorContext.WALK))
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALK)))
+        }
+    }
+
+    suspend fun cancelarSolicitudCliente(
+        token: String,
+        solicitudUuid: String,
+        motivo: String? = null
+    ): Result<SolicitudPaseoResDto> {
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val req = CancelarSolicitudReqDto(motivo = motivo?.trim()?.ifBlank { null })
+            val response = apiService.cancelarSolicitudCliente(authHeader, solicitudUuid, req)
+            val body = response.body()
+
+            if (response.isSuccessful && body?.response != null) {
                 Result.success(body.response)
             } else if (body != null && !body.message.isNullOrBlank()) {
                 Result.failure(Exception(body.message))

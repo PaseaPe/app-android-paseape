@@ -72,3 +72,19 @@ data class SolicitudPaseoResDto(
     @SerializedName("hora_vencimiento") val horaVencimiento: String? = null,
     @SerializedName("creado_el") val creadoEl: String? = null
 )
+
+data class PageResponseDto<T>(
+    @SerializedName("items") val items: List<T>? = emptyList(),
+    @SerializedName("page") val page: Int? = 0,
+    @SerializedName("size") val size: Int? = 10,
+    @SerializedName("total_elements") val totalElements: Long? = 0L,
+    @SerializedName("total_pages") val totalPages: Int? = 0,
+    @SerializedName("is_first") val isFirst: Boolean? = true,
+    @SerializedName("is_last") val isLast: Boolean? = true,
+    @SerializedName("has_next") val hasNext: Boolean? = false,
+    @SerializedName("has_previous") val hasPrevious: Boolean? = false
+)
+
+data class CancelarSolicitudReqDto(
+    @SerializedName("motivo") val motivo: String? = null
+)

@@ -4,67 +4,93 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.NotificacionDto
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
+import com.example.paseape.data.network.RetrofitClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NotificacionesViewModel : ViewModel() {
 
-    // --- CÓDIGO REAL (Comentado para pruebas con Mock Data) ---
-    // var isLoading by mutableStateOf(false)
-    //     private set
-    // var errorMessage by mutableStateOf<String?>(null)
-    //     private set
+    private val apiService = RetrofitClient.apiService
+
+    var isLoading by mutableStateOf(false)
+        private set
+    var marcandoLeidas by mutableStateOf(false)
+        private set
+    var errorMessage by mutableStateOf<String?>(null)
+        private set
 
     var listaNotificaciones by mutableStateOf<List<NotificacionDto>>(emptyList())
         private set
 
-    init {
-        // Carga de datos de prueba para la interfaz
-        cargarNotificacionesMock()
+    fun cargarNotificaciones(authHeader: String) {
+        if (authHeader.isBlank()) {
+            errorMessage = "No se encontró una sesión activa."
+            return
+        }
+        isLoading = true
+        errorMessage = null
 
-        // CUANDO QUIERAS CONECTAR LA API REAL, DESCOMENTA ESTA LÍNEA:
-        // cargarNotificacionesReales(token = "TU_TOKEN_AQUÍ", usuarioId = 1L)
-    }
-
-    // --- MOCK DATA (Activo para pruebas visuales) ---
-    fun cargarNotificacionesMock() {
-        listaNotificaciones = listOf(
-            NotificacionDto(
-                id = 101L,
-
-                titulo = "¡Paseo confirmado!",
-                mensaje = "Tu paseo para Luna ha sido aceptado por el paseador.",
-                fechaCreacion = "2026-10-19T10:00:00",
-                leido = false
-            ),
-            NotificacionDto(
-                id = 102L,
-
-                titulo = "Paseo en curso",
-                mensaje = "Max ya está paseando con su paseador asignado.",
-                fechaCreacion = "2026-10-19T11:30:00",
-                leido = true
-            )
-        )
-    }
-
-    /*
-    // --- FUNCIÓN REAL DE CONEXIÓN A LA RED ---
-    fun cargarNotificacionesReales(token: String, usuarioId: Long) {
-        viewModelScope.launch {
-            isLoading = true
-            errorMessage = null
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.apiService.obtenerNotificaciones("Bearer $token", usuarioId)
-                if (response.isSuccessful && response.body() != null) {
-                    listaNotificaciones = response.body()!!
-                } else {
-                    errorMessage = "Error al obtener notificaciones"
+                val token = if (authHeader.startsWith("Bearer ")) authHeader else "Bearer $authHeader"
+                val response = apiService.listarNotificaciones(token)
+                val body = response.body()
+
+                withContext(Dispatchers.Main) {
+                    isLoading = false
+                    if (response.isSuccessful && body != null) {
+                        listaNotificaciones = body.response.orEmpty()
+                    } else if (body != null && !body.message.isNullOrBlank()) {
+                        errorMessage = body.message
+                    } else {
+                        errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.NOTIFICATION)
+                    }
                 }
             } catch (e: Exception) {
-                errorMessage = e.localizedMessage
+                withContext(Dispatchers.Main) {
+                    isLoading = false
+                    errorMessage = ApiErrorMapper.fromThrowable(e, ApiErrorContext.NOTIFICATION)
+                }
             }
-            isLoading = false
         }
     }
-    */
+
+    fun marcarTodasComoLeidas(
+        authHeader: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        if (authHeader.isBlank() || listaNotificaciones.isEmpty()) return
+        marcandoLeidas = true
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val token = if (authHeader.startsWith("Bearer ")) authHeader else "Bearer $authHeader"
+                val response = apiService.marcarTodasNotificacionesLeidas(token)
+                val body = response.body()
+
+                withContext(Dispatchers.Main) {
+                    marcandoLeidas = false
+                    if (response.isSuccessful) {
+                        listaNotificaciones = emptyList()
+                        onSuccess()
+                    } else {
+                        val msg = body?.message?.takeIf { it.isNotBlank() }
+                            ?: ApiErrorMapper.fromResponse(response, ApiErrorContext.NOTIFICATION)
+                        onError(msg)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    marcandoLeidas = false
+                    onError(ApiErrorMapper.fromThrowable(e, ApiErrorContext.NOTIFICATION))
+                }
+            }
+        }
+    }
 }

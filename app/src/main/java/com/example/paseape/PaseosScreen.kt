@@ -43,6 +43,7 @@ fun PaseosScreen(
     authHeader: String = "",
     userUuid: String? = null,
     abrirInmediataInicial: Boolean = false,
+    tabInicial: Int = 1,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -50,12 +51,13 @@ fun PaseosScreen(
     val azulOscuro = Color(0xFF1E293B)
 
     // 0: Activos, 1: Pendientes, 2: Historial, 3: Solicitud Inmediata (Modo InDrive)
-    var selectedTab by remember { mutableIntStateOf(if (abrirInmediataInicial) 3 else 0) }
-    val pendientesCount = 1 + viewModel.solicitudesInmediatasCreadas.size
+    var selectedTab by remember { mutableIntStateOf(if (abrirInmediataInicial) 3 else tabInicial.coerceIn(0, 3)) }
+    var solicitudParaCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+
     val tabs = listOf(
-        "Activos (1)",
-        "Pendientes ($pendientesCount)",
-        "Historial (1)",
+        "Activos (${viewModel.totalActivos})",
+        "Pendientes (${viewModel.totalPendientes})",
+        "Historial (${viewModel.totalHistorial})",
         "⚡ Inmediato"
     )
 
@@ -76,6 +78,13 @@ fun PaseosScreen(
                 },
                 actions = {
                     if (selectedTab != 3) {
+                        IconButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Actualizar bandeja",
+                                tint = azulOscuro
+                            )
+                        }
                         Button(
                             onClick = { selectedTab = 3 },
                             colors = ButtonDefaults.buttonColors(containerColor = naranja),
@@ -136,7 +145,7 @@ fun PaseosScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Banner de éxito tras crear una solicitud inmediata
+            // Banner de éxito tras crear o cancelar una solicitud
             viewModel.exitoSolicitudMensaje?.let { mensajeExito ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)),
@@ -190,6 +199,18 @@ fun PaseosScreen(
                     }
                 )
             } else {
+                val listaActual = when (selectedTab) {
+                    0 -> viewModel.solicitudesActivas
+                    1 -> viewModel.solicitudesPendientes
+                    else -> viewModel.solicitudesHistorial
+                }
+
+                val mensajeVacio = when (selectedTab) {
+                    0 -> "No tienes paseos en curso en este momento."
+                    1 -> "No tienes solicitudes pendientes ni aceptadas por iniciar."
+                    else -> "Aún no tienes paseos registrados en tu historial."
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -201,26 +222,113 @@ fun PaseosScreen(
                         )
                     }
 
-                    when (selectedTab) {
-                        0 -> item { CardPaseoEnCurso() }
-                        1 -> {
-                            // Primero mostramos las solicitudes inmediatas REALES creadas en el backend
-                            items(viewModel.solicitudesInmediatasCreadas) { solicitudReal ->
-                                CardSolicitudInmediataReal(
-                                    solicitud = solicitudReal,
-                                    formatearMoneda = { viewModel.formatearMoneda(it) }
-                                )
+                    if (viewModel.cargandoBandeja && listaActual.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = naranja)
                             }
-                            // Y debajo la tarjeta de ejemplo (Mockup mientras HU21 GET esté pendiente)
-                            item { CardPaseoPendiente() }
                         }
-                        2 -> item { CardPaseoHistorial() }
+                    } else if (viewModel.errorBandeja != null && listaActual.isEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = viewModel.errorBandeja ?: "Error al cargar la bandeja",
+                                        color = Color(0xFFDC2626),
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OutlinedButton(onClick = { viewModel.cargarBandejaCliente(authHeader) }) {
+                                        Text("Reintentar", color = naranja)
+                                    }
+                                }
+                            }
+                        }
+                    } else if (listaActual.isEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(28.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Pets,
+                                        contentDescription = null,
+                                        tint = Color(0xFF94A3B8),
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = mensajeVacio,
+                                        color = Color(0xFF64748B),
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(listaActual, key = { it.uuid ?: it.codigoReserva ?: it.hashCode().toString() }) { solicitudReal ->
+                            val permiteCancelar = selectedTab == 1 &&
+                                (solicitudReal.estadoId == 1 || solicitudReal.estadoId == 2 || solicitudReal.estadoId == 8)
+                            CardSolicitudInmediataReal(
+                                solicitud = solicitudReal,
+                                formatearMoneda = { viewModel.formatearMoneda(it) },
+                                permiteCancelar = permiteCancelar,
+                                cancelando = viewModel.cancelandoUuid == solicitudReal.uuid,
+                                onCancelarClick = { solicitudParaCancelar = solicitudReal }
+                            )
+                        }
                     }
 
                     item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
             }
         }
+    }
+
+    solicitudParaCancelar?.let { solicitud ->
+        DialogoCancelarSolicitudCliente(
+            solicitud = solicitud,
+            cancelando = viewModel.cancelandoUuid == solicitud.uuid,
+            onDismiss = { solicitudParaCancelar = null },
+            onConfirmar = { motivo ->
+                val uuid = solicitud.uuid.orEmpty()
+                viewModel.cancelarSolicitud(
+                    authHeader = authHeader,
+                    solicitudUuid = uuid,
+                    motivo = motivo,
+                    onSuccess = {
+                        solicitudParaCancelar = null
+                        Toast.makeText(context, "Solicitud cancelada exitosamente", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+        )
     }
 }
 
@@ -865,13 +973,16 @@ fun MetodoPagoChip(
 }
 
 // =========================================================================
-// TARJETA DE SOLICITUD INMEDIATA REAL (RESPUESTA DEL BACKEND)
+// TARJETA DE SOLICITUD DE PASEO REAL (RESPUESTA DEL BACKEND - HU21)
 // =========================================================================
 
 @Composable
 fun CardSolicitudInmediataReal(
     solicitud: SolicitudPaseoResDto,
-    formatearMoneda: (Double) -> String
+    formatearMoneda: (Double) -> String,
+    permiteCancelar: Boolean = false,
+    cancelando: Boolean = false,
+    onCancelarClick: () -> Unit = {}
 ) {
     val nombresMascotas = solicitud.mascotas
         ?.mapNotNull { it.nombre }
@@ -879,16 +990,33 @@ fun CardSolicitudInmediataReal(
         .orEmpty()
         .ifBlank { "Mascota(s) seleccionada(s)" }
 
-    val esProgramado = solicitud.tipoModalidadPaseoId == 1 || !solicitud.paseadorNombreCompleto.isNullOrBlank()
+    val esProgramado = solicitud.tipoModalidadPaseoId == 1 ||
+        solicitud.tipoModalidadPaseoDescripcion?.equals("PROGRAMADO", ignoreCase = true) == true
     val tituloModalidad = if (esProgramado) "Paseo Programado" else "Paseo Inmediato"
     val tarifaHora = solicitud.tarifaHoraPenSnapshot ?: 0.0
     val montoTotal = solicitud.montoTotal ?: 0.0
 
+    val (badgeBg, badgeTextColor) = when (solicitud.estadoId) {
+        2 -> Color(0xFFECFDF5) to Color(0xFF047857) // ACEPTADA
+        5 -> Color(0xFFEFF6FF) to Color(0xFF1D4ED8) // EN_CURSO
+        6 -> Color(0xFFF0FDF4) to Color(0xFF15803D) // FINALIZADA
+        3, 4, 7 -> Color(0xFFFEF2F2) to Color(0xFFB91C1C) // RECHAZADA, CANCELADA, VENCIDA
+        else -> Color(0xFFFFF3E0) to Color(0xFFE65100) // PENDIENTE / BUSCANDO
+    }
+
+    val borderColor = when (solicitud.estadoId) {
+        2 -> Color(0xFF10B981)
+        5 -> Color(0xFF3B82F6)
+        3, 4, 7 -> Color(0xFFE2E8F0)
+        6 -> Color(0xFFCBD5E1)
+        else -> Color(0xFFFF6B00)
+    }
+
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.5.dp, Color(0xFFFF6B00)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(1.5.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -900,7 +1028,7 @@ fun CardSolicitudInmediataReal(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.Bolt,
+                            imageVector = if (esProgramado) Icons.Default.Pets else Icons.Default.Bolt,
                             contentDescription = null,
                             tint = Color(0xFFFF6B00),
                             modifier = Modifier.size(18.dp)
@@ -909,7 +1037,7 @@ fun CardSolicitudInmediataReal(
                         Text(
                             text = "$tituloModalidad • $nombresMascotas",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             color = Color(0xFF1E293B)
                         )
                     }
@@ -920,12 +1048,12 @@ fun CardSolicitudInmediataReal(
                     )
                 }
                 Surface(
-                    color = Color(0xFFFFF3E0),
+                    color = badgeBg,
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
                         text = solicitud.estadoDescripcion ?: if (esProgramado) "PENDIENTE" else "BUSCANDO PASEADOR",
-                        color = Color(0xFFE65100),
+                        color = badgeTextColor,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -941,6 +1069,13 @@ fun CardSolicitudInmediataReal(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF1E293B)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            } else if (!esProgramado && solicitud.estadoId == 8) {
+                Text(
+                    text = "🔎 Buscando un paseador disponible en tu distrito...",
+                    fontSize = 12.sp,
+                    color = Color(0xFFE65100)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -995,80 +1130,28 @@ fun CardSolicitudInmediataReal(
                     )
                 }
             }
-        }
-    }
-}
 
-// =========================================================================
-// TARJETAS INDIVIDUALES (MOCKUP PARA ESTADOS CUANDO HU21 ESTÉ PENDIENTE)
-// =========================================================================
-
-@Composable
-fun CardPaseoEnCurso() {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(text = "Bobby", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text(text = "SOL-202610-0012", color = Color.Gray, fontSize = 12.sp)
-                }
-                Surface(
-                    color = Color(0xFFE3F2FD),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = "EN CURSO",
-                        color = Color(0xFF1976D2),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Paseador: Roberto Gómez • Mascota Bobby", fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                color = Color(0xFFF1F5F9),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "• Paseo iniciado a las 08:05 AM / 25 min transcurridos",
-                    color = Color(0xFF2563EB),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (permiteCancelar && !solicitud.uuid.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
                 OutlinedButton(
-                    onClick = { /* Acción llamar */ },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(20.dp)
+                    onClick = onCancelarClick,
+                    enabled = !cancelando,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, Color(0xFFDC2626)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
                 ) {
-                    Text("Llamar Paseador", color = Color(0xFFFF6B00))
-                }
-                Button(
-                    onClick = { /* Acción ver mapa */ },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text("Ver Mapa en Vivo", color = Color.White)
+                    if (cancelando) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color(0xFFDC2626),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Cancelando...")
+                    } else {
+                        Text("Cancelar Solicitud", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -1076,97 +1159,83 @@ fun CardPaseoEnCurso() {
 }
 
 @Composable
-fun CardPaseoPendiente() {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(text = "Lucía Vega", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text(text = "SOL-202610-0015", color = Color.Gray, fontSize = 12.sp)
-                }
-                Surface(
-                    color = Color(0xFFFFF3E0),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
+fun DialogoCancelarSolicitudCliente(
+    solicitud: SolicitudPaseoResDto,
+    cancelando: Boolean,
+    onDismiss: () -> Unit,
+    onConfirmar: (String?) -> Unit
+) {
+    val requiereMotivoObligatorio = solicitud.estadoId == 2 // ACEPTADA requiere >= 10 caracteres según backend
+    var motivo by remember { mutableStateOf("") }
+    var errorValidacion by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!cancelando) onDismiss() },
+        title = {
+            Text(
+                text = "Cancelar solicitud ${solicitud.codigoReserva.orEmpty()}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = if (requiereMotivoObligatorio) {
+                        "Este paseo ya fue aceptado por el paseador. Por favor, ingresa el motivo de cancelación (mínimo 10 caracteres):"
+                    } else {
+                        "¿Estás seguro de que deseas cancelar esta solicitud de paseo?"
+                    },
+                    fontSize = 13.sp,
+                    color = Color(0xFF334155)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = motivo,
+                    onValueChange = {
+                        motivo = it
+                        errorValidacion = null
+                    },
+                    label = {
+                        Text(if (requiereMotivoObligatorio) "Motivo de cancelación *" else "Motivo (opcional)")
+                    },
+                    placeholder = { Text("Ej. Surgió un imprevisto y no estaré en casa") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                errorValidacion?.let { msg ->
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "PENDIENTE",
-                        color = Color(0xFFE65100),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        text = msg,
+                        color = Color(0xFFDC2626),
+                        fontSize = 12.sp
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Esperando respuesta de Lucía Vega.", fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = { /* Acción cancelar */ },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B00))
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val limpio = motivo.trim()
+                    if (requiereMotivoObligatorio && limpio.length < 10) {
+                        errorValidacion = "El motivo es obligatorio y debe tener al menos 10 caracteres."
+                        return@Button
+                    }
+                    onConfirmar(limpio.ifBlank { null })
+                },
+                enabled = !cancelando,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
             ) {
-                Text("Cancelar Solicitud")
+                Text("Sí, cancelar", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !cancelando
+            ) {
+                Text("Volver")
             }
         }
-    }
-}
-
-@Composable
-fun CardPaseoHistorial() {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(text = "Paseo de ayer", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text(text = "SOL-202610-0009", color = Color.Gray, fontSize = 12.sp)
-                }
-                Surface(
-                    color = Color(0xFFEEEEEE),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = "FINALIZADO",
-                        color = Color.Gray,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Paseo completado ayer con éxito.", fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = { /* Acción calificar */ },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B00))
-            ) {
-                Text("Calificar servicio ⭐")
-            }
-        }
-    }
+    )
 }

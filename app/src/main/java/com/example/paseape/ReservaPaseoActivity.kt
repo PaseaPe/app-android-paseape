@@ -91,7 +91,10 @@ class ReservaPaseoActivity : ComponentActivity() {
                                 "¡Solicitud de paseo enviada con éxito!"
                             }
                             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                            startActivity(Intent(this, PaseosActivity::class.java))
+                            val intentPaseos = Intent(this, PaseosActivity::class.java).apply {
+                                putExtra(PaseosActivity.EXTRA_TAB_INICIAL, 1)
+                            }
+                            startActivity(intentPaseos)
                             finish()
                         }
                     )
