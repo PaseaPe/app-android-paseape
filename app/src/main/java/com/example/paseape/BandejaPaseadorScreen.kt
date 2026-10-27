@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,12 +65,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
+import kotlinx.coroutines.delay
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.Locale
 
 private val TextoGris = Color(0xFF64748B)
@@ -82,7 +88,6 @@ private val FondoEnCurso = Color(0xFFE3F2FD)
 private val TextoEnCurso = Color(0xFF1565C0)
 private val FondoRechazada = Color(0xFFFDECEA)
 private val FondoFinalizada = Color(0xFFF1F5F9)
-private val PuntoRojo = Color(0xFFF44336)
 
 /**
  * Bandeja "Gestión de Paseos" del paseador: 4 pestañas con contadores sobre los
@@ -98,6 +103,20 @@ fun BandejaPaseadorScreen(
     val accionesEnCurso by viewModel.accionesEnCurso.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+
+    // Insignia numérica de notificaciones no leídas (misma fuente que el dashboard del cliente)
+    val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            NotificacionesViewModel.sincronizarContadorRemoto(
+                context = context,
+                authHeader = SessionManager.getAuthHeader(context),
+                userUuid = SessionManager.getUserUuid(context)
+            )
+            delay(15_000L)
+        }
+    }
 
     var tabActivo by remember { mutableStateOf(TabPaseos.INMEDIATOS) }
     var solicitudDescartar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
@@ -148,18 +167,26 @@ fun BandejaPaseadorScreen(
                             )
                         }
                     ) {
-                        Box {
+                        BadgedBox(
+                            badge = {
+                                if (unreadCount > 0) {
+                                    Badge(
+                                        containerColor = PrimaryOrange,
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Notifications,
                                 contentDescription = "Notificaciones",
                                 tint = PrimaryDark
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(PuntoRojo)
-                                    .align(Alignment.TopEnd)
                             )
                         }
                     }
@@ -366,6 +393,10 @@ private fun PaseosTabsRow(
             .fillMaxWidth()
             .background(Color.White)
     ) {
+        // Reloj vivo mientras haya inmediatas: descuenta las vencidas del contador
+        val hayInmediatas = tabs[TabPaseos.INMEDIATOS]?.items?.isNotEmpty() == true
+        val ahora = recordarAhora(hayInmediatas)
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -374,7 +405,13 @@ private fun PaseosTabsRow(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             TabPaseos.entries.forEach { tab ->
-                val total = tabs[tab]?.totalElements ?: 0L
+                val data = tabs[tab]
+                val expiradas = if (tab == TabPaseos.INMEDIATOS) {
+                    data?.items?.count { solicitudExpirada(it, ahora) } ?: 0
+                } else {
+                    0
+                }
+                val total = ((data?.totalElements ?: 0L) - expiradas).coerceAtLeast(0L)
                 val etiqueta = if (total > 0L) {
                     "${tab.etiquetaUI} ($total)"
                 } else {
@@ -452,13 +489,26 @@ private fun PaseosTabContent(
         return
     }
 
+    // Las solicitudes inmediatas vencidas (5 min) desaparecen automáticamente
+    val ahora = recordarAhora(tab == TabPaseos.INMEDIATOS)
+    val itemsVisibles = if (tab == TabPaseos.INMEDIATOS) {
+        data.items.filterNot { solicitudExpirada(it, ahora) }
+    } else {
+        data.items
+    }
+
+    if (itemsVisibles.isEmpty()) {
+        PaseosEmptyContent(tab = tab)
+        return
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(
-            items = data.items,
+            items = itemsVisibles,
             key = { solicitud -> solicitud.uuid ?: solicitud.hashCode() }
         ) { solicitud ->
             SolicitudPaseoCard(
@@ -652,6 +702,26 @@ private fun SolicitudPaseoCard(
                         lineHeight = 16.sp
                     )
                 }
+            }
+
+            // Fecha y hora del paseo (programado: fecha + bloque; inmediato: creado el)
+            textoFechaHoraPaseo(
+                fechaProgramada = solicitud.fechaProgramada,
+                bloqueHorarioCodigo = solicitud.bloqueHorarioCodigo,
+                creadoEl = solicitud.creadoEl
+            )?.let { fechaHora ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = fechaHora,
+                    fontSize = 12.sp,
+                    color = TextoGris
+                )
+            }
+
+            // Contador de los 5 minutos máximos de una solicitud inmediata
+            if (tab == TabPaseos.INMEDIATOS && estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO) {
+                Spacer(modifier = Modifier.height(6.dp))
+                ContadorVencimiento(horaVencimiento = solicitud.horaVencimiento)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -909,15 +979,19 @@ private fun textoVigencia(solicitud: SolicitudPaseoResDto): String {
     }
 }
 
-/** "Solicitado hace X min" a partir de `creado_el` (ISO LocalDateTime). */
+/**
+ * "Solicitado hace X min" a partir de `creado_el`.
+ * El backend guarda `creado_el` en UTC, así que se compara contra UTC para no
+ * desfasar el resultado con la hora local del dispositivo.
+ */
 private fun tiempoDesdeCreacion(creadoEl: String?): String {
     val texto = creadoEl?.trim()
     if (texto.isNullOrBlank()) return "Solicitud inmediata"
 
-    val creado = runCatching { LocalDateTime.parse(texto) }.getOrNull()
+    val creado = runCatching { LocalDateTime.parse(texto).toInstant(ZoneOffset.UTC) }.getOrNull()
         ?: return "Solicitud inmediata"
     val minutos = runCatching {
-        Duration.between(creado, LocalDateTime.now()).toMinutes()
+        Duration.between(creado, Instant.now()).toMinutes()
     }.getOrNull() ?: return "Solicitud inmediata"
 
     return when {

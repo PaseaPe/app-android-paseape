@@ -231,10 +231,18 @@ class BandejaPaseadorViewModel : ViewModel() {
                     val nuevos = resultado.data.items.filter { item ->
                         previo.items.none { it.uuid == item.uuid }
                     }
+                    val combinados = previo.items + nuevos
+                    // En Inmediatos y Mis paseos lo más reciente va arriba
+                    val itemsCombinados =
+                        if (tab == TabPaseos.INMEDIATOS || tab == TabPaseos.MIS_PASEOS) {
+                            ordenarPorCreacionDesc(combinados)
+                        } else {
+                            combinados
+                        }
                     state.copy(
                         tabs = state.tabs + (
                             tab to previo.copy(
-                                items = previo.items + nuevos,
+                                items = itemsCombinados,
                                 page = resultado.data.page,
                                 hasNext = resultado.data.hasNext,
                                 totalElements = resultado.data.totalElements,
@@ -498,13 +506,21 @@ class BandejaPaseadorViewModel : ViewModel() {
         tab: TabPaseos
     ): TabPaseosData {
         val items = page.items.orEmpty()
+        // Novedades arriba en Inmediatos y Mis paseos (el backend puede ordenar
+        // Mis paseos por fecha programada).
+        val itemsOrdenados =
+            if (tab == TabPaseos.INMEDIATOS || tab == TabPaseos.MIS_PASEOS) {
+                ordenarPorCreacionDesc(items)
+            } else {
+                items
+            }
         Log.d(
             TAG,
-            "${tab.valorDeTabAPI}: ${items.size} items, total=${page.totalElements ?: 0L}, " +
+            "${tab.valorDeTabAPI}: ${itemsOrdenados.size} items, total=${page.totalElements ?: 0L}, " +
                 "hasNext=${page.hasNext ?: false}"
         )
         return TabPaseosData(
-            items = items,
+            items = itemsOrdenados,
             page = page.page ?: 0,
             hasNext = page.hasNext ?: false,
             totalElements = page.totalElements ?: 0L

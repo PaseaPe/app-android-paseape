@@ -204,13 +204,9 @@ fun CardNotificacionReal(
         else -> TipoIcono.SOLICITUD
     }
 
+    // `creado_el` llega en UTC (el backend corre en UTC): convertimos a la hora local
     val fechaFormateada = remember(notificacion.creadoEl) {
-        val raw = notificacion.creadoEl.orEmpty()
-        if (raw.length >= 16) {
-            raw.replace("T", " ").take(16)
-        } else {
-            raw.ifBlank { "Reciente" }
-        }
+        textoFechaHoraNotificacion(notificacion.creadoEl) ?: "Reciente"
     }
 
     val esNueva = notificacion.leido != true
