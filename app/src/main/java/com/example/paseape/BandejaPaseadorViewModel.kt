@@ -41,7 +41,8 @@ enum class AccionPaseo {
     TOMAR,
     DESCARTAR,
     ACEPTAR,
-    RECHAZAR
+    RECHAZAR,
+    INICIAR
 }
 
 data class TabPaseosData(
@@ -270,8 +271,9 @@ class BandejaPaseadorViewModel : ViewModel() {
     }
 
     /**
-     * Acepta una solicitud inmediata: PATCH /tomar. Se quita de Inmediatos de
-     * forma optimista y, al confirmar, se refrescan Inmediatos y Mis paseos.
+     * Acepta una solicitud inmediata: PATCH /tomar y, al confirmar, inicia el
+     * paseo con PATCH /iniciar para que aparezca en la pestaña En Curso.
+     * Se quita de Inmediatos de forma optimista.
      */
     fun tomarInmediata(uuid: String) {
         val existe = successActual()?.tabs?.get(TabPaseos.INMEDIATOS)
@@ -292,13 +294,76 @@ class BandejaPaseadorViewModel : ViewModel() {
             when (resultado) {
                 is ResultadoApi.Exito -> {
                     ajustarContador(TabPaseos.INMEDIATOS)
-                    emitirInfo("Solicitud aceptada")
-                    refrescarTabs(setOf(TabPaseos.INMEDIATOS, TabPaseos.MIS_PASEOS))
+                    iniciarTrasTomar(header, uuid)
                 }
 
                 is ResultadoApi.Error -> {
                     removido?.let(::restaurarLocal)
                     emitirError(resultado.mensaje) { tomarInmediata(uuid) }
+                }
+            }
+        }
+    }
+
+    /**
+     * Encadena el inicio del paseo inmediato recién aceptado. Si `/iniciar`
+     * falla, el paseo queda en Mis paseos como ACEPTADA y el usuario puede
+     * iniciarlo manualmente con el botón "Iniciar paseo".
+     */
+    private suspend fun iniciarTrasTomar(header: String, uuid: String) {
+        val inicio = llamarApi("iniciar el paseo") {
+            RetrofitClient.apiService.iniciarPaseo(header, uuid)
+        }
+
+        when (inicio) {
+            is ResultadoApi.Exito -> {
+                emitirInfo("Paseo aceptado e iniciado")
+                refrescarTabs(
+                    setOf(
+                        TabPaseos.INMEDIATOS,
+                        TabPaseos.MIS_PASEOS,
+                        TabPaseos.EN_CURSO
+                    )
+                )
+            }
+
+            is ResultadoApi.Error -> {
+                refrescarTabs(setOf(TabPaseos.INMEDIATOS, TabPaseos.MIS_PASEOS))
+                emitirError(
+                    "Paseo aceptado, pero no se pudo iniciar: ${inicio.mensaje}"
+                ) { iniciarPaseo(uuid) }
+            }
+        }
+    }
+
+    /**
+     * Inicia un paseo aceptado: PATCH /iniciar (ACEPTADA -> EN_CURSO). Se quita
+     * de Mis paseos de forma optimista y, al confirmar, se refresca En Curso.
+     */
+    fun iniciarPaseo(uuid: String) {
+        if (uuid.isBlank()) return
+
+        val header = authHeaderActual.ifBlank { return }
+        if (!marcarAccion(uuid, AccionPaseo.INICIAR)) return
+
+        val removido = quitarLocal(TabPaseos.MIS_PASEOS, uuid)
+
+        viewModelScope.launch {
+            val resultado = llamarApi("iniciar el paseo") {
+                RetrofitClient.apiService.iniciarPaseo(header, uuid)
+            }
+            desmarcarAccion(uuid)
+
+            when (resultado) {
+                is ResultadoApi.Exito -> {
+                    ajustarContador(TabPaseos.MIS_PASEOS)
+                    emitirInfo("Paseo iniciado")
+                    refrescarTabs(setOf(TabPaseos.MIS_PASEOS, TabPaseos.EN_CURSO))
+                }
+
+                is ResultadoApi.Error -> {
+                    removido?.let(::restaurarLocal)
+                    emitirError(resultado.mensaje) { iniciarPaseo(uuid) }
                 }
             }
         }

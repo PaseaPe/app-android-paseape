@@ -327,4 +327,11 @@ interface ApiService {
         @Body body: RechazarSolicitudRequest
     ): Response<ResponseDto<SolicitudPaseoResDto>>
 
+    /** Paseo aceptado ACEPTADA -> EN_CURSO. */
+    @PATCH("paseador/solicitudes/{uuid}/iniciar")
+    suspend fun iniciarPaseo(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
 }

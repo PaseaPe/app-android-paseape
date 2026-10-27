@@ -250,6 +250,9 @@ fun BandejaPaseadorScreen(
                                     }
                                 }
                             },
+                            onIniciar = { solicitud ->
+                                solicitud.uuid?.let { viewModel.iniciarPaseo(it) }
+                            },
                             onSecundario = { solicitud ->
                                 when (tabActivo) {
                                     TabPaseos.INMEDIATOS -> {
@@ -461,6 +464,7 @@ private fun PaseosTabContent(
     onReintentar: () -> Unit,
     onCargarMas: () -> Unit,
     onAceptar: (SolicitudPaseoResDto) -> Unit,
+    onIniciar: (SolicitudPaseoResDto) -> Unit,
     onSecundario: (SolicitudPaseoResDto) -> Unit
 ) {
     if (data == null || (data.cargando && data.items.isEmpty() && data.error == null)) {
@@ -516,6 +520,7 @@ private fun PaseosTabContent(
                 tab = tab,
                 accionEnCurso = solicitud.uuid?.let { acciones[it] },
                 onAceptar = { onAceptar(solicitud) },
+                onIniciar = { onIniciar(solicitud) },
                 onSecundario = { onSecundario(solicitud) }
             )
         }
@@ -587,6 +592,7 @@ private fun SolicitudPaseoCard(
     tab: TabPaseos,
     accionEnCurso: AccionPaseo?,
     onAceptar: () -> Unit,
+    onIniciar: () -> Unit,
     onSecundario: () -> Unit
 ) {
     val mascotas = solicitud.mascotas.orEmpty()
@@ -617,6 +623,9 @@ private fun SolicitudPaseoCard(
         tab == TabPaseos.MIS_PASEOS && estado == BandejaPaseadorViewModel.ESTADO_PENDIENTE -> true
         else -> false
     }
+    val muestraIniciar = solicitud.uuid != null &&
+        tab == TabPaseos.MIS_PASEOS &&
+        estado == BandejaPaseadorViewModel.ESTADO_ACEPTADA
     val textoSecundario = if (tab == TabPaseos.INMEDIATOS) "Descartar" else "Rechazar"
     val borde = if (tab == TabPaseos.INMEDIATOS) {
         BorderStroke(1.dp, PrimaryOrange.copy(alpha = 0.5f))
@@ -827,6 +836,39 @@ private fun SolicitudPaseoCard(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
+            }
+
+            if (muestraIniciar) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onIniciar,
+                    enabled = accionEnCurso == null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VerdeAceptar,
+                        contentColor = Color.White,
+                        disabledContainerColor = VerdeAceptar.copy(alpha = 0.45f),
+                        disabledContentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    if (accionEnCurso == AccionPaseo.INICIAR) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "Iniciar paseo",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
