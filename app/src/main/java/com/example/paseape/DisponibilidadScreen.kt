@@ -8,7 +8,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,7 +34,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -70,11 +68,18 @@ import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
 
-private val OrangeReducido = lerp(PrimaryOrange, Color.Black, 0.18f)
+private val NaranjaPersonalizado = lerp(PrimaryOrange, Color.Black, 0.18f)
+
+private enum class AccionSemana {
+    LUNES_A_VIERNES,
+    FINES_DE_SEMANA,
+    LIMPIAR
+}
 
 private val TextoGris = Color(0xFF64748B)
 private val BordeGris = Color(0xFFE2E8F0)
 private val FondoCeldaVacia = Color(0xFFF1F5F9)
+private val RojoEliminar = Color(0xFFD32F2F)
 private val HoraColumnWidth = 68.dp
 private val SlotHeight = 32.dp
 
@@ -88,7 +93,7 @@ fun DisponibilidadScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var slotSeleccionado by remember { mutableStateOf<SlotKey?>(null) }
-    var mostrarConfirmacionLimpiar by remember { mutableStateOf(false) }
+    var accionSemanaPendiente by remember { mutableStateOf<AccionSemana?>(null) }
 
     LaunchedEffect(token) {
         viewModel.cargar(token)
@@ -96,13 +101,14 @@ fun DisponibilidadScreen(
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
+            val reintentar = message.retry
             val resultado = snackbarHostState.showSnackbar(
                 message = message.text,
-                actionLabel = if (message.retry) "Reintentar" else null,
-                withDismissAction = !message.retry
+                actionLabel = if (reintentar != null) "Reintentar" else null,
+                withDismissAction = reintentar == null
             )
-            if (message.retry && resultado == SnackbarResult.ActionPerformed) {
-                viewModel.cargar(token, force = true)
+            if (reintentar != null && resultado == SnackbarResult.ActionPerformed) {
+                reintentar()
             }
         }
     }
@@ -120,23 +126,27 @@ fun DisponibilidadScreen(
                 },
                 actions = {
                     val state = uiState
-                    if (state is DisponibilidadUiState.Success &&
-                        state.sinGuardar &&
-                        !state.isSaving
-                    ) {
-                        Surface(
-                            color = PrimaryOrange.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(
-                                text = "Sin guardar",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryOrange
-                            )
+                    if (state is DisponibilidadUiState.Success) {
+                        val estadoTexto = when {
+                            state.isSaving -> "Guardando…"
+                            state.hayCambiosSinGuardar -> "Sin guardar"
+                            else -> null
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+                        if (estadoTexto != null) {
+                            Surface(
+                                color = PrimaryOrange.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = estadoTexto,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryOrange
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -145,14 +155,10 @@ fun DisponibilidadScreen(
             )
         },
         bottomBar = {
-            val state = uiState
-            if (state is DisponibilidadUiState.Success) {
-                DisponibilidadBottomBar(
-                    state = state,
-                    onDescartar = { viewModel.descartarCambios() },
-                    onGuardar = { viewModel.guardar(token) }
-                )
-            }
+            DisponibilidadBottomBar(
+                state = uiState as? DisponibilidadUiState.Success,
+                onGuardar = { viewModel.guardarCambios() }
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BackgroundOffWhite
@@ -185,11 +191,10 @@ fun DisponibilidadScreen(
                 is DisponibilidadUiState.Success -> {
                     DisponibilidadContenido(
                         state = state,
-                        enabled = !state.isSaving,
                         onAjustarCapacidad = { delta -> viewModel.ajustarCapacidadBase(delta) },
-                        onLunesAViernes = { viewModel.marcarLunesAViernes() },
-                        onFinesDeSemana = { viewModel.marcarFinesDeSemana() },
-                        onLimpiar = { mostrarConfirmacionLimpiar = true },
+                        onLunesAViernes = { accionSemanaPendiente = AccionSemana.LUNES_A_VIERNES },
+                        onFinesDeSemana = { accionSemanaPendiente = AccionSemana.FINES_DE_SEMANA },
+                        onLimpiar = { accionSemanaPendiente = AccionSemana.LIMPIAR },
                         onSlotVacioClick = { slot -> viewModel.activarSlot(slot) },
                         onSlotMarcadoClick = { slot -> slotSeleccionado = slot }
                     )
@@ -204,11 +209,10 @@ fun DisponibilidadScreen(
         EditorCupoBottomSheet(
             state = state,
             slot = slot,
-            enabled = !state.isSaving,
             onDismiss = { slotSeleccionado = null },
-            onSeleccionarCupo = { cupo ->
-                viewModel.actualizarCupo(slot, cupo)
-                slotSeleccionado = null
+            onAjustarCupo = { delta ->
+                val cupoActual = state.slots[slot] ?: state.capacidadBase
+                viewModel.actualizarCupo(slot, cupoActual + delta)
             },
             onQuitarBloque = {
                 viewModel.quitarSlot(slot)
@@ -217,19 +221,42 @@ fun DisponibilidadScreen(
         )
     }
 
-    if (mostrarConfirmacionLimpiar) {
+    accionSemanaPendiente?.let { accion ->
+        val titulo = when (accion) {
+            AccionSemana.LUNES_A_VIERNES -> "Marcar lunes a viernes"
+            AccionSemana.FINES_DE_SEMANA -> "Marcar fines de semana"
+            AccionSemana.LIMPIAR -> "Limpiar semana"
+        }
+        val detalle = when (accion) {
+            AccionSemana.LUNES_A_VIERNES ->
+                "Se activarán los bloques vacíos de lunes a viernes con el cupo base. " +
+                    "Los bloques personalizados se mantienen y los cambios se guardan " +
+                    "al pulsar Guardar Cambios."
+            AccionSemana.FINES_DE_SEMANA ->
+                "Se activarán los bloques vacíos de sábado y domingo con el cupo base. " +
+                    "Los bloques personalizados se mantienen y los cambios se guardan " +
+                    "al pulsar Guardar Cambios."
+            AccionSemana.LIMPIAR ->
+                "Se desmarcarán todos los bloques de tu disponibilidad. ¿Deseas continuar?"
+        }
+        val etiqueta = when (accion) {
+            AccionSemana.LUNES_A_VIERNES,
+            AccionSemana.FINES_DE_SEMANA -> "Marcar"
+            AccionSemana.LIMPIAR -> "Limpiar"
+        }
+
         AlertDialog(
-            onDismissRequest = { mostrarConfirmacionLimpiar = false },
+            onDismissRequest = { accionSemanaPendiente = null },
             title = {
                 Text(
-                    text = "Limpiar semana",
+                    text = titulo,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryDark
                 )
             },
             text = {
                 Text(
-                    text = "Se desmarcarán todos los bloques de tu disponibilidad. ¿Deseas continuar?",
+                    text = detalle,
                     fontSize = 14.sp,
                     color = TextoGris
                 )
@@ -237,18 +264,22 @@ fun DisponibilidadScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.limpiarSemana()
-                        mostrarConfirmacionLimpiar = false
+                        when (accion) {
+                            AccionSemana.LUNES_A_VIERNES -> viewModel.marcarLunesAViernes()
+                            AccionSemana.FINES_DE_SEMANA -> viewModel.marcarFinesDeSemana()
+                            AccionSemana.LIMPIAR -> viewModel.limpiarSemana()
+                        }
+                        accionSemanaPendiente = null
                     },
                     colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+                        contentColor = PrimaryOrange
                     )
                 ) {
-                    Text("Limpiar", fontWeight = FontWeight.Bold)
+                    Text(etiqueta, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarConfirmacionLimpiar = false }) {
+                TextButton(onClick = { accionSemanaPendiente = null }) {
                     Text("Cancelar", color = PrimaryDark)
                 }
             },
@@ -261,7 +292,6 @@ fun DisponibilidadScreen(
 @Composable
 private fun DisponibilidadContenido(
     state: DisponibilidadUiState.Success,
-    enabled: Boolean,
     onAjustarCapacidad: (Int) -> Unit,
     onLunesAViernes: () -> Unit,
     onFinesDeSemana: () -> Unit,
@@ -279,7 +309,6 @@ private fun DisponibilidadContenido(
 
         CapacidadBaseCard(
             capacidadBase = state.capacidadBase,
-            enabled = enabled,
             onAjustar = onAjustarCapacidad
         )
 
@@ -293,17 +322,14 @@ private fun DisponibilidadContenido(
         ) {
             AccionChip(
                 texto = "Lunes a Viernes",
-                enabled = enabled,
                 onClick = onLunesAViernes
             )
             AccionChip(
                 texto = "Fines de Semana",
-                enabled = enabled,
                 onClick = onFinesDeSemana
             )
             AccionChip(
                 texto = "Limpiar Semana",
-                enabled = enabled,
                 onClick = onLimpiar
             )
         }
@@ -326,17 +352,27 @@ private fun DisponibilidadContenido(
         ) {
             LeyendaItem(color = PrimaryOrange, texto = "Base")
             Spacer(modifier = Modifier.width(10.dp))
-            LeyendaItem(color = OrangeReducido, texto = "Personalizado")
+            LeyendaItem(color = NaranjaPersonalizado, texto = "Personalizado")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        if (state.estaVacia) {
+            Text(
+                text = "Aún no tienes bloques activos. Toca una celda para activarla con " +
+                    "el cupo base y pulsa Guardar Cambios.",
+                fontSize = 11.sp,
+                color = TextoGris,
+                lineHeight = 15.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         DisponibilidadGrid(
             dias = state.diasSemana,
             bloques = state.bloquesHorario,
             slots = state.slots,
             capacidadBase = state.capacidadBase,
-            enabled = enabled,
             onSlotVacioClick = onSlotVacioClick,
             onSlotMarcadoClick = onSlotMarcadoClick
         )
@@ -348,7 +384,6 @@ private fun DisponibilidadContenido(
 @Composable
 private fun CapacidadBaseCard(
     capacidadBase: Int,
-    enabled: Boolean,
     onAjustar: (Int) -> Unit
 ) {
     Card(
@@ -389,7 +424,7 @@ private fun CapacidadBaseCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Cupo predeterminado de canes por hora",
+                    text = "Cupo que se asigna al activar un bloque",
                     fontSize = 12.sp,
                     color = TextoGris,
                     lineHeight = 16.sp
@@ -398,37 +433,10 @@ private fun CapacidadBaseCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Surface(
-                color = Color.White,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, PrimaryOrange.copy(alpha = 0.65f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StepButton(
-                        icon = Icons.Default.Remove,
-                        contentDescription = "Disminuir capacidad base",
-                        enabled = enabled && capacidadBase > 1,
-                        onClick = { onAjustar(-1) }
-                    )
-                    Text(
-                        text = "$capacidadBase perros",
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryDark,
-                        maxLines = 1
-                    )
-                    StepButton(
-                        icon = Icons.Default.Add,
-                        contentDescription = "Aumentar capacidad base",
-                        enabled = enabled && capacidadBase < 6,
-                        onClick = { onAjustar(1) }
-                    )
-                }
-            }
+            CupoStepper(
+                valor = capacidadBase,
+                onAjustar = onAjustar
+            )
         }
     }
 }
@@ -457,28 +465,67 @@ private fun StepButton(
 }
 
 @Composable
+private fun CupoStepper(
+    valor: Int,
+    onAjustar: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = Color.White,
+        shape = CircleShape,
+        border = BorderStroke(1.dp, PrimaryOrange.copy(alpha = 0.65f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StepButton(
+                icon = Icons.Default.Remove,
+                contentDescription = "Disminuir cupo",
+                enabled = valor > 1,
+                onClick = { onAjustar(-1) }
+            )
+            Text(
+                text = "$valor mascotas",
+                modifier = Modifier.padding(horizontal = 4.dp),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryDark,
+                maxLines = 1
+            )
+            StepButton(
+                icon = Icons.Default.Add,
+                contentDescription = "Aumentar cupo",
+                enabled = valor < 6,
+                onClick = { onAjustar(1) }
+            )
+        }
+    }
+}
+
+@Composable
 private fun AccionChip(
     texto: String,
-    enabled: Boolean,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .background(PrimaryOrange.copy(alpha = if (enabled) 0.08f else 0.04f))
+            .background(PrimaryOrange.copy(alpha = 0.08f))
             .border(
                 width = 1.dp,
-                color = PrimaryOrange.copy(alpha = if (enabled) 0.65f else 0.3f),
+                color = PrimaryOrange.copy(alpha = 0.65f),
                 shape = CircleShape
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Text(
             text = texto,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (enabled) PrimaryOrange else PrimaryOrange.copy(alpha = 0.4f),
+            color = PrimaryOrange,
             maxLines = 1
         )
     }
@@ -508,7 +555,6 @@ private fun DisponibilidadGrid(
     bloques: List<BloqueHorarioParamDto>,
     slots: Map<SlotKey, Int>,
     capacidadBase: Int,
-    enabled: Boolean,
     onSlotVacioClick: (SlotKey) -> Unit,
     onSlotMarcadoClick: (SlotKey) -> Unit
 ) {
@@ -577,7 +623,6 @@ private fun DisponibilidadGrid(
                         SlotCell(
                             cupo = cupo,
                             esBase = esBase,
-                            enabled = enabled,
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 if (cupo == null) {
@@ -598,14 +643,13 @@ private fun DisponibilidadGrid(
 private fun SlotCell(
     cupo: Int?,
     esBase: Boolean,
-    enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val colorFondo = when {
         cupo == null -> FondoCeldaVacia
         esBase -> PrimaryOrange
-        else -> OrangeReducido
+        else -> NaranjaPersonalizado
     }
     val shape = RoundedCornerShape(6.dp)
 
@@ -621,7 +665,7 @@ private fun SlotCell(
                     Modifier
                 }
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (cupo != null) {
@@ -637,16 +681,12 @@ private fun SlotCell(
 
 @Composable
 private fun DisponibilidadBottomBar(
-    state: DisponibilidadUiState.Success,
-    onDescartar: () -> Unit,
+    state: DisponibilidadUiState.Success?,
     onGuardar: () -> Unit
 ) {
-    val ayuda = when {
-        state.estaVacia && state.slotsGuardados.isEmpty() -> "Selecciona al menos un bloque"
-        state.sinGuardar -> "Cambios sin guardar"
-        else -> null
-    }
-    val puedeDescartar = state.sinGuardar && !state.isSaving
+    val puedeGuardar = state != null &&
+        state.hayCambiosSinGuardar &&
+        !state.isSaving
 
     Surface(
         color = Color.White,
@@ -658,50 +698,12 @@ private fun DisponibilidadBottomBar(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (ayuda != null) {
-                Text(
-                    text = ayuda,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (state.estaVacia) TextoGris else PrimaryOrange
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onDescartar,
-                    enabled = puedeDescartar,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        PrimaryOrange.copy(alpha = if (puedeDescartar) 0.55f else 0.25f)
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = PrimaryOrange,
-                        disabledContentColor = PrimaryOrange.copy(alpha = 0.35f)
-                    )
-                ) {
-                    Text(
-                        text = "Descartar",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
+            if (state != null) {
                 Button(
                     onClick = onGuardar,
-                    enabled = state.puedeGuardar,
+                    enabled = puedeGuardar,
                     modifier = Modifier
-                        .weight(1.8f)
+                        .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -711,7 +713,7 @@ private fun DisponibilidadBottomBar(
                         disabledContentColor = Color.White
                     )
                 ) {
-                    if (state.isSaving) {
+                    if (state.isSaving && state.hayCambiosSinGuardar) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             color = Color.White,
@@ -725,9 +727,9 @@ private fun DisponibilidadBottomBar(
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+            }
 
             Text(
                 text = "Cambios aplican para reservas futuras en Lima Metropolitana",
@@ -745,14 +747,13 @@ private fun DisponibilidadBottomBar(
 private fun EditorCupoBottomSheet(
     state: DisponibilidadUiState.Success,
     slot: SlotKey,
-    enabled: Boolean,
     onDismiss: () -> Unit,
-    onSeleccionarCupo: (Int) -> Unit,
+    onAjustarCupo: (Int) -> Unit,
     onQuitarBloque: () -> Unit
 ) {
     val dia = state.diasSemana.firstOrNull { it.id == slot.diaSemanaId }
     val bloque = state.bloquesHorario.firstOrNull { it.id == slot.bloqueHorarioId }
-    val cupoActual = state.slots[slot]
+    val cupoActual = state.slots[slot] ?: state.capacidadBase
     val subtitulo = listOfNotNull(
         dia?.descripcion?.let(::capitalizar),
         bloque?.descripcion?.let(::rangoHorario)
@@ -789,44 +790,39 @@ private fun EditorCupoBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Máximo de perros por hora",
+                text = "Máximo de mascotas por hora",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextoGris
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
-                (1..6).forEach { cupo ->
-                    CupoOpcion(
-                        cupo = cupo,
-                        seleccionado = cupoActual == cupo,
-                        enabled = enabled,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSeleccionarCupo(cupo) }
-                    )
-                }
+                CupoStepper(
+                    valor = cupoActual,
+                    onAjustar = onAjustarCupo
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
                 onClick = onQuitarBloque,
-                enabled = enabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
+                    containerColor = RojoEliminar.copy(alpha = 0.06f),
+                    contentColor = RojoEliminar
                 ),
                 border = BorderStroke(
                     1.dp,
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                    RojoEliminar.copy(alpha = 0.6f)
                 )
             ) {
                 Icon(
@@ -842,31 +838,6 @@ private fun EditorCupoBottomSheet(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun CupoOpcion(
-    cupo: Int,
-    seleccionado: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (seleccionado) PrimaryOrange else FondoCeldaVacia)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = cupo.toString(),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (seleccionado) Color.White else PrimaryDark
-        )
     }
 }
 

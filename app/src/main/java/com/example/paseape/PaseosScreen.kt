@@ -57,12 +57,6 @@ fun PaseosScreen(
     var selectedTab by remember { mutableIntStateOf(tabInicial.coerceIn(0, 2)) }
     var solicitudParaCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
 
-    val tabs = listOf(
-        "Activos (${viewModel.totalActivos})",
-        "Pendientes (${viewModel.totalPendientes})",
-        "Historial (${viewModel.totalHistorial})"
-    )
-
     if (modoVentanaInmediata) {
         Scaffold(
             topBar = {
@@ -142,6 +136,24 @@ fun PaseosScreen(
                 .background(Color(0xFFF8F9FA))
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // Oculta las solicitudes inmediatas cuyos 5 minutos ya vencieron y
+            // descuéntalas del contador de la pestaña.
+            val pendientes = viewModel.solicitudesPendientes
+            val hayInmediatas = pendientes.any { it.estadoId == ESTADO_SOLICITUD_BUSCANDO }
+            val ahora = recordarAhora(hayInmediatas)
+            val pendientesVigentes = if (hayInmediatas) {
+                pendientes.filterNot { solicitudExpirada(it, ahora) }
+            } else {
+                pendientes
+            }
+            val expiradasOcultas = pendientes.size - pendientesVigentes.size
+
+            val tabs = listOf(
+                "Activos (${viewModel.totalActivos})",
+                "Pendientes (${(viewModel.totalPendientes - expiradasOcultas).coerceAtLeast(0L)})",
+                "Historial (${viewModel.totalHistorial})"
+            )
+
             // =========================================================================
             // BARRA DE PESTAÑAS (TABS)
             // =========================================================================
@@ -210,7 +222,7 @@ fun PaseosScreen(
             // =========================================================================
             val listaActual = when (selectedTab) {
                 0 -> viewModel.solicitudesActivas
-                1 -> viewModel.solicitudesPendientes
+                1 -> pendientesVigentes
                 else -> viewModel.solicitudesHistorial
             }
 
@@ -1081,14 +1093,24 @@ fun CardSolicitudInmediataReal(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            if (!solicitud.fechaProgramada.isNullOrBlank()) {
-                val bloqueTxt = solicitud.bloqueHorarioCodigo?.let { " • $it" }.orEmpty()
+            // Fecha y hora del paseo (programado: fecha + bloque; inmediato: creado el)
+            textoFechaHoraPaseo(
+                fechaProgramada = solicitud.fechaProgramada,
+                bloqueHorarioCodigo = solicitud.bloqueHorarioCodigo,
+                creadoEl = solicitud.creadoEl
+            )?.let { fechaHora ->
                 Text(
-                    text = "📅 Fecha: ${solicitud.fechaProgramada}$bloqueTxt",
+                    text = fechaHora,
                     fontSize = 12.sp,
                     color = Color(0xFF334155)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Contador de los 5 minutos máximos de una solicitud inmediata
+            if (!esProgramado && solicitud.estadoId == ESTADO_SOLICITUD_BUSCANDO) {
+                ContadorVencimiento(horaVencimiento = solicitud.horaVencimiento)
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             Text(

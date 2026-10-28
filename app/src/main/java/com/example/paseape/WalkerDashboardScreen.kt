@@ -66,6 +66,7 @@ fun WalkerDashboardScreen(
     usuarioUuid: String,
     viewModel: WalkerProfileViewModel,
     disponibilidadViewModel: DisponibilidadViewModel,
+    paseosViewModel: BandejaPaseadorViewModel,
     onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -118,6 +119,25 @@ fun WalkerDashboardScreen(
                     onClick = { selectedTab = 1 },
                     icon = {
                         Icon(
+                            imageVector = Icons.Default.Pets,
+                            contentDescription = "Paseos"
+                        )
+                    },
+                    label = { Text("Paseos", fontWeight = FontWeight.Medium) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = PrimaryDark,
+                        selectedTextColor = PrimaryDark,
+                        indicatorColor = PrimaryDark.copy(alpha = 0.12f),
+                        unselectedIconColor = Color(0xFF64748B),
+                        unselectedTextColor = Color(0xFF64748B)
+                    )
+                )
+
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = {
+                        Icon(
                             imageVector = Icons.Default.CalendarMonth,
                             contentDescription = "Horario"
                         )
@@ -133,8 +153,8 @@ fun WalkerDashboardScreen(
                 )
 
                 NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     icon = {
                         Icon(
                             imageVector = Icons.Default.Person,
@@ -164,11 +184,15 @@ fun WalkerDashboardScreen(
                     uiState = uiState,
                     onLogoutClick = onLogoutClick
                 )
-                1 -> DisponibilidadScreen(
+                1 -> BandejaPaseadorScreen(
+                    token = token,
+                    viewModel = paseosViewModel
+                )
+                2 -> DisponibilidadScreen(
                     token = token,
                     viewModel = disponibilidadViewModel
                 )
-                2 -> WalkerProfileScreen(
+                3 -> WalkerProfileScreen(
                     uiState = uiState,
                     distritos = distritos,
                     isOperationLoading = isOperationLoading,

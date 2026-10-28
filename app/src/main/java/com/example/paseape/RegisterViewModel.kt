@@ -162,6 +162,7 @@ class RegisterViewModel : ViewModel() {
                 RegisterField.TARIFA ->
                     state.copy(tarifaHora = value.filter { it.isDigit() || it == '.' }.take(7))
                 RegisterField.BIOGRAFIA -> state.copy(biografia = value)
+                RegisterField.NUMERO_DOCUMENTO -> state.copy(numeroDocumento = value)
                 else -> state
             }
             actualizado.copy(
