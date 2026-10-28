@@ -303,7 +303,6 @@ fun ProfileSuccessContent(
     val detalle = usuario.detalleCliente
     val mascotas = detalle?.mascotas ?: emptyList()
 
-    var showLogoutDialog by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showAddPetDialog by remember { mutableStateOf(false) }
 
@@ -576,76 +575,6 @@ fun ProfileSuccessContent(
                 )
             }
         }
-
-        // BOTÓN CERRAR SESIÓN
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { showLogoutDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Cerrar sesión",
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Cerrar Sesión",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = Color.White,
-            title = {
-                Text(
-                    text = "Cerrar Sesión",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = PrimaryDark
-                )
-            },
-            text = {
-                Text(
-                    text = "¿Estás seguro de que deseas salir de tu cuenta de PaseaPE?",
-                    fontSize = 14.sp,
-                    color = Color.DarkGray
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showLogoutDialog = false
-                        onLogout()
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-                ) {
-                    Text("Sí, salir", color = Color.White)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showLogoutDialog = false },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            }
-        )
     }
 
     if (showEditProfileDialog) {

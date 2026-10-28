@@ -45,17 +45,6 @@ fun Paso1Screen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
                     }
-                },
-                // BOTÓN DE ACCESO DIRECTO PARA PROBAR EL PASO 2
-                actions = {
-                    TextButton(onClick = onNext) {
-                        Text(
-                            text = "Ver Paso 2 ➔",
-                            color = naranja,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
                 }
             )
         },

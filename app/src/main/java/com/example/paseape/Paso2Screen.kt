@@ -47,16 +47,6 @@ fun Paso2Screen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
                     }
-                },
-                actions = {
-                    TextButton(onClick = onNext) {
-                        Text(
-                            text = "Ver Paso 3 ➔",
-                            color = naranja,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
                 }
             )
         },

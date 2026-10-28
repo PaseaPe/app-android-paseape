@@ -60,15 +60,6 @@ fun PaseadorDetalleScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = { /* Menú adicional si se requiere */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menú",
-                            tint = PrimaryDark
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BackgroundOffWhite
                 )
@@ -441,8 +432,14 @@ fun PaseadorDetalleContent(
                     fontSize = 11.sp,
                     color = Color(0xFF64748B)
                 )
+                val tipoDocNombre = when (paseador?.tipoDocumentoId) {
+                    1 -> "DNI"
+                    2 -> "Carné de Extranjería"
+                    3 -> "Pasaporte"
+                    else -> "DNI"
+                }
                 Text(
-                    text = "DNI (1)",
+                    text = tipoDocNombre,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1E293B)
@@ -456,7 +453,7 @@ fun PaseadorDetalleContent(
                     color = Color(0xFF64748B)
                 )
                 Text(
-                    text = paseador?.biografia ?: "45678912",
+                    text = paseador?.numeroDocumento?.takeIf { it.isNotBlank() } ?: "No registrado",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1E293B)
@@ -477,33 +474,6 @@ fun PaseadorDetalleContent(
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF334155)
                 )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Cuadro interno de Certificado PDF adjunto
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFFF8FAFC),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp)
-                    ) {
-                        Text(
-                            text = "📄 Certificado de Antecedentes Policiales adjunto",
-                            fontSize = 12.sp,
-                            color = Color(0xFF475569)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Ver documento PDF",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFF97316)
-                        )
-                    }
-                }
             }
         }
 
