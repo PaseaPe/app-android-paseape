@@ -21,11 +21,17 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,7 +45,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,12 +58,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.paseape.data.SessionManager
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
+import kotlinx.coroutines.delay
 
 @Composable
 fun WalkerDashboardScreen(
@@ -67,14 +76,30 @@ fun WalkerDashboardScreen(
     viewModel: WalkerProfileViewModel,
     disponibilidadViewModel: DisponibilidadViewModel,
     paseosViewModel: BandejaPaseadorViewModel,
+    onNotificacionesClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     val uiState by viewModel.uiState.collectAsState()
     val distritos by viewModel.distritos.collectAsState()
     val isOperationLoading by viewModel.isOperationLoading.collectAsState()
+
+    // Insignia numérica de notificaciones no leídas (misma fuente que el dashboard del cliente)
+    val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            NotificacionesViewModel.sincronizarContadorRemoto(
+                context = context,
+                authHeader = SessionManager.getAuthHeader(context),
+                userUuid = SessionManager.getUserUuid(context)
+            )
+            delay(15_000L)
+        }
+    }
 
     // Escuchar mensajes para el Snackbar
     LaunchedEffect(Unit) {
@@ -182,6 +207,9 @@ fun WalkerDashboardScreen(
             when (selectedTab) {
                 0 -> WalkerHomeContent(
                     uiState = uiState,
+                    unreadCount = unreadCount,
+                    onNotificacionesClick = onNotificacionesClick,
+                    onPerfilClick = { selectedTab = 3 },
                     onLogoutClick = onLogoutClick
                 )
                 1 -> BandejaPaseadorScreen(
@@ -223,9 +251,13 @@ fun WalkerDashboardScreen(
 @Composable
 fun WalkerHomeContent(
     uiState: WalkerProfileUiState,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    unreadCount: Int = 0,
+    onNotificacionesClick: () -> Unit = {},
+    onPerfilClick: () -> Unit = {}
 ) {
     var disponible by remember { mutableStateOf(true) }
+    var menuAbierto by remember { mutableStateOf(false) }
 
     val nombrePaseador = when (uiState) {
         is WalkerProfileUiState.Success -> uiState.detalle.nombres ?: "Paseador"
@@ -234,18 +266,70 @@ fun WalkerHomeContent(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
+                navigationIcon = {
+                    Box {
+                        IconButton(onClick = { menuAbierto = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menú",
+                                tint = PrimaryDark
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuAbierto,
+                            onDismissRequest = { menuAbierto = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Mi perfil") },
+                                onClick = {
+                                    menuAbierto = false
+                                    onPerfilClick()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = PrimaryDark
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Cerrar sesión",
+                                        color = Color(0xFFD32F2F)
+                                    )
+                                },
+                                onClick = {
+                                    menuAbierto = false
+                                    onLogoutClick()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                        contentDescription = null,
+                                        tint = Color(0xFFD32F2F)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                },
                 title = {
-                    Column {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Hola, $nombrePaseador 👋",
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = PrimaryDark
+                            color = PrimaryDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = if (disponible) "Disponible para paseos" else "Modo No Disponible",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
+                            maxLines = 1,
                             color = if (disponible) Color(0xFF2E7D32) else Color(0xFF64748B)
                         )
                     }
@@ -260,12 +344,30 @@ fun WalkerHomeContent(
                         )
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(onClick = onLogoutClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "Cerrar sesión",
-                            tint = PrimaryDark
-                        )
+                    // BOTÓN DE NOTIFICACIONES CON INSIGNIA NUMÉRICA
+                    IconButton(onClick = onNotificacionesClick) {
+                        BadgedBox(
+                            badge = {
+                                if (unreadCount > 0) {
+                                    Badge(
+                                        containerColor = Color(0xFFFF6B00),
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notificaciones",
+                                tint = PrimaryDark
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundOffWhite)

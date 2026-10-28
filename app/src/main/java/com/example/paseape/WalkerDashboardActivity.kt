@@ -46,6 +46,14 @@ class WalkerDashboardActivity : ComponentActivity() {
                     viewModel = viewModel,
                     disponibilidadViewModel = disponibilidadViewModel,
                     paseosViewModel = paseosViewModel,
+                    onNotificacionesClick = {
+                        startActivity(
+                            Intent(
+                                this@WalkerDashboardActivity,
+                                NotificacionesActivity::class.java
+                            )
+                        )
+                    },
                     onLogoutClick = { cerrarSesionYRedirigir() }
                 )
             }
