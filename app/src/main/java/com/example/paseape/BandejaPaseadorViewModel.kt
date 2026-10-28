@@ -3,6 +3,7 @@ package com.example.paseape
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.paseape.data.model.CancelarSolicitudReqDto
 import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.RechazarSolicitudRequest
 import com.example.paseape.data.model.SolicitudPaseoResDto
@@ -42,7 +43,8 @@ enum class AccionPaseo {
     DESCARTAR,
     ACEPTAR,
     RECHAZAR,
-    INICIAR
+    INICIAR,
+    CANCELAR
 }
 
 data class TabPaseosData(
@@ -469,6 +471,48 @@ class BandejaPaseadorViewModel : ViewModel() {
                 is ResultadoApi.Error -> {
                     removido?.let(::restaurarLocal)
                     emitirError(resultado.mensaje) { rechazarProgramada(uuid, motivo) }
+                }
+            }
+        }
+    }
+
+    /**
+     * Cancela un paseo programado ya aceptado y todavía no iniciado:
+     * PATCH /cancelar (ACEPTADA -> CANCELADA). El backend exige un motivo de
+     * al menos 10 caracteres y notifica al cliente. Se quita de Mis paseos de
+     * forma optimista y se revierte si la escritura falla.
+     */
+    fun cancelarPaseo(uuid: String, motivo: String) {
+        val original = successActual()?.tabs?.get(TabPaseos.MIS_PASEOS)
+            ?.items?.firstOrNull { it.uuid == uuid } ?: return
+        if (original.estadoId != ESTADO_ACEPTADA) return
+
+        val header = authHeaderActual.ifBlank { return }
+        if (!marcarAccion(uuid, AccionPaseo.CANCELAR)) return
+
+        val removido = quitarLocal(TabPaseos.MIS_PASEOS, uuid)
+
+        viewModelScope.launch {
+            val motivoLimpio = motivo.trim()
+            val resultado = llamarApi("cancelar el paseo") {
+                RetrofitClient.apiService.cancelarPaseoPaseador(
+                    token = header,
+                    uuid = uuid,
+                    request = CancelarSolicitudReqDto(motivo = motivoLimpio)
+                )
+            }
+            desmarcarAccion(uuid)
+
+            when (resultado) {
+                is ResultadoApi.Exito -> {
+                    ajustarContador(TabPaseos.MIS_PASEOS)
+                    emitirInfo("Paseo cancelado")
+                    refrescarTabs(setOf(TabPaseos.MIS_PASEOS, TabPaseos.HISTORIAL))
+                }
+
+                is ResultadoApi.Error -> {
+                    removido?.let(::restaurarLocal)
+                    emitirError(resultado.mensaje) { cancelarPaseo(uuid, motivo) }
                 }
             }
         }
