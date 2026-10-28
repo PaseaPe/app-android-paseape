@@ -1,5 +1,7 @@
 package com.example.paseape
 
+import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,11 +36,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,24 +51,120 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.ui.components.CatalogDropdownField
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 
 private val ErrorRed = Color(0xFFB3261E)
 
 @Composable
 fun RegisterScreen(
     viewModel: RegisterViewModel,
-    onRegisterSuccess: () -> Unit,
+    onRegisterSuccess: (Int?, String?) -> Unit,
     onLoginClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var step by remember { mutableIntStateOf(1) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var googleLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.registroExitoso) {
         if (uiState.registroExitoso) {
-            onRegisterSuccess()
+            onRegisterSuccess(uiState.authRole, uiState.authUuid)
+        }
+    }
+
+    // Si el token de Google expiró, el backend lo rechaza y volvemos al paso 1.
+    LaunchedEffect(uiState.volverAPaso1) {
+        if (uiState.volverAPaso1) {
+            step = 1
+            viewModel.onVolverAPaso1Aplicado()
+        }
+    }
+
+    /**
+     * Flujo de Google para el registro: obtiene el id_token, comprueba si ese
+     * correo ya tiene cuenta y, si es nuevo, prellena el formulario. La pantalla
+     * se queda en el paso 1 para que el usuario complete el teléfono.
+     */
+    fun launchGoogleRegisterFlow() {
+        if (googleLoading || uiState.isSubmitting) return
+        googleLoading = true
+
+        coroutineScope.launch {
+            try {
+                val credentialManager = CredentialManager.create(context)
+                val serverClientId = "1076479424045-i2m2bjuakkfc3233ssd20epbctf03b81.apps.googleusercontent.com"
+
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(serverClientId)
+                    .setAutoSelectEnabled(false)
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(
+                    context = context,
+                    request = request
+                )
+
+                val credential = result.credential
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleIdTokenCredential =
+                        GoogleIdTokenCredential.createFrom(credential.data)
+
+                    when (val chequeo = viewModel.chequearCuentaGoogle(
+                        googleIdTokenCredential.idToken
+                    )) {
+                        ChequeoCuentaGoogle.NoRegistrada -> viewModel.onGoogleCredential(
+                            idToken = googleIdTokenCredential.idToken,
+                            email = googleIdTokenCredential.id,
+                            nombreCompleto = googleIdTokenCredential.displayName
+                        )
+
+                        ChequeoCuentaGoogle.Registrada -> viewModel.mostrarErrorGoogle(
+                            "Ya existe una cuenta con ese correo. Inicia Sesión"
+                        )
+
+                        is ChequeoCuentaGoogle.Error ->
+                            viewModel.mostrarErrorGoogle(chequeo.mensaje)
+                    }
+                } else {
+                    viewModel.mostrarErrorGoogle(
+                        "No pudimos obtener las credenciales de Google. Inténtalo de nuevo."
+                    )
+                }
+            } catch (e: GetCredentialCancellationException) {
+                // El usuario cerró el selector: no mostramos error.
+            } catch (e: GetCredentialException) {
+                Log.e("GOOGLE_REGISTER", "Error CredentialManager: ${e.type} - ${e.message}", e)
+                viewModel.mostrarErrorGoogle(
+                    "No se pudo conectar con Google. Verifica tu cuenta o configuración OAuth."
+                )
+            } catch (e: Exception) {
+                Log.e("GOOGLE_REGISTER", "Error al obtener credenciales de Google", e)
+                viewModel.mostrarErrorGoogle(
+                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.REGISTER)
+                )
+            } finally {
+                googleLoading = false
+            }
         }
     }
 
@@ -116,6 +219,8 @@ fun RegisterScreen(
                 uiState = uiState,
                 viewModel = viewModel,
                 onLoginClick = onLoginClick,
+                googleLoading = googleLoading,
+                onGoogleClick = { launchGoogleRegisterFlow() },
                 onSiguiente = {
                     if (viewModel.validarPaso1()) {
                         step = 2
@@ -137,9 +242,41 @@ private fun Paso1(
     uiState: RegisterUiState,
     viewModel: RegisterViewModel,
     onLoginClick: () -> Unit,
+    googleLoading: Boolean,
+    onGoogleClick: () -> Unit,
     onSiguiente: () -> Unit
 ) {
     val habilitado = !uiState.isSubmitting
+
+    if (uiState.modoGoogle) {
+        Surface(
+            color = Color(0xFFE8F5E9),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = "✓ Registrando con Google",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2E7D32)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = uiState.googleEmail,
+                    fontSize = 13.sp,
+                    color = PrimaryDark
+                )
+                Text(
+                    text = "Tu cuenta se creará sin contraseña.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+    }
 
     RegisterTextField(
         value = uiState.nombres,
@@ -161,30 +298,32 @@ private fun Paso1(
         enabled = habilitado
     )
 
-    Spacer(modifier = Modifier.height(8.dp))
+    if (!uiState.modoGoogle) {
+        Spacer(modifier = Modifier.height(8.dp))
 
-    RegisterTextField(
-        value = uiState.correo,
-        onValueChange = { viewModel.onFieldChange(RegisterField.CORREO, it) },
-        label = "Correo electrónico *",
-        placeholder = "tucorreo@ejemplo.com",
-        error = uiState.fieldErrors[RegisterField.CORREO],
-        enabled = habilitado,
-        keyboardType = KeyboardType.Email
-    )
+        RegisterTextField(
+            value = uiState.correo,
+            onValueChange = { viewModel.onFieldChange(RegisterField.CORREO, it) },
+            label = "Correo electrónico *",
+            placeholder = "tucorreo@ejemplo.com",
+            error = uiState.fieldErrors[RegisterField.CORREO],
+            enabled = habilitado,
+            keyboardType = KeyboardType.Email
+        )
 
-    Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-    RegisterTextField(
-        value = uiState.contrasena,
-        onValueChange = { viewModel.onFieldChange(RegisterField.CONTRASENA, it) },
-        label = "Contraseña *",
-        error = uiState.fieldErrors[RegisterField.CONTRASENA],
-        supportingText = "Entre 6 y 50 caracteres.",
-        enabled = habilitado,
-        keyboardType = KeyboardType.Password,
-        password = true
-    )
+        RegisterTextField(
+            value = uiState.contrasena,
+            onValueChange = { viewModel.onFieldChange(RegisterField.CONTRASENA, it) },
+            label = "Contraseña *",
+            error = uiState.fieldErrors[RegisterField.CONTRASENA],
+            supportingText = "Entre 6 y 50 caracteres.",
+            enabled = habilitado,
+            keyboardType = KeyboardType.Password,
+            password = true
+        )
+    }
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -246,6 +385,75 @@ private fun Paso1(
         enabled = habilitado
     ) {
         Text("Siguiente")
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    if (uiState.modoGoogle) {
+        TextButton(
+            onClick = { viewModel.salirDeModoGoogle() },
+            enabled = habilitado
+        ) {
+            Text(
+                text = "Usar correo y contraseña",
+                color = PrimaryDark,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    } else {
+        OutlinedButton(
+            onClick = onGoogleClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.White,
+                contentColor = PrimaryDark
+            ),
+            enabled = habilitado && !googleLoading
+        ) {
+            if (googleLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = PrimaryDark,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFEA4335).copy(alpha = 0.12f),
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "G",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFEA4335)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Continuar con Google",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+            }
+        }
+    }
+
+    uiState.errorGeneral?.let { mensaje ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = mensaje,
+            color = ErrorRed,
+            fontSize = 13.sp
+        )
     }
 
     Spacer(modifier = Modifier.height(16.dp))

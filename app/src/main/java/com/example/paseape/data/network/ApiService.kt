@@ -198,7 +198,7 @@ interface ApiService {
     @POST("auth/register/google")
     suspend fun registrarConGoogle(
         @Body request: RegistroGoogleRequest
-    ): GenericResponse
+    ): GoogleAuthResponse
 
     @Headers("Content-Type: application/json")
     @POST("auth/forgot-password")
