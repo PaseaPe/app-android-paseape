@@ -198,7 +198,7 @@ interface ApiService {
     @POST("auth/register/google")
     suspend fun registrarConGoogle(
         @Body request: RegistroGoogleRequest
-    ): GenericResponse
+    ): GoogleAuthResponse
 
     @Headers("Content-Type: application/json")
     @POST("auth/forgot-password")
@@ -332,6 +332,14 @@ interface ApiService {
     suspend fun iniciarPaseo(
         @Header("Authorization") token: String,
         @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Cancela un paseo aceptado y aún no iniciado (ACEPTADA -> CANCELADA). Motivo obligatorio. */
+    @PATCH("paseador/solicitudes/{uuid}/cancelar")
+    suspend fun cancelarPaseoPaseador(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
     ): Response<ResponseDto<SolicitudPaseoResDto>>
 
 }

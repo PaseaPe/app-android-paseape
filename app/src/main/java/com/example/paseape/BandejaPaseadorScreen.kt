@@ -1,6 +1,5 @@
 package com.example.paseape
 
-import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,13 +22,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,17 +56,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
-import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -102,26 +95,12 @@ fun BandejaPaseadorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val accionesEnCurso by viewModel.accionesEnCurso.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-
-    // Insignia numérica de notificaciones no leídas (misma fuente que el dashboard del cliente)
-    val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            NotificacionesViewModel.sincronizarContadorRemoto(
-                context = context,
-                authHeader = SessionManager.getAuthHeader(context),
-                userUuid = SessionManager.getUserUuid(context)
-            )
-            delay(15_000L)
-        }
-    }
 
     var tabActivo by remember { mutableStateOf(TabPaseos.INMEDIATOS) }
     var solicitudDescartar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
     var solicitudRechazar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
     var motivoRechazo by remember { mutableStateOf("") }
+    var solicitudCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
 
     LaunchedEffect(token) {
         viewModel.cargar(token)
@@ -159,36 +138,6 @@ fun BandejaPaseadorScreen(
                             contentDescription = "Actualizar paseos",
                             tint = PrimaryDark
                         )
-                    }
-                    IconButton(
-                        onClick = {
-                            context.startActivity(
-                                Intent(context, NotificacionesActivity::class.java)
-                            )
-                        }
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (unreadCount > 0) {
-                                    Badge(
-                                        containerColor = PrimaryOrange,
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = if (unreadCount > 99) "99+" else unreadCount.toString(),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Notificaciones",
-                                tint = PrimaryDark
-                            )
-                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -252,6 +201,9 @@ fun BandejaPaseadorScreen(
                             },
                             onIniciar = { solicitud ->
                                 solicitud.uuid?.let { viewModel.iniciarPaseo(it) }
+                            },
+                            onCancelar = { solicitud ->
+                                solicitudCancelar = solicitud
                             },
                             onSecundario = { solicitud ->
                                 when (tabActivo) {
@@ -383,6 +335,97 @@ fun BandejaPaseadorScreen(
             shape = RoundedCornerShape(20.dp)
         )
     }
+
+    solicitudCancelar?.let { solicitud ->
+        CancelarPaseoDialog(
+            solicitud = solicitud,
+            onDismiss = { solicitudCancelar = null },
+            onConfirmar = { motivo ->
+                solicitud.uuid?.let { viewModel.cancelarPaseo(it, motivo) }
+                solicitudCancelar = null
+            }
+        )
+    }
+}
+
+/**
+ * Diálogo para cancelar un paseo ya aceptado. El motivo es obligatorio y el
+ * backend exige al menos [MIN_MOTIVO_CANCELACION] caracteres. El estado del
+ * texto vive dentro del diálogo y se reinicia por solicitud, de modo que el
+ * contador siempre arranca en 0 al abrirlo.
+ */
+@Composable
+private fun CancelarPaseoDialog(
+    solicitud: SolicitudPaseoResDto,
+    onDismiss: () -> Unit,
+    onConfirmar: (String) -> Unit
+) {
+    var motivo by remember(solicitud.uuid) { mutableStateOf("") }
+    val motivoValido = motivo.trim().length >= MIN_MOTIVO_CANCELACION
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Cancelar paseo",
+                fontWeight = FontWeight.Bold,
+                color = PrimaryDark
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "El cliente será notificado de la cancelación. " +
+                        "Indica el motivo (mínimo $MIN_MOTIVO_CANCELACION caracteres).",
+                    fontSize = 14.sp,
+                    color = TextoGris
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = motivo,
+                    onValueChange = { nuevo ->
+                        if (nuevo.length <= MAX_MOTIVO_RECHAZO) {
+                            motivo = nuevo
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Motivo de la cancelación") },
+                    minLines = 2,
+                    maxLines = 4,
+                    supportingText = {
+                        Text(
+                            text = "${motivo.length} / $MAX_MOTIVO_RECHAZO caracteres",
+                            fontSize = 11.sp,
+                            color = TextoGris
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryOrange,
+                        focusedLabelColor = PrimaryOrange,
+                        cursorColor = PrimaryOrange
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirmar(motivo) },
+                enabled = motivoValido,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = RojoEliminar
+                )
+            ) {
+                Text("Cancelar paseo", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Volver", color = PrimaryDark)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
 @Composable
@@ -465,6 +508,7 @@ private fun PaseosTabContent(
     onCargarMas: () -> Unit,
     onAceptar: (SolicitudPaseoResDto) -> Unit,
     onIniciar: (SolicitudPaseoResDto) -> Unit,
+    onCancelar: (SolicitudPaseoResDto) -> Unit,
     onSecundario: (SolicitudPaseoResDto) -> Unit
 ) {
     if (data == null || (data.cargando && data.items.isEmpty() && data.error == null)) {
@@ -521,6 +565,7 @@ private fun PaseosTabContent(
                 accionEnCurso = solicitud.uuid?.let { acciones[it] },
                 onAceptar = { onAceptar(solicitud) },
                 onIniciar = { onIniciar(solicitud) },
+                onCancelar = { onCancelar(solicitud) },
                 onSecundario = { onSecundario(solicitud) }
             )
         }
@@ -593,6 +638,7 @@ private fun SolicitudPaseoCard(
     accionEnCurso: AccionPaseo?,
     onAceptar: () -> Unit,
     onIniciar: () -> Unit,
+    onCancelar: () -> Unit,
     onSecundario: () -> Unit
 ) {
     val mascotas = solicitud.mascotas.orEmpty()
@@ -626,6 +672,7 @@ private fun SolicitudPaseoCard(
     val muestraIniciar = solicitud.uuid != null &&
         tab == TabPaseos.MIS_PASEOS &&
         estado == BandejaPaseadorViewModel.ESTADO_ACEPTADA
+    val muestraCancelar = muestraIniciar
     val textoSecundario = if (tab == TabPaseos.INMEDIATOS) "Descartar" else "Rechazar"
     val borde = if (tab == TabPaseos.INMEDIATOS) {
         BorderStroke(1.dp, PrimaryOrange.copy(alpha = 0.5f))
@@ -872,6 +919,40 @@ private fun SolicitudPaseoCard(
                     }
                 }
             }
+
+            if (muestraCancelar) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onCancelar,
+                    enabled = accionEnCurso == null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, RojoEliminar.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = RojoEliminar.copy(alpha = 0.06f),
+                        contentColor = RojoEliminar,
+                        disabledContainerColor = RojoEliminar.copy(alpha = 0.03f),
+                        disabledContentColor = RojoEliminar.copy(alpha = 0.45f)
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    if (accionEnCurso == AccionPaseo.CANCELAR) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = RojoEliminar,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "Cancelar",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1061,3 +1142,6 @@ private fun formatearMonto(monto: Double?): String? {
 }
 
 private const val MAX_MOTIVO_RECHAZO = 500
+
+/** El backend exige un motivo de al menos 10 caracteres para cancelar. */
+private const val MIN_MOTIVO_CANCELACION = 10
