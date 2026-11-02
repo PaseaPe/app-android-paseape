@@ -371,6 +371,18 @@ fun WalkerProfileScreen(
                                     valor = paseador?.distritoCoberturaDescripcion?.uppercase() ?: "SIN ASIGNAR",
                                     icono = Icons.Default.LocationOn
                                 )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Antecedentes Policiales / Penales
+                                val antecedentesUrl = paseador?.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
+                                ItemResumenAtributo(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    titulo = "Certificado de antecedentes policiales / penales",
+                                    valor = antecedentesUrl ?: "Pendiente de adjuntar (presiona Editar Perfil)",
+                                    icono = Icons.Default.CheckCircle,
+                                    destacado = antecedentesUrl != null
+                                )
                             }
                         }
 

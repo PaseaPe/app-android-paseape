@@ -40,7 +40,8 @@ enum class RegisterField {
     DISTRITO_COBERTURA,
     EXPERIENCIA,
     TARIFA,
-    BIOGRAFIA
+    BIOGRAFIA,
+    ANTECEDENTES_URL
 }
 
 /** Resultado de consultar si el correo de Google ya tiene una cuenta. */
@@ -72,6 +73,7 @@ data class RegisterUiState(
     val experienciaAnos: String = "",
     val tarifaHora: String = "",
     val biografia: String = "",
+    val antecedentesPolicialesUrl: String = "",
 
     // Catálogos del backend
     val distritos: List<DistritoParamDto> = emptyList(),
@@ -187,6 +189,7 @@ class RegisterViewModel : ViewModel() {
                 RegisterField.TARIFA ->
                     state.copy(tarifaHora = value.filter { it.isDigit() || it == '.' }.take(7))
                 RegisterField.BIOGRAFIA -> state.copy(biografia = value)
+                RegisterField.ANTECEDENTES_URL -> state.copy(antecedentesPolicialesUrl = value)
                 RegisterField.NUMERO_DOCUMENTO -> state.copy(numeroDocumento = value)
                 else -> state
             }
@@ -638,7 +641,8 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
+                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
             )
         }
     }
@@ -682,7 +686,8 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
+                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
             )
         }
     }

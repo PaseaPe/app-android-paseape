@@ -10,6 +10,11 @@ import com.example.paseape.data.model.DiaSemanaParamDto
 import com.example.paseape.data.model.DisponibilidadBloqueRequestDto
 import com.example.paseape.data.model.DisponibilidadDataDto
 import com.example.paseape.data.model.GuardarDisponibilidadRequestDto
+import com.example.paseape.data.model.MascotaData
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
@@ -98,6 +103,72 @@ class DisponibilidadViewModel : ViewModel() {
 
     private val operacionesActivas = mutableSetOf<Long>()
     private var secuenciaOperacion = 0L
+
+    private val _slotMascotas = MutableStateFlow<List<MascotaData>>(emptyList())
+    val slotMascotas: StateFlow<List<MascotaData>> = _slotMascotas.asStateFlow()
+
+    private val _slotFechaIso = MutableStateFlow<String?>(null)
+    val slotFechaIso: StateFlow<String?> = _slotFechaIso.asStateFlow()
+
+    private val _isLoadingSlotMascotas = MutableStateFlow(false)
+    val isLoadingSlotMascotas: StateFlow<Boolean> = _isLoadingSlotMascotas.asStateFlow()
+
+    private var jobSlotMascotas: Job? = null
+
+    fun cargarMascotasDeSlot(paseadorUuid: String, slot: SlotKey) {
+        jobSlotMascotas?.cancel()
+        _slotMascotas.value = emptyList()
+        _slotFechaIso.value = null
+
+        val authHeader = authHeaderActual
+        if (authHeader.isBlank() || paseadorUuid.isBlank()) {
+            _isLoadingSlotMascotas.value = false
+            return
+        }
+
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("America/Lima"))
+        val dowCal = cal.get(Calendar.DAY_OF_WEEK)
+        val isoDow = if (dowCal == Calendar.SUNDAY) 7 else dowCal - 1
+        val diff = (slot.diaSemanaId - isoDow + 7) % 7
+        cal.add(Calendar.DAY_OF_YEAR, diff)
+
+        val fmtIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("America/Lima")
+        }
+        val fechaIso = fmtIso.format(cal.time)
+        _slotFechaIso.value = fechaIso
+        _isLoadingSlotMascotas.value = true
+
+        jobSlotMascotas = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val res = RetrofitClient.apiService.getDisponibilidadPaseadorPorFecha(
+                    token = authHeader,
+                    paseadorUuid = paseadorUuid,
+                    fecha = fechaIso
+                )
+                val mascotas = if (res.isSuccessful) {
+                    res.body()?.response?.bloques
+                        ?.firstOrNull { it.bloqueHorarioId == slot.bloqueHorarioId }
+                        ?.mascotas
+                        .orEmpty()
+                } else {
+                    emptyList()
+                }
+                withContext(Dispatchers.Main) {
+                    _slotMascotas.value = mascotas
+                    _isLoadingSlotMascotas.value = false
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudieron consultar mascotas del bloque para fecha $fechaIso: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    _slotMascotas.value = emptyList()
+                    _isLoadingSlotMascotas.value = false
+                }
+            }
+        }
+    }
 
     /**
      * Carga catálogos y disponibilidad. Si ya se cargó con el mismo token y el

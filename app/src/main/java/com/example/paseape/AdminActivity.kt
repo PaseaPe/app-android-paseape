@@ -38,7 +38,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -323,6 +322,14 @@ fun AdminPaseadorCardReal(
                     color = Color.Gray
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                val tieneAntecedentes = !paseador.antecedentesPolicialesUrl.isNullOrBlank()
+                Text(
+                    text = if (tieneAntecedentes) "✔ Antecedentes adjuntos" else "⚠ Sin antecedentes adjuntos",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (tieneAntecedentes) Color(0xFF16A34A) else Color(0xFFD97706)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Toca para cambiar verificación",
                     fontSize = 10.sp,

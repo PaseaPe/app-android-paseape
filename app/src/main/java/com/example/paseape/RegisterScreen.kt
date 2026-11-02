@@ -644,6 +644,19 @@ private fun Paso2(
         Spacer(modifier = Modifier.height(8.dp))
 
         RegisterTextField(
+            value = uiState.antecedentesPolicialesUrl,
+            onValueChange = { viewModel.onFieldChange(RegisterField.ANTECEDENTES_URL, it) },
+            label = "URL de Antecedentes Policiales / Penales",
+            placeholder = "https://.../certificado.pdf",
+            error = uiState.fieldErrors[RegisterField.ANTECEDENTES_URL],
+            supportingText = "Requerido para que un administrador apruebe tu perfil",
+            enabled = habilitado,
+            keyboardType = KeyboardType.Uri
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RegisterTextField(
             value = uiState.biografia,
             onValueChange = { viewModel.onFieldChange(RegisterField.BIOGRAFIA, it) },
             label = "Biografía / presentación",

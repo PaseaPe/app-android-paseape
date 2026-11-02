@@ -62,7 +62,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.BloqueHorarioParamDto
+import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.DiaSemanaParamDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
@@ -90,6 +93,12 @@ fun DisponibilidadScreen(
     viewModel: DisponibilidadViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val slotMascotas by viewModel.slotMascotas.collectAsState()
+    val slotFechaIso by viewModel.slotFechaIso.collectAsState()
+    val isLoadingSlotMascotas by viewModel.isLoadingSlotMascotas.collectAsState()
+    val context = LocalContext.current
+    val paseadorUuid = remember(context) { SessionManager.getUserUuid(context).orEmpty() }
+    var mascotaDetalleSeleccionada by remember { mutableStateOf<MascotaData?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     var slotSeleccionado by remember { mutableStateOf<SlotKey?>(null) }
@@ -206,10 +215,23 @@ fun DisponibilidadScreen(
     val state = uiState
     if (state is DisponibilidadUiState.Success && slotSeleccionado != null) {
         val slot = slotSeleccionado!!
+        LaunchedEffect(slot, paseadorUuid) {
+            viewModel.cargarMascotasDeSlot(paseadorUuid, slot)
+        }
+        mascotaDetalleSeleccionada?.let { mascota ->
+            MascotaBloqueDetalleDialog(
+                mascota = mascota,
+                onDismiss = { mascotaDetalleSeleccionada = null }
+            )
+        }
         EditorCupoBottomSheet(
             state = state,
             slot = slot,
             onDismiss = { slotSeleccionado = null },
+            mascotas = slotMascotas,
+            fechaIso = slotFechaIso,
+            isLoadingMascotas = isLoadingSlotMascotas,
+            onMascotaClick = { mascotaDetalleSeleccionada = it },
             onAjustarCupo = { delta ->
                 val cupoActual = state.slots[slot] ?: state.capacidadBase
                 viewModel.actualizarCupo(slot, cupoActual + delta)
@@ -749,7 +771,11 @@ private fun EditorCupoBottomSheet(
     slot: SlotKey,
     onDismiss: () -> Unit,
     onAjustarCupo: (Int) -> Unit,
-    onQuitarBloque: () -> Unit
+    onQuitarBloque: () -> Unit,
+    mascotas: List<MascotaData> = emptyList(),
+    fechaIso: String? = null,
+    isLoadingMascotas: Boolean = false,
+    onMascotaClick: (MascotaData) -> Unit = {}
 ) {
     val dia = state.diasSemana.firstOrNull { it.id == slot.diaSemanaId }
     val bloque = state.bloquesHorario.firstOrNull { it.id == slot.bloqueHorarioId }
@@ -779,6 +805,24 @@ private fun EditorCupoBottomSheet(
             )
 
             if (subtitulo.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (!fechaIso.isNullOrBlank()) "$subtitulo · $fechaIso" else subtitulo,
+                    fontSize = 13.sp,
+                    color = TextoGris
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            MascotasAceptadasBloqueSection(
+                mascotas = mascotas,
+                fechaIso = fechaIso,
+                isLoading = isLoadingMascotas,
+                onMascotaClick = onMascotaClick
+            )
+
+            if (false) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitulo,
@@ -930,6 +974,110 @@ private fun diaCorto(descripcion: String): String {
 }
 
 /** "LUNES" -> "Lunes". */
+@Composable
+private fun MascotasAceptadasBloqueSection(
+    mascotas: List<MascotaData>,
+    fechaIso: String?,
+    isLoading: Boolean,
+    onMascotaClick: (MascotaData) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFFF8FAFC),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, BordeGris)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Text(
+                text = if (!fechaIso.isNullOrBlank()) {
+                    "Mascotas aceptadas para el $fechaIso (${mascotas.size})"
+                } else {
+                    "Mascotas aceptadas en este bloque (${mascotas.size})"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryDark
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            when {
+                isLoading -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = PrimaryOrange
+                        )
+                        Text(
+                            text = "Consultando mascotas aceptadas...",
+                            fontSize = 11.sp,
+                            color = TextoGris
+                        )
+                    }
+                }
+                mascotas.isEmpty() -> {
+                    Text(
+                        text = "Sin mascotas aceptadas para esta fecha en este bloque.",
+                        fontSize = 11.sp,
+                        color = TextoGris
+                    )
+                }
+                else -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        mascotas.forEach { mascota ->
+                            val resumen = listOfNotNull(
+                                mascota.nombre?.takeIf { it.isNotBlank() } ?: "Mascota",
+                                mascota.tipoRazaDescripcion?.takeIf { it.isNotBlank() },
+                                mascota.tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() }
+                            ).joinToString(" • ")
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                                    .border(1.dp, BordeGris, RoundedCornerShape(8.dp))
+                                    .clickable { onMascotaClick(mascota) }
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Pets,
+                                    contentDescription = null,
+                                    tint = PrimaryOrange,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = resumen,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = PrimaryDark,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "Ver ficha",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryOrange
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun capitalizar(texto: String): String {
     val limpio = texto.trim().lowercase()
     return limpio.replaceFirstChar { it.uppercase() }
