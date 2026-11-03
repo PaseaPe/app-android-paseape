@@ -40,7 +40,8 @@ enum class RegisterField {
     DISTRITO_COBERTURA,
     EXPERIENCIA,
     TARIFA,
-    BIOGRAFIA
+    BIOGRAFIA,
+    ANTECEDENTES
 }
 
 /** Resultado de consultar si el correo de Google ya tiene una cuenta. */
@@ -72,6 +73,7 @@ data class RegisterUiState(
     val experienciaAnos: String = "",
     val tarifaHora: String = "",
     val biografia: String = "",
+    val antecedentesUrl: String = "",
 
     // Catálogos del backend
     val distritos: List<DistritoParamDto> = emptyList(),
@@ -163,7 +165,8 @@ class RegisterViewModel : ViewModel() {
                     RegisterField.DISTRITO,
                     RegisterField.TIPO_DOCUMENTO,
                     RegisterField.NUMERO_DOCUMENTO,
-                    RegisterField.DISTRITO_COBERTURA
+                    RegisterField.DISTRITO_COBERTURA,
+                    RegisterField.ANTECEDENTES
                 ),
                 errorGeneral = null
             )
@@ -187,6 +190,7 @@ class RegisterViewModel : ViewModel() {
                 RegisterField.TARIFA ->
                     state.copy(tarifaHora = value.filter { it.isDigit() || it == '.' }.take(7))
                 RegisterField.BIOGRAFIA -> state.copy(biografia = value)
+                RegisterField.ANTECEDENTES -> state.copy(antecedentesUrl = value)
                 RegisterField.NUMERO_DOCUMENTO -> state.copy(numeroDocumento = value)
                 else -> state
             }
@@ -440,6 +444,17 @@ class RegisterViewModel : ViewModel() {
                     errores[RegisterField.EXPERIENCIA] = "Ingresa una experiencia válida."
                 }
             }
+
+            val antecedentes = state.antecedentesUrl.trim()
+            when {
+                antecedentes.isBlank() ->
+                    errores[RegisterField.ANTECEDENTES] =
+                        "El enlace de antecedentes es obligatorio."
+                !antecedentes.startsWith("http://", ignoreCase = true) &&
+                    !antecedentes.startsWith("https://", ignoreCase = true) ->
+                    errores[RegisterField.ANTECEDENTES] =
+                        "Ingresa una URL válida (debe empezar con http:// o https://)."
+            }
         }
 
         return errores
@@ -638,6 +653,7 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
+                antecedentesPolicialesUrl = state.antecedentesUrl.trim().ifBlank { null },
                 distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
             )
         }
@@ -682,6 +698,7 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
+                antecedentesPolicialesUrl = state.antecedentesUrl.trim().ifBlank { null },
                 distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
             )
         }

@@ -600,6 +600,18 @@ private fun Paso2(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        RegisterTextField(
+            value = uiState.antecedentesUrl,
+            onValueChange = { viewModel.onFieldChange(RegisterField.ANTECEDENTES, it) },
+            label = "Antecedentes policiales (URL) *",
+            placeholder = "https://drive.google.com/...",
+            error = uiState.fieldErrors[RegisterField.ANTECEDENTES],
+            enabled = habilitado,
+            keyboardType = KeyboardType.Uri
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         val placeholderCobertura = when {
             uiState.isLoadingCatalogos -> "Cargando distritos..."
             !catalogsReady -> "Distritos no disponibles"
