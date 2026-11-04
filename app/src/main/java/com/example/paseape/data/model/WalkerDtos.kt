@@ -9,7 +9,8 @@ data class UpdateProfileRequestDto(
     @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
     @SerializedName("biografia") val biografia: String? = null,
     @SerializedName("tarifa_hora_pen") val tarifaHoraPen: Double? = null,
-    @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null
+    @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null,
+    @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null
 )
 
 data class UpdateCoverageRequestDto(

@@ -46,12 +46,13 @@ data class DisponibilidadSlotDto(
     @SerializedName("hora_fin") val horaFin: String? = null,
     @SerializedName("max_mascotas") val maxMascotas: Int? = null,
     @SerializedName("activo") val activo: Boolean? = null,
-    // Campos de ocupación y vigencia por fecha
+    // Campos de ocupación, vigencia y mascotas aceptadas por bloque/fecha
     @SerializedName("mascotas_ocupadas") val mascotasOcupadas: Int? = null,
     @SerializedName("cupos_disponibles") val cuposDisponibles: Int? = null,
     @SerializedName("esta_lleno") val estaLleno: Boolean? = null,
     @SerializedName("disponible") val disponible: Boolean? = null,
-    @SerializedName("motivo_no_disponible") val motivoNoDisponible: String? = null
+    @SerializedName("motivo_no_disponible") val motivoNoDisponible: String? = null,
+    @SerializedName("mascotas") val mascotas: List<MascotaData>? = null
 )
 
 /** Body de PUT /paseador/disponibilidad. */

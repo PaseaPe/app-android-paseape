@@ -484,6 +484,19 @@ fun PaseadorCard(
                         color = Color(0xFF64748B)
                     )
                 }
+
+                val esAprobado = paseador.estadoVerificacionDescripcion.equals("APROBADO", ignoreCase = true) ||
+                    paseador.estadoVerificacionId == 3 ||
+                    !paseador.antecedentesPolicialesUrl.isNullOrBlank()
+                if (esAprobado) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "✔ Antecedentes verificados",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF16A34A)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(10.dp))

@@ -40,6 +40,8 @@ class WalkerProfileViewModel : ViewModel() {
     private val _userMessage = MutableSharedFlow<String>()
     val userMessage: SharedFlow<String> = _userMessage.asSharedFlow()
 
+    private var cachedAntecedentesUrl: String? = null
+
     fun cargarParametros(token: String?) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -82,7 +84,19 @@ class WalkerProfileViewModel : ViewModel() {
                         val body = response.body()
                         val detalle = body?.response?.extraerUsuario()
                         if (detalle != null) {
-                            _uiState.value = WalkerProfileUiState.Success(detalle)
+                            val antecedentesEfectivos = detalle.paseador?.antecedentesPolicialesUrl
+                                ?.takeIf { it.isNotBlank() }
+                                ?: cachedAntecedentesUrl
+                            val detalleFinal = if (antecedentesEfectivos != null && detalle.paseador != null) {
+                                detalle.copy(
+                                    paseador = detalle.paseador.copy(
+                                        antecedentesPolicialesUrl = antecedentesEfectivos
+                                    )
+                                )
+                            } else {
+                                detalle
+                            }
+                            _uiState.value = WalkerProfileUiState.Success(detalleFinal)
                         } else {
                             _uiState.value = WalkerProfileUiState.Error("No se encontraron los datos del perfil de paseador.")
                         }
@@ -120,6 +134,9 @@ class WalkerProfileViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     _isOperationLoading.value = false
                     if (response.isSuccessful) {
+                        if (!req.antecedentesPolicialesUrl.isNullOrBlank()) {
+                            cachedAntecedentesUrl = req.antecedentesPolicialesUrl
+                        }
                         _userMessage.emit("Perfil de paseador actualizado correctamente.")
                         onSuccess()
                         cargarPerfil(token, usuarioUuid)

@@ -50,6 +50,7 @@ data class PaseadorAdminDto(
     @SerializedName("nombres") val nombres: String,
     @SerializedName("apellidos") val apellidos: String,
     @SerializedName("distrito_cobertura_descripcion") val distrito: String,
+    @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null,
     @SerializedName("estado_verificacion_id") val estadoVerificacionId: Int? = null,
     @SerializedName("estado_verificacion_descripcion") val estadoVerificacion: String,
     @SerializedName("estado") val estado: Int

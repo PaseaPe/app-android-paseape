@@ -1,15 +1,21 @@
 package com.example.paseape
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +30,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.data.model.DisponibilidadSlotDto
+import com.example.paseape.data.model.MascotaData
+import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +45,8 @@ fun Paso1Screen(
 ) {
     val naranja = Color(0xFFE8702A)
     val slotsState by viewModel.slotsUiState.collectAsState()
+    var mascotaDetalleSeleccionada by remember { mutableStateOf<MascotaData?>(null) }
+    var slotParaVerMascotas by remember { mutableStateOf<DisponibilidadSlotDto?>(null) }
 
     Scaffold(
         topBar = {
@@ -45,17 +56,6 @@ fun Paso1Screen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás")
                     }
-                },
-                // BOTÓN DE ACCESO DIRECTO PARA PROBAR EL PASO 2
-                actions = {
-                    TextButton(onClick = onNext) {
-                        Text(
-                            text = "Ver Paso 2 ➔",
-                            color = naranja,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
                 }
             )
         },
@@ -63,6 +63,52 @@ fun Paso1Screen(
             Surface(shadowElevation = 8.dp) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val bloqueActivo = viewModel.bloqueSeleccionado
+                    val cantMascotas = (bloqueActivo?.mascotas?.size ?: 0)
+                        .coerceAtLeast(bloqueActivo?.mascotasOcupadas ?: 0)
+
+                    if (bloqueActivo != null) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { slotParaVerMascotas = bloqueActivo },
+                            color = Color(0xFFFFF7ED),
+                            border = BorderStroke(1.dp, Color(0xFFFDBA74)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Pets,
+                                    contentDescription = null,
+                                    tint = naranja,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (cantMascotas > 0) {
+                                        "Mascotas aceptadas en este bloque ($cantMascotas)"
+                                    } else {
+                                        "Ver mascotas aceptadas de este bloque"
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = PrimaryDark,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "Ver drawer",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = naranja
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
                     val horaBtn = if (bloqueActivo != null) {
                         val ini = bloqueActivo.horaInicio?.take(5).orEmpty()
                         val fin = bloqueActivo.horaFin?.take(5).orEmpty()
@@ -305,9 +351,12 @@ fun Paso1Screen(
                             hora = horaTexto,
                             sub = subTexto,
                             cupos = cupoTexto,
+                            mascotas = slot.mascotas.orEmpty(),
+                            mascotasOcupadas = slot.mascotasOcupadas ?: 0,
                             isSelected = isSelected,
                             isAvailable = slot.disponible == true,
-                            onClick = { viewModel.seleccionarBloque(slot) }
+                            onClick = { viewModel.seleccionarBloque(slot) },
+                            onVerMascotasClick = { slotParaVerMascotas = slot }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -317,6 +366,25 @@ fun Paso1Screen(
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
+
+    // DRAWER / MODAL BOTTOM SHEET CON LAS MASCOTAS DEL BLOQUE
+    slotParaVerMascotas?.let { slot ->
+        MascotasAceptadasBloqueBottomSheet(
+            slot = slot,
+            fechaIso = viewModel.diaSeleccionadoIso,
+            onDismiss = { slotParaVerMascotas = null },
+            onVerFichaCompleta = { mascota ->
+                mascotaDetalleSeleccionada = mascota
+            }
+        )
+    }
+
+    mascotaDetalleSeleccionada?.let { mascota ->
+        MascotaBloqueDetalleDialog(
+            mascota = mascota,
+            onDismiss = { mascotaDetalleSeleccionada = null }
+        )
+    }
 }
 
 @Composable
@@ -324,13 +392,17 @@ fun BloqueHorarioCard(
     hora: String,
     sub: String,
     cupos: String,
+    mascotas: List<MascotaData> = emptyList(),
+    mascotasOcupadas: Int = 0,
     isSelected: Boolean,
     isAvailable: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onVerMascotasClick: () -> Unit = {}
 ) {
     val naranja = Color(0xFFE8702A)
     val bg = if (isSelected) naranja else if (!isAvailable) Color(0xFFF1F5F9) else Color.White
     val border = if (isSelected) naranja else if (!isAvailable) Color.Transparent else Color(0xFF4CAF50)
+    val totalEnBloque = mascotas.size.coerceAtLeast(mascotasOcupadas)
 
     Box(
         modifier = Modifier
@@ -340,35 +412,399 @@ fun BloqueHorarioCard(
             .clickable(enabled = isAvailable, onClick = onClick)
             .padding(14.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = hora,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else if (!isAvailable) Color.Gray else Color.Black
-                )
-                Text(
-                    text = sub,
-                    fontSize = 11.sp,
-                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray
-                )
-            }
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (isSelected) Color.White.copy(alpha = 0.25f) else if (!isAvailable) Color(0xFFE2E8F0) else Color(0xFFE8F5E9)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = cupos,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White else if (!isAvailable) Color.Gray else Color(0xFF2E7D32)
-                )
+                Column {
+                    Text(
+                        text = hora,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color.White else if (!isAvailable) Color.Gray else Color.Black
+                    )
+                    Text(
+                        text = sub,
+                        fontSize = 11.sp,
+                        color = if (isSelected) Color.White.copy(alpha = 0.85f) else Color.Gray
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) Color.White.copy(alpha = 0.25f) else if (!isAvailable) Color(0xFFE2E8F0) else Color(0xFFE8F5E9)
+                ) {
+                    Text(
+                        text = cupos,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) Color.White else if (!isAvailable) Color.Gray else Color(0xFF2E7D32)
+                    )
+                }
+            }
+
+            // BOTÓN PARA RENDERIZAR EL DRAWER / BOTTOM SHEET CON LAS MASCOTAS
+            if (isSelected || totalEnBloque > 0 || isAvailable) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSelected) Color.White.copy(alpha = 0.22f) else Color(0xFFFFF7ED),
+                    border = BorderStroke(1.dp, if (isSelected) Color.White.copy(alpha = 0.6f) else Color(0xFFFDBA74)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onVerMascotasClick() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Pets,
+                            contentDescription = null,
+                            tint = if (isSelected) Color.White else naranja,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Ver mascotas aceptadas ($totalEnBloque)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) Color.White else naranja
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MascotasAceptadasBloqueBottomSheet(
+    slot: DisponibilidadSlotDto,
+    fechaIso: String,
+    onDismiss: () -> Unit,
+    onVerFichaCompleta: (MascotaData) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val naranja = Color(0xFFE8702A)
+    val mascotas = slot.mascotas.orEmpty()
+    val ini = slot.horaInicio?.take(5).orEmpty()
+    val fin = slot.horaFin?.take(5).orEmpty()
+    val horaTexto = if (ini.isNotBlank() && fin.isNotBlank()) "$ini - $fin" else slot.bloqueCodigo.orEmpty()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = naranja.copy(alpha = 0.12f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Pets,
+                                contentDescription = null,
+                                tint = naranja,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Mascotas en este Turno",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryDark
+                        )
+                        Text(
+                            text = "Horario: $horaTexto · Fecha: $fechaIso",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.Gray)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Surface(
+                color = Color(0xFFF1F5F9),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFF475569),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Estas mascotas ya tienen paseos aceptados por el paseador en este turno. Revisa sus características para asegurar compatibilidad.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF475569),
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (mascotas.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Aún no hay otras mascotas registradas en este turno.",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    mascotas.forEach { mascota ->
+                        MascotaItemDrawerCard(
+                            mascota = mascota,
+                            onVerFicha = { onVerFichaCompleta(mascota) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MascotaItemDrawerCard(
+    mascota: MascotaData,
+    onVerFicha: () -> Unit
+) {
+    val naranja = Color(0xFFE8702A)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!mascota.fotoUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = mascota.fotoUrl,
+                        contentDescription = mascota.nombre,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = naranja.copy(alpha = 0.15f),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Pets,
+                                contentDescription = null,
+                                tint = naranja,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = mascota.nombre ?: "Mascota",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark
+                    )
+                    val razaTamano = listOfNotNull(
+                        mascota.tipoRazaDescripcion?.takeIf { it.isNotBlank() },
+                        mascota.tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() }
+                    ).joinToString(" • ")
+                    if (razaTamano.isNotBlank()) {
+                        Text(
+                            text = razaTamano,
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = onVerFicha,
+                    colors = ButtonDefaults.textButtonColors(contentColor = naranja)
+                ) {
+                    Text("Ver ficha", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Chips de información rápida
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                mascota.tipoNivelEnergiaDescripcion?.takeIf { it.isNotBlank() }?.let { energia ->
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFFEF3C7)
+                    ) {
+                        Text(
+                            text = "Energía: $energia",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFB45309),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                val sociablePerros = when (mascota.sociableConPerros) {
+                    1 -> "Sociable con perros: Sí"
+                    0 -> "Sociable con perros: No"
+                    else -> null
+                }
+                sociablePerros?.let {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (mascota.sociableConPerros == 1) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
+                    ) {
+                        Text(
+                            text = it,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (mascota.sociableConPerros == 1) Color(0xFF15803D) else Color(0xFFB91C1C),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MascotaBloqueDetalleDialog(
+    mascota: MascotaData,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        containerColor = Color.White,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Pets,
+                    contentDescription = null,
+                    tint = Color(0xFFE8702A),
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = mascota.nombre ?: "Detalle de Mascota",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                DetalleMascotaItem("Raza", mascota.tipoRazaDescripcion ?: "No especificada")
+                DetalleMascotaItem("Tamaño", mascota.tipoTamanoMascotaDescripcion ?: "No especificado")
+                DetalleMascotaItem("Género", mascota.tipoGeneroMascotaDescripcion ?: "No especificado")
+                DetalleMascotaItem("Nivel de energía", mascota.tipoNivelEnergiaDescripcion ?: "No especificado")
+                val edadTexto = buildString {
+                    val anos = mascota.edadAnos ?: 0
+                    val meses = mascota.edadMeses ?: 0
+                    if (anos > 0) append("$anos año(s) ")
+                    if (meses > 0) append("$meses mes(es)")
+                }.trim().ifBlank { "No especificada" }
+                DetalleMascotaItem("Edad", edadTexto)
+                mascota.pesoKg?.let {
+                    DetalleMascotaItem("Peso", String.format(Locale.US, "%.1f kg", it))
+                }
+                DetalleMascotaItem(
+                    "Sociable con perros",
+                    if (mascota.sociableConPerros == 1) "Sí" else "No"
+                )
+                DetalleMascotaItem(
+                    "Sociable con personas",
+                    if (mascota.sociableConPersonas == 1) "Sí" else "No"
+                )
+                if (!mascota.precaucionesMedicas.isNullOrBlank()) {
+                    DetalleMascotaItem("Precauciones médicas", mascota.precaucionesMedicas)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar", fontWeight = FontWeight.Bold, color = PrimaryDark)
+            }
+        }
+    )
+}
+
+@Composable
+private fun DetalleMascotaItem(label: String, valor: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "$label:",
+            fontSize = 12.sp,
+            color = Color(0xFF64748B),
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = valor,
+            fontSize = 12.sp,
+            color = Color(0xFF1E293B),
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End
+        )
     }
 }

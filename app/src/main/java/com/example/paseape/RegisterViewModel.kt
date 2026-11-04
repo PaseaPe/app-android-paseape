@@ -41,7 +41,7 @@ enum class RegisterField {
     EXPERIENCIA,
     TARIFA,
     BIOGRAFIA,
-    ANTECEDENTES
+    ANTECEDENTES_URL
 }
 
 /** Resultado de consultar si el correo de Google ya tiene una cuenta. */
@@ -73,7 +73,7 @@ data class RegisterUiState(
     val experienciaAnos: String = "",
     val tarifaHora: String = "",
     val biografia: String = "",
-    val antecedentesUrl: String = "",
+    val antecedentesPolicialesUrl: String = "",
 
     // Catálogos del backend
     val distritos: List<DistritoParamDto> = emptyList(),
@@ -166,7 +166,7 @@ class RegisterViewModel : ViewModel() {
                     RegisterField.TIPO_DOCUMENTO,
                     RegisterField.NUMERO_DOCUMENTO,
                     RegisterField.DISTRITO_COBERTURA,
-                    RegisterField.ANTECEDENTES
+                    RegisterField.ANTECEDENTES_URL
                 ),
                 errorGeneral = null
             )
@@ -190,7 +190,7 @@ class RegisterViewModel : ViewModel() {
                 RegisterField.TARIFA ->
                     state.copy(tarifaHora = value.filter { it.isDigit() || it == '.' }.take(7))
                 RegisterField.BIOGRAFIA -> state.copy(biografia = value)
-                RegisterField.ANTECEDENTES -> state.copy(antecedentesUrl = value)
+                RegisterField.ANTECEDENTES_URL -> state.copy(antecedentesPolicialesUrl = value)
                 RegisterField.NUMERO_DOCUMENTO -> state.copy(numeroDocumento = value)
                 else -> state
             }
@@ -445,14 +445,14 @@ class RegisterViewModel : ViewModel() {
                 }
             }
 
-            val antecedentes = state.antecedentesUrl.trim()
+            val antecedentes = state.antecedentesPolicialesUrl.trim()
             when {
                 antecedentes.isBlank() ->
-                    errores[RegisterField.ANTECEDENTES] =
+                    errores[RegisterField.ANTECEDENTES_URL] =
                         "El enlace de antecedentes es obligatorio."
                 !antecedentes.startsWith("http://", ignoreCase = true) &&
                     !antecedentes.startsWith("https://", ignoreCase = true) ->
-                    errores[RegisterField.ANTECEDENTES] =
+                    errores[RegisterField.ANTECEDENTES_URL] =
                         "Ingresa una URL válida (debe empezar con http:// o https://)."
             }
         }
@@ -653,8 +653,8 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                antecedentesPolicialesUrl = state.antecedentesUrl.trim().ifBlank { null },
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
+                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
             )
         }
     }
@@ -698,8 +698,8 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                antecedentesPolicialesUrl = state.antecedentesUrl.trim().ifBlank { null },
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
+                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
             )
         }
     }

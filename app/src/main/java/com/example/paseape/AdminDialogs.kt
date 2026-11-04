@@ -231,6 +231,18 @@ fun ActualizarVerificacionPaseadorDialog(
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val antecedentes = paseador.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
+                    Text(
+                        text = if (antecedentes != null) {
+                            "✔ Antecedentes adjuntos: $antecedentes"
+                        } else {
+                            "⚠ Sin antecedentes policiales/penales adjuntos"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (antecedentes != null) Color(0xFF16A34A) else Color(0xFFD97706)
+                    )
                 }
 
                 Text(

@@ -600,18 +600,6 @@ private fun Paso2(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        RegisterTextField(
-            value = uiState.antecedentesUrl,
-            onValueChange = { viewModel.onFieldChange(RegisterField.ANTECEDENTES, it) },
-            label = "Antecedentes policiales (URL) *",
-            placeholder = "https://drive.google.com/...",
-            error = uiState.fieldErrors[RegisterField.ANTECEDENTES],
-            enabled = habilitado,
-            keyboardType = KeyboardType.Uri
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         val placeholderCobertura = when {
             uiState.isLoadingCatalogos -> "Cargando distritos..."
             !catalogsReady -> "Distritos no disponibles"
@@ -651,6 +639,19 @@ private fun Paso2(
             error = uiState.fieldErrors[RegisterField.TARIFA],
             enabled = habilitado,
             keyboardType = KeyboardType.Decimal
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RegisterTextField(
+            value = uiState.antecedentesPolicialesUrl,
+            onValueChange = { viewModel.onFieldChange(RegisterField.ANTECEDENTES_URL, it) },
+            label = "URL de Antecedentes Policiales / Penales",
+            placeholder = "https://.../certificado.pdf",
+            error = uiState.fieldErrors[RegisterField.ANTECEDENTES_URL],
+            supportingText = "Requerido para que un administrador apruebe tu perfil",
+            enabled = habilitado,
+            keyboardType = KeyboardType.Uri
         )
 
         Spacer(modifier = Modifier.height(8.dp))

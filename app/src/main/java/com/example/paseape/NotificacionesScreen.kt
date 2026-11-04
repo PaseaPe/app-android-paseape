@@ -122,7 +122,7 @@ fun NotificacionesScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = { viewModel.cargarNotificaciones(authHeader, incluirLeidas = true) },
+                            onClick = { viewModel.cargarNotificaciones(authHeader) },
                             colors = ButtonDefaults.buttonColors(containerColor = naranja)
                         ) {
                             Text("Reintentar", color = Color.White)

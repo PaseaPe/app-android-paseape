@@ -18,6 +18,7 @@ data class PaseadorDto(
     @SerializedName("max_mascotas_predeterminado") val maxMascotasPredeterminado: Int? = null,
     @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null,
     @SerializedName("distrito_cobertura_descripcion") val distritoCoberturaDescripcion: String? = null,
+    @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null,
     @SerializedName("estado_verificacion_id") val estadoVerificacionId: Int? = null,
     @SerializedName("estado_verificacion_descripcion") val estadoVerificacionDescripcion: String? = null,
     @SerializedName("paseos_completados") val paseosCompletados: Int? = null,

@@ -21,9 +21,9 @@ data class RegistroGoogleRequest(
     @SerializedName("notas_adicionales") val notasAdicionales: String? = null,
     @SerializedName("tipo_documento_id") val tipoDocumentoId: Int? = null,
     @SerializedName("numero_documento") val numeroDocumento: String? = null,
-    @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null,
     @SerializedName("experiencia_anos") val experienciaAnos: Int? = null,
     @SerializedName("biografia") val biografia: String? = null,
     @SerializedName("tarifa_hora_pen") val tarifaHoraPen: Double? = null,
-    @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null
+    @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null,
+    @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null
 )
