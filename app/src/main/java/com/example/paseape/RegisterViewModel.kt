@@ -165,7 +165,8 @@ class RegisterViewModel : ViewModel() {
                     RegisterField.DISTRITO,
                     RegisterField.TIPO_DOCUMENTO,
                     RegisterField.NUMERO_DOCUMENTO,
-                    RegisterField.DISTRITO_COBERTURA
+                    RegisterField.DISTRITO_COBERTURA,
+                    RegisterField.ANTECEDENTES_URL
                 ),
                 errorGeneral = null
             )
@@ -442,6 +443,17 @@ class RegisterViewModel : ViewModel() {
                 if (experiencia == null || experiencia < 0) {
                     errores[RegisterField.EXPERIENCIA] = "Ingresa una experiencia válida."
                 }
+            }
+
+            val antecedentes = state.antecedentesPolicialesUrl.trim()
+            when {
+                antecedentes.isBlank() ->
+                    errores[RegisterField.ANTECEDENTES_URL] =
+                        "El enlace de antecedentes es obligatorio."
+                !antecedentes.startsWith("http://", ignoreCase = true) &&
+                    !antecedentes.startsWith("https://", ignoreCase = true) ->
+                    errores[RegisterField.ANTECEDENTES_URL] =
+                        "Ingresa una URL válida (debe empezar con http:// o https://)."
             }
         }
 
