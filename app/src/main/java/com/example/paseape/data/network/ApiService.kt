@@ -10,6 +10,7 @@ import retrofit2.http.POST
 import retrofit2.http.Header
 import com.example.paseape.data.model.PaseadoresResponse
 import com.example.paseape.data.model.LoginRequest
+import com.example.paseape.data.model.AuthResData
 import com.example.paseape.data.model.LoginResponse
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
@@ -30,11 +31,26 @@ import com.example.paseape.data.model.DetallePaseadorResponse
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UpdateCoverageRequestDto
 import com.example.paseape.data.model.ApplicationParametersResponse
+import com.example.paseape.data.model.ActualizarBloqueDisponibilidadRequestDto
+import com.example.paseape.data.model.ActualizarCapacidadBaseRequestDto
+import com.example.paseape.data.model.DisponibilidadAccionResponseDto
+import com.example.paseape.data.model.DisponibilidadPaseadorFechaResponseDto
+import com.example.paseape.data.model.DisponibilidadResponseDto
+import com.example.paseape.data.model.GuardarDisponibilidadRequestDto
 import com.example.paseape.data.model.RazasResponse
 import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
+import com.example.paseape.data.model.NotificacionDto
+import com.example.paseape.data.model.PaseoResDto
+import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
+import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
+import com.example.paseape.data.model.CancelarSolicitudReqDto
+import com.example.paseape.data.model.PageResponseDto
+import com.example.paseape.data.model.RechazarSolicitudRequest
+import com.example.paseape.data.model.SolicitudPaseoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -80,19 +96,30 @@ interface ApiService {
 
     @GET("paseadores")
     suspend fun getPaseadores(
-        @Header("Authorization") token: String
+        @Header("Authorization") token: String,
+        @Query("distrito_id") distritoId: Int? = null,
+        @Query("distrito_ids") distritoIds: List<Int>? = null
     ): Response<PaseadoresListResponse>
 
     @GET("paseadores/{usuario_uuid}")
     suspend fun getPaseadorPorUsuarioUuid(
         @Header("Authorization") token: String,
-        @Path("usuario_uuid") usuarioUuid: String
+        @Path("usuario_uuid") usuarioUuid: String,
+        @Query("fecha") fecha: String? = null
     ): Response<DetallePaseadorResponse>
+
+    @GET("paseadores/{paseador_uuid}/disponibilidad")
+    suspend fun getDisponibilidadPaseadorPorFecha(
+        @Header("Authorization") token: String,
+        @Path("paseador_uuid") paseadorUuid: String,
+        @Query("fecha") fecha: String? = null
+    ): Response<DisponibilidadPaseadorFechaResponseDto>
 
     @GET("paseadores/{uuid}")
     suspend fun getWalkerDetail(
         @Header("Authorization") token: String,
-        @Path("uuid") userUuid: String
+        @Path("uuid") userUuid: String,
+        @Query("fecha") fecha: String? = null
     ): Response<DetallePaseadorResponse>
 
     @PUT("paseadores/distrito-cobertura")
@@ -112,13 +139,46 @@ interface ApiService {
         @Path("tipoMascotaId") tipoMascotaId: Int
     ): Response<RazasResponse>
 
+    /**
+     * Catálogos de días y bloques horarios. El backend actual los expone en
+     * /application-parameters/horario; se usa como respaldo de compatibilidad.
+     */
+    @GET("application-parameters/horario")
+    suspend fun getHorarioParameters(
+        @Header("Authorization") token: String? = null
+    ): Response<ApplicationParametersResponse>
+
+    // Disponibilidad semanal del paseador
+    @GET("paseador/disponibilidad")
+    suspend fun getMiDisponibilidad(
+        @Header("Authorization") token: String
+    ): Response<DisponibilidadResponseDto>
+
+    @PUT("paseador/disponibilidad")
+    suspend fun sincronizarDisponibilidad(
+        @Header("Authorization") token: String,
+        @Body request: GuardarDisponibilidadRequestDto
+    ): Response<DisponibilidadResponseDto>
+
+    @PATCH("paseador/disponibilidad/bloque")
+    suspend fun actualizarBloqueDisponibilidad(
+        @Header("Authorization") token: String,
+        @Body request: ActualizarBloqueDisponibilidadRequestDto
+    ): Response<DisponibilidadAccionResponseDto>
+
+    @PATCH("paseador/disponibilidad/capacidad-base")
+    suspend fun actualizarCapacidadBase(
+        @Header("Authorization") token: String,
+        @Body request: ActualizarCapacidadBaseRequestDto
+    ): Response<DisponibilidadAccionResponseDto>
+
     @GET("paseadores")
     suspend fun obtenerPaseadores(): PaseadoresResponse
 
     @POST("auth/register/local")
     suspend fun registrarUsuario(
         @Body request: RegistroRequest
-    ): GenericResponse
+    ): Response<ResponseDto<AuthResData>>
 
     @POST("auth/login")
     suspend fun iniciarSesion(
@@ -138,11 +198,12 @@ interface ApiService {
     @POST("auth/register/google")
     suspend fun registrarConGoogle(
         @Body request: RegistroGoogleRequest
-    ): GenericResponse
+    ): GoogleAuthResponse
 
     @Headers("Content-Type: application/json")
     @POST("auth/forgot-password")
     suspend fun forgotPassword(@Body request: ForgotPasswordRequest): Response<Void>
+
     @POST("auth/reset-password")
     suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<Void>
 
@@ -170,4 +231,115 @@ interface ApiService {
         @Path("paseador_uuid") paseadorUuid: String,
         @Body request: ActualizarVerificacionPaseadorRequest
     ): Response<GenericApiResponse>
+
+    // Solicitud inmediata (HU15 - Modalidad Tipo Taxi / InDrive)
+    @POST("cliente/solicitudes/inmediata")
+    suspend fun crearSolicitudInmediata(
+        @Header("Authorization") token: String,
+        @Body request: CrearSolicitudInmediataReqDto
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Solicitud programada (HU16 - Reserva con paseador, fecha y bloque horario)
+    @POST("cliente/solicitudes/programada")
+    suspend fun crearSolicitudProgramada(
+        @Header("Authorization") token: String,
+        @Body request: CrearSolicitudProgramadaReqDto
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Bandeja de solicitudes del cliente (HU21)
+    @GET("cliente/solicitudes")
+    suspend fun obtenerBandejaCliente(
+        @Header("Authorization") token: String,
+        @Query("tab") tab: String = "PENDIENTES",
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): Response<ResponseDto<PageResponseDto<SolicitudPaseoResDto>>>
+
+    // Cancelación de solicitud por el cliente (HU21)
+    @PATCH("cliente/solicitudes/{uuid}/cancelar")
+    suspend fun cancelarSolicitudCliente(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Notificaciones internas activas (HU22 y HU23)
+    @GET("notificaciones")
+    suspend fun listarNotificaciones(
+        @Header("Authorization") token: String
+    ): Response<ResponseDto<List<NotificacionDto>>>
+
+    @PATCH("notificaciones/marcar-todas-leidas")
+    suspend fun marcarTodasNotificacionesLeidas(
+        @Header("Authorization") token: String
+    ): Response<ResponseDto<Unit>>
+
+    // Métodos de paseos y notificaciones integrados directamente en ApiService
+    @GET("paseos/cliente/{clienteId}")
+    suspend fun obtenerPaseosPorCliente(
+        @Header("Authorization") token: String,
+        @Path("clienteId") clienteId: Long
+    ): Response<List<PaseoResDto>>
+
+    @GET("notificaciones/usuario/{usuarioId}")
+    suspend fun obtenerNotificaciones(
+        @Header("Authorization") token: String,
+        @Path("usuarioId") usuarioId: Long
+    ): Response<List<NotificacionDto>>
+
+    // --- BANDEJA DEL PASEADOR (HU de gestion de solicitudes) ---
+
+    // Bandeja de solicitudes/paseos del paseador
+    @GET("paseador/solicitudes")
+    suspend fun obtenerBandejaPaseador(
+        @Header("Authorization") token: String,
+        @Query("tab") tab: String,
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): Response<ResponseDto<PageResponseDto<SolicitudPaseoResDto>>>
+
+    /** Inmediata en SOLICITADA_BUSCANDO -> ACEPTADA. */
+    @PATCH("paseador/solicitudes/{uuid}/tomar")
+    suspend fun tomarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Oculta la solicitud solo para este paseador (no la cancela para los demás). */
+    @PATCH("paseador/solicitudes/{uuid}/descartar")
+    suspend fun descartarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<Any?>>
+
+    /** Programada PENDIENTE -> ACEPTADA. */
+    @PATCH("paseador/solicitudes/{uuid}/aceptar")
+    suspend fun aceptarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Programada PENDIENTE -> RECHAZADA. El motivo es opcional. */
+    @PATCH("paseador/solicitudes/{uuid}/rechazar")
+    suspend fun rechazarSolicitud(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body body: RechazarSolicitudRequest
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Paseo aceptado ACEPTADA -> EN_CURSO. */
+    @PATCH("paseador/solicitudes/{uuid}/iniciar")
+    suspend fun iniciarPaseo(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /** Cancela un paseo aceptado y aún no iniciado (ACEPTADA -> CANCELADA). Motivo obligatorio. */
+    @PATCH("paseador/solicitudes/{uuid}/cancelar")
+    suspend fun cancelarPaseoPaseador(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
 }

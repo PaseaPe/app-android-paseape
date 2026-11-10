@@ -12,6 +12,8 @@ import com.example.paseape.data.model.NivelEnergiaParamDto
 import com.example.paseape.data.model.RazaParamDto
 import com.example.paseape.data.model.TamanoMascotaParamDto
 import com.example.paseape.data.model.TipoMascotaParamDto
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +99,7 @@ class PetFormViewModel : ViewModel() {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = "No se pudieron cargar los catálogos maestros (HTTP ${response.code()})"
+                            errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
                         )
                     }
                 }
@@ -106,7 +108,7 @@ class PetFormViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Error de red al cargar catálogos: ${e.localizedMessage}"
+                        errorMessage = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
                     )
                 }
             }
@@ -370,11 +372,10 @@ class PetFormViewModel : ViewModel() {
                         onSuccess()
                     }
                 } else {
-                    val msg = response.message().ifBlank { "HTTP ${response.code()}" }
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            errorMessage = "Error al crear mascota: $msg"
+                            errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
                         )
                     }
                 }
@@ -383,7 +384,7 @@ class PetFormViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         isSubmitting = false,
-                        errorMessage = "Error de red al crear mascota: ${e.localizedMessage}"
+                        errorMessage = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
                     )
                 }
             }
@@ -408,11 +409,10 @@ class PetFormViewModel : ViewModel() {
                         onSuccess()
                     }
                 } else {
-                    val msg = response.message().ifBlank { "HTTP ${response.code()}" }
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            errorMessage = "Error al actualizar mascota: $msg"
+                            errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
                         )
                     }
                 }
@@ -421,7 +421,7 @@ class PetFormViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         isSubmitting = false,
-                        errorMessage = "Error de red al actualizar mascota: ${e.localizedMessage}"
+                        errorMessage = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
                     )
                 }
             }

@@ -21,6 +21,14 @@ class WalkerDashboardActivity : ComponentActivity() {
         ViewModelProvider(this)[WalkerProfileViewModel::class.java]
     }
 
+    private val disponibilidadViewModel by lazy {
+        ViewModelProvider(this)[DisponibilidadViewModel::class.java]
+    }
+
+    private val paseosViewModel by lazy {
+        ViewModelProvider(this)[BandejaPaseadorViewModel::class.java]
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -36,6 +44,16 @@ class WalkerDashboardActivity : ComponentActivity() {
                     token = token,
                     usuarioUuid = userUuid,
                     viewModel = viewModel,
+                    disponibilidadViewModel = disponibilidadViewModel,
+                    paseosViewModel = paseosViewModel,
+                    onNotificacionesClick = {
+                        startActivity(
+                            Intent(
+                                this@WalkerDashboardActivity,
+                                NotificacionesActivity::class.java
+                            )
+                        )
+                    },
                     onLogoutClick = { cerrarSesionYRedirigir() }
                 )
             }

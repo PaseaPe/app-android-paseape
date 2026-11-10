@@ -13,8 +13,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarPerfilReqDto
 import com.example.paseape.data.model.CrearMascotaRequest
+import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
 import kotlinx.coroutines.Dispatchers
@@ -30,17 +33,23 @@ sealed interface ProfileUiState {
 class AccountActivity : ComponentActivity() {
 
     private var uiState by mutableStateOf<ProfileUiState>(ProfileUiState.Loading)
+    private var distritosDisponibles by mutableStateOf<List<DistritoParamDto>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        cargarDistritosCatalogo()
         cargarPerfilCliente()
 
         setContent {
             PaseaPETheme {
                 ProfileScreen(
                     uiState = uiState,
-                    onRetry = { cargarPerfilCliente() },
+                    distritos = distritosDisponibles,
+                    onRetry = {
+                        cargarDistritosCatalogo()
+                        cargarPerfilCliente()
+                    },
                     onLogoutClick = { cerrarSesionYRedirigir() },
                     onLogout = { cerrarSesionYRedirigir() },
                     onBack = { finish() },
@@ -53,6 +62,23 @@ class AccountActivity : ComponentActivity() {
                         startActivity(intent)
                     }
                 )
+            }
+        }
+    }
+
+    private fun cargarDistritosCatalogo() {
+        if (distritosDisponibles.isNotEmpty()) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val res = RetrofitClient.apiService.getApplicationParameters()
+                if (res.isSuccessful) {
+                    val lista = res.body()?.response?.distritos ?: emptyList()
+                    withContext(Dispatchers.Main) {
+                        distritosDisponibles = lista
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("ACCOUNT_DEBUG", "No se pudieron cargar distritos de catálogo", e)
             }
         }
     }
@@ -88,13 +114,13 @@ class AccountActivity : ComponentActivity() {
 
         if (uuid.isNullOrBlank()) {
             Log.e("ACCOUNT_DEBUG", "Error: user_uuid no encontrado en Intent ni SharedPreferences")
-            uiState = ProfileUiState.Error("Sesión expirada o identificador no encontrado. Por favor inicia sesión nuevamente.")
+            uiState = ProfileUiState.Error("Tu sesión expiró. Inicia sesión nuevamente.")
             return
         }
 
         if (token.isNullOrBlank()) {
             Log.e("ACCOUNT_DEBUG", "Error: auth_token no encontrado en SharedPreferences")
-            uiState = ProfileUiState.Error("Sesión expirada: Token de autenticación ausente. Por favor inicia sesión nuevamente.")
+            uiState = ProfileUiState.Error("Tu sesión expiró. Inicia sesión nuevamente.")
             return
         }
 
@@ -119,15 +145,17 @@ class AccountActivity : ComponentActivity() {
                             uiState = ProfileUiState.Error("No se encontraron los datos del cliente en la respuesta.")
                         }
                     } else {
-                        val rawError = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        Log.e("ACCOUNT_DEBUG", "Error del servidor: HTTP ${response.code()} ${response.message()} - Body: $rawError")
-                        uiState = ProfileUiState.Error("Error del servidor: HTTP ${response.code()} ${response.message()}".trim())
+                        val errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                        Log.e("ACCOUNT_DEBUG", "Error del servidor HTTP ${response.code()}: $errorMessage")
+                        uiState = ProfileUiState.Error(errorMessage)
                     }
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error de red", e)
                 withContext(Dispatchers.Main) {
-                    uiState = ProfileUiState.Error("Error de conexión: ${e.localizedMessage ?: "Fallo de red"}")
+                    uiState = ProfileUiState.Error(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE)
+                    )
                 }
             }
         }
@@ -136,7 +164,7 @@ class AccountActivity : ComponentActivity() {
     fun actualizarDatosPerfil(req: ActualizarPerfilReqDto) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
-            Toast.makeText(this, "Sesión no válida. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
             return
         }
         val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
@@ -149,14 +177,18 @@ class AccountActivity : ComponentActivity() {
                         Toast.makeText(this@AccountActivity, "Perfil actualizado con éxito", Toast.LENGTH_SHORT).show()
                         cargarPerfilCliente()
                     } else {
-                        val errorMsg = response.message().ifBlank { "HTTP ${response.code()}" }
-                        Toast.makeText(this@AccountActivity, "Error al actualizar perfil: $errorMsg", Toast.LENGTH_LONG).show()
+                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                        Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al actualizar perfil", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@AccountActivity, "Error de conexión al actualizar perfil", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@AccountActivity,
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
@@ -165,7 +197,7 @@ class AccountActivity : ComponentActivity() {
     fun crearMascota(req: CrearMascotaRequest) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
-            Toast.makeText(this, "Sesión no válida. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
             return
         }
         val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
@@ -186,14 +218,18 @@ class AccountActivity : ComponentActivity() {
                         Toast.makeText(this@AccountActivity, "Mascota agregada con éxito", Toast.LENGTH_SHORT).show()
                         cargarPerfilCliente()
                     } else {
-                        val errorMsg = response.message().ifBlank { "HTTP ${response.code()}" }
-                        Toast.makeText(this@AccountActivity, "Error al agregar mascota: $errorMsg", Toast.LENGTH_LONG).show()
+                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                        Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al crear mascota", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@AccountActivity, "Error de conexión al crear mascota", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@AccountActivity,
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarMascotaRequest
+import com.example.paseape.data.network.ApiErrorContext
+import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +68,7 @@ class MascotaDetalleActivity : ComponentActivity() {
 
         val token = getAuthToken()
         if (token == null) {
-            uiState = MascotaDetalleUiState.Error("Sesión expirada. Inicia sesión nuevamente.")
+            uiState = MascotaDetalleUiState.Error("Tu sesión expiró. Inicia sesión nuevamente.")
             return
         }
 
@@ -89,15 +91,17 @@ class MascotaDetalleActivity : ComponentActivity() {
                             uiState = MascotaDetalleUiState.Error("No se encontraron los datos de la mascota en la respuesta.")
                         }
                     } else {
-                        val errorBody = response.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                        uiState = MascotaDetalleUiState.Error("Error al cargar mascota (HTTP ${response.code()})")
-                        Log.e("MASCOTA_DETALLE", "Error HTTP: $errorBody")
+                        val errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                        Log.e("MASCOTA_DETALLE", "Error HTTP ${response.code()}: $errorMessage")
+                        uiState = MascotaDetalleUiState.Error(errorMessage)
                     }
                 }
             } catch (e: Exception) {
                 Log.e("MASCOTA_DETALLE", "Error de red al consultar mascota", e)
                 withContext(Dispatchers.Main) {
-                    uiState = MascotaDetalleUiState.Error(e.localizedMessage ?: "Error de red.")
+                    uiState = MascotaDetalleUiState.Error(
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
+                    )
                 }
             }
         }
@@ -106,7 +110,7 @@ class MascotaDetalleActivity : ComponentActivity() {
     private fun actualizarMascota(req: ActualizarMascotaRequest) {
         val uuid = mascotaUuid ?: return
         val token = getAuthToken() ?: run {
-            Toast.makeText(this, "Sesión no válida", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -121,15 +125,23 @@ class MascotaDetalleActivity : ComponentActivity() {
                         Toast.makeText(this@MascotaDetalleActivity, "¡Mascota actualizada con éxito!", Toast.LENGTH_SHORT).show()
                         cargarDetalleMascota()
                     } else {
-                        val errorBody = response.errorBody()?.string() ?: ""
-                        Log.e("MASCOTA_DETALLE", "Error al actualizar: HTTP ${response.code()} $errorBody")
-                        Toast.makeText(this@MascotaDetalleActivity, "Error al actualizar mascota (HTTP ${response.code()})", Toast.LENGTH_LONG).show()
+                        val errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                        Log.e("MASCOTA_DETALLE", "Error al actualizar: HTTP ${response.code()} - $errorMessage")
+                        Toast.makeText(
+                            this@MascotaDetalleActivity,
+                            errorMessage,
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("MASCOTA_DETALLE", "Excepción al actualizar mascota", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MascotaDetalleActivity, "Error de red: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@MascotaDetalleActivity,
+                        ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }

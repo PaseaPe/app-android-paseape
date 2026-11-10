@@ -57,6 +57,7 @@ fun EditarPerfilPaseadorDialog(
     var apellidos by remember { mutableStateOf(detalle.apellidos ?: paseador?.apellidos.orEmpty()) }
     var telefono by remember { mutableStateOf(detalle.telefono ?: paseador?.telefono.orEmpty()) }
     var fotoPerfilUrl by remember { mutableStateOf(detalle.fotoPerfilUrl.orEmpty()) }
+    var antecedentesPolicialesUrl by remember { mutableStateOf(paseador?.antecedentesPolicialesUrl.orEmpty()) }
     var biografia by remember { mutableStateOf(paseador?.biografia.orEmpty()) }
 
     val initialTarifa = paseador?.tarifaHoraPen?.let { String.format(Locale.US, "%.2f", it) } ?: "25.00"
@@ -131,6 +132,19 @@ fun EditarPerfilPaseadorDialog(
                     value = fotoPerfilUrl,
                     onValueChange = { fotoPerfilUrl = it },
                     label = { Text("Foto de Perfil URL (Opcional)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Antecedentes Policiales / Penales URL
+                OutlinedTextField(
+                    value = antecedentesPolicialesUrl,
+                    onValueChange = { antecedentesPolicialesUrl = it },
+                    label = { Text("Antecedentes Policiales / Penales URL") },
+                    placeholder = { Text("https://.../certificado.pdf") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     enabled = !isLoading,
@@ -215,7 +229,8 @@ fun EditarPerfilPaseadorDialog(
                         fotoPerfilUrl = fotoPerfilUrl.trim().ifBlank { null },
                         biografia = biografia.trim().ifBlank { null },
                         tarifaHoraPen = tarifaNum,
-                        distritoCoberturaId = selectedDistrito?.id
+                        distritoCoberturaId = selectedDistrito?.id,
+                        antecedentesPolicialesUrl = antecedentesPolicialesUrl.trim().ifBlank { null }
                     )
                     onConfirm(req)
                 },

@@ -15,7 +15,7 @@ val localProperties = Properties().apply {
 }
 
 val baseUrl: String = localProperties.getProperty("BASE_URL")
-    ?: "http://10.0.2.2:7002/api-paseape/"
+    ?: "http://192.168.100.114:7001/api-paseape/"
 
 android {
     namespace = "com.example.paseape"
@@ -42,6 +42,9 @@ android {
                 enable = false
             }
         }
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {
@@ -52,6 +55,15 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 }
 

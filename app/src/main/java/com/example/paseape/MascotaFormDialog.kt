@@ -1,6 +1,5 @@
 package com.example.paseape
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,17 +24,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -66,6 +60,7 @@ import com.example.paseape.data.model.NivelEnergiaParamDto
 import com.example.paseape.data.model.RazaParamDto
 import com.example.paseape.data.model.TamanoMascotaParamDto
 import com.example.paseape.data.model.TipoMascotaParamDto
+import com.example.paseape.ui.components.CatalogDropdownField
 import com.example.paseape.ui.theme.PrimaryDark
 
 @Composable
@@ -550,64 +545,3 @@ private fun FormSwitchRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun <T> CatalogDropdownField(
-    label: String,
-    items: List<T>,
-    selectedItem: T?,
-    itemLabel: (T) -> String,
-    placeholder: String,
-    enabled: Boolean,
-    onItemSelected: (T) -> Unit,
-    modifier: Modifier = Modifier,
-    supportingText: (@Composable () -> Unit)? = null
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded && enabled,
-        onExpandedChange = { if (enabled) expanded = it },
-        modifier = modifier.fillMaxWidth()
-    ) {
-        OutlinedTextField(
-            value = selectedItem?.let(itemLabel) ?: "",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            placeholder = { Text(placeholder, fontSize = 13.sp, color = Color.Gray) },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded && enabled)
-            },
-            supportingText = supportingText,
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled),
-            shape = RoundedCornerShape(12.dp),
-            enabled = enabled,
-            colors = OutlinedTextFieldDefaults.colors()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded && enabled,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color.White)
-        ) {
-            items.forEach { item ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = itemLabel(item),
-                            fontSize = 14.sp,
-                            color = Color(0xFF1E293B)
-                        )
-                    },
-                    onClick = {
-                        onItemSelected(item)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
