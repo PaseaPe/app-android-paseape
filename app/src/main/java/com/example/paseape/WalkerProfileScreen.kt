@@ -1,5 +1,9 @@
 package com.example.paseape
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,15 +57,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.ui.components.DocumentosSoloLecturaCard
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
@@ -71,12 +79,20 @@ fun WalkerProfileScreen(
     uiState: WalkerProfileUiState,
     distritos: List<DistritoParamDto>,
     isOperationLoading: Boolean,
+    isDocumentLoading: Boolean,
+    uploadProgress: Int?,
+    documentError: String?,
     onRetry: () -> Unit,
-    onActualizarPerfil: (UpdateProfileRequestDto, () -> Unit) -> Unit,
-    onActualizarCobertura: (Int, () -> Unit) -> Unit
+    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, () -> Unit) -> Unit,
+    onActualizarCobertura: (Int, () -> Unit) -> Unit,
+    onEliminarDocumento: (String, () -> Unit) -> Unit,
+    onObtenerUrlDescarga: (String, (String) -> Unit) -> Unit,
+    onLimpiarErrorDocumentos: () -> Unit
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showUpdateCoverageDialog by remember { mutableStateOf(false) }
+    var archivosPendientes by remember { mutableStateOf<List<ArchivoPendiente>>(emptyList()) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -374,15 +390,46 @@ fun WalkerProfileScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // Antecedentes Policiales / Penales
-                                val antecedentesUrl = paseador?.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
-                                ItemResumenAtributo(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    titulo = "Certificado de antecedentes policiales / penales",
-                                    valor = antecedentesUrl ?: "Pendiente de adjuntar (presiona Editar Perfil)",
-                                    icono = Icons.Default.CheckCircle,
-                                    destacado = antecedentesUrl != null
+                                // Antecedentes Policiales / Penales: solo lectura en el
+                                // perfil. Agregar o eliminar se hace desde Editar Perfil.
+                                DocumentosSoloLecturaCard(
+                                    documentos = detalle.digitalDocuments.orEmpty(),
+                                    habilitado = !isDocumentLoading,
+                                    onDescargarDocumento = { documento ->
+                                        documento.uuid?.let { uuid ->
+                                            onObtenerUrlDescarga(uuid) { url ->
+                                                abrirDocumento(context, url)
+                                            }
+                                        }
+                                    }
                                 )
+
+                                // Compatibilidad con el campo legado de URL, solo si no
+                                // hay documentos digitales todavía.
+                                val legacyUrl = paseador?.antecedentesPolicialesUrl
+                                    ?.takeIf { it.isNotBlank() }
+                                if (detalle.digitalDocuments.isNullOrEmpty() && legacyUrl != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Certificado registrado previamente",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF64748B),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        TextButton(onClick = { abrirDocumento(context, legacyUrl) }) {
+                                            Text(
+                                                text = "Abrir enlace",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryDark
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -445,7 +492,11 @@ fun WalkerProfileScreen(
                             }
 
                             Button(
-                                onClick = { showEditProfileDialog = true },
+                                onClick = {
+                                    archivosPendientes = emptyList()
+                                    onLimpiarErrorDocumentos()
+                                    showEditProfileDialog = true
+                                },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
@@ -468,10 +519,40 @@ fun WalkerProfileScreen(
                         EditarPerfilPaseadorDialog(
                             detalle = detalle,
                             distritos = distritos,
+                            documentos = detalle.digitalDocuments.orEmpty(),
+                            archivosPendientes = archivosPendientes,
                             isLoading = isOperationLoading,
-                            onDismiss = { showEditProfileDialog = false },
+                            isDocumentLoading = isDocumentLoading,
+                            uploadProgress = uploadProgress,
+                            documentError = documentError,
+                            onArchivosSeleccionados = { nuevos ->
+                                archivosPendientes =
+                                    (archivosPendientes + nuevos)
+                                        .distinctBy { it.uri.toString() }
+                            },
+                            onQuitarArchivo = { archivo ->
+                                archivosPendientes = archivosPendientes
+                                    .filterNot { it.uri == archivo.uri }
+                            },
+                            onEliminarDocumento = { documento ->
+                                documento.uuid?.let { uuid ->
+                                    onEliminarDocumento(uuid) {}
+                                }
+                            },
+                            onDescargarDocumento = { documento ->
+                                documento.uuid?.let { uuid ->
+                                    onObtenerUrlDescarga(uuid) { url ->
+                                        abrirDocumento(context, url)
+                                    }
+                                }
+                            },
+                            onDismiss = {
+                                archivosPendientes = emptyList()
+                                showEditProfileDialog = false
+                            },
                             onConfirm = { req ->
-                                onActualizarPerfil(req) {
+                                onActualizarPerfil(req, archivosPendientes) {
+                                    archivosPendientes = emptyList()
                                     showEditProfileDialog = false
                                 }
                             }
@@ -585,5 +666,19 @@ fun ItemResumenAtributo(
                 )
             }
         }
+    }
+}
+
+/** Abre una URL prefirmada de documento en el navegador/visor del sistema. */
+private fun abrirDocumento(context: Context, url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            "No se pudo abrir el documento.",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 }

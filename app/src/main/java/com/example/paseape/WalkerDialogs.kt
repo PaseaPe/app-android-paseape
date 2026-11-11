@@ -36,9 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.paseape.data.model.ArchivoPendiente
+import com.example.paseape.data.model.DigitalDocumentDto
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.ui.components.FileUploadCard
 import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
 
@@ -47,17 +50,26 @@ import java.util.Locale
 fun EditarPerfilPaseadorDialog(
     detalle: UsuarioPaseadorDetalleDto,
     distritos: List<DistritoParamDto>,
+    documentos: List<DigitalDocumentDto>,
+    archivosPendientes: List<ArchivoPendiente>,
     isLoading: Boolean,
+    isDocumentLoading: Boolean,
+    uploadProgress: Int?,
+    documentError: String?,
+    onArchivosSeleccionados: (List<ArchivoPendiente>) -> Unit,
+    onQuitarArchivo: (ArchivoPendiente) -> Unit,
+    onEliminarDocumento: (DigitalDocumentDto) -> Unit,
+    onDescargarDocumento: (DigitalDocumentDto) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (UpdateProfileRequestDto) -> Unit
 ) {
     val paseador = detalle.paseador
+    val ocupado = isLoading || isDocumentLoading
 
     var nombres by remember { mutableStateOf(detalle.nombres ?: paseador?.nombres.orEmpty()) }
     var apellidos by remember { mutableStateOf(detalle.apellidos ?: paseador?.apellidos.orEmpty()) }
     var telefono by remember { mutableStateOf(detalle.telefono ?: paseador?.telefono.orEmpty()) }
     var fotoPerfilUrl by remember { mutableStateOf(detalle.fotoPerfilUrl.orEmpty()) }
-    var antecedentesPolicialesUrl by remember { mutableStateOf(paseador?.antecedentesPolicialesUrl.orEmpty()) }
     var biografia by remember { mutableStateOf(paseador?.biografia.orEmpty()) }
 
     val initialTarifa = paseador?.tarifaHoraPen?.let { String.format(Locale.US, "%.2f", it) } ?: "25.00"
@@ -74,7 +86,7 @@ fun EditarPerfilPaseadorDialog(
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = { if (!isLoading) onDismiss() },
+        onDismissRequest = { if (!ocupado) onDismiss() },
         shape = RoundedCornerShape(20.dp),
         containerColor = Color.White,
         title = {
@@ -99,7 +111,7 @@ fun EditarPerfilPaseadorDialog(
                     onValueChange = { nombres = it },
                     label = { Text("Nombres") },
                     singleLine = true,
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -110,7 +122,7 @@ fun EditarPerfilPaseadorDialog(
                     onValueChange = { apellidos = it },
                     label = { Text("Apellidos") },
                     singleLine = true,
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -122,7 +134,7 @@ fun EditarPerfilPaseadorDialog(
                     label = { Text("Teléfono") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -134,22 +146,27 @@ fun EditarPerfilPaseadorDialog(
                     label = { Text("Foto de Perfil URL (Opcional)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                // Antecedentes Policiales / Penales URL
-                OutlinedTextField(
-                    value = antecedentesPolicialesUrl,
-                    onValueChange = { antecedentesPolicialesUrl = it },
-                    label = { Text("Antecedentes Policiales / Penales URL") },
-                    placeholder = { Text("https://.../certificado.pdf") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                // Antecedentes Policiales / Penales: mismos controles que en el
+                // registro. Los archivos elegidos se envían al guardar cambios.
+                FileUploadCard(
+                    documentosExistentes = documentos,
+                    archivosPendientes = archivosPendientes,
+                    subiendo = uploadProgress != null,
+                    progreso = uploadProgress,
+                    habilitado = !ocupado,
+                    error = documentError,
+                    onArchivosSeleccionados = onArchivosSeleccionados,
+                    onQuitarPendiente = onQuitarArchivo,
+                    onEliminarDocumento = onEliminarDocumento,
+                    onDescargarDocumento = onDescargarDocumento,
+                    onSubir = null,
+                    titulo = "Antecedentes policiales / penales",
+                    descripcion = "Adjunta tu certificado en PDF o Word. Máximo 1 MB por archivo. Los archivos nuevos se envían al guardar los cambios."
                 )
 
                 // Biografía
@@ -159,7 +176,7 @@ fun EditarPerfilPaseadorDialog(
                     label = { Text("Biografía") },
                     minLines = 3,
                     maxLines = 5,
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -171,7 +188,7 @@ fun EditarPerfilPaseadorDialog(
                     label = { Text("Tarifa por hora (S/)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    enabled = !isLoading,
+                    enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -186,7 +203,7 @@ fun EditarPerfilPaseadorDialog(
 
                 ExposedDropdownMenuBox(
                     expanded = dropdownExpanded,
-                    onExpandedChange = { if (!isLoading && distritos.isNotEmpty()) dropdownExpanded = it },
+                    onExpandedChange = { if (!ocupado && distritos.isNotEmpty()) dropdownExpanded = it },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedTextField(
@@ -196,9 +213,9 @@ fun EditarPerfilPaseadorDialog(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !isLoading && distritos.isNotEmpty()),
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = !ocupado && distritos.isNotEmpty()),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = !isLoading && distritos.isNotEmpty()
+                        enabled = !ocupado && distritos.isNotEmpty()
                     )
 
                     ExposedDropdownMenu(
@@ -229,16 +246,15 @@ fun EditarPerfilPaseadorDialog(
                         fotoPerfilUrl = fotoPerfilUrl.trim().ifBlank { null },
                         biografia = biografia.trim().ifBlank { null },
                         tarifaHoraPen = tarifaNum,
-                        distritoCoberturaId = selectedDistrito?.id,
-                        antecedentesPolicialesUrl = antecedentesPolicialesUrl.trim().ifBlank { null }
+                        distritoCoberturaId = selectedDistrito?.id
                     )
                     onConfirm(req)
                 },
-                enabled = !isLoading && nombres.isNotBlank() && apellidos.isNotBlank() && selectedDistrito != null,
+                enabled = !ocupado && nombres.isNotBlank() && apellidos.isNotBlank() && selectedDistrito != null,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
             ) {
-                if (isLoading) {
+                if (ocupado) {
                     CircularProgressIndicator(
                         color = Color.White,
                         modifier = Modifier.size(16.dp),
@@ -252,7 +268,7 @@ fun EditarPerfilPaseadorDialog(
         dismissButton = {
             OutlinedButton(
                 onClick = onDismiss,
-                enabled = !isLoading,
+                enabled = !ocupado,
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Cancelar")

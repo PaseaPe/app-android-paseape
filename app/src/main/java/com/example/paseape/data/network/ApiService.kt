@@ -48,10 +48,16 @@ import com.example.paseape.data.model.CancelarSolicitudReqDto
 import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.RechazarSolicitudRequest
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.data.model.DigitalDocumentDto
+import com.example.paseape.data.model.DocumentUrlDto
+import okhttp3.MultipartBody
 import retrofit2.Response
+import retrofit2.http.DELETE
 import retrofit2.http.Headers
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -341,5 +347,33 @@ interface ApiService {
         @Path("uuid") uuid: String,
         @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
     ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // --- DOCUMENTOS DIGITALES (antecedentes policiales / penales) ---
+
+    /**
+     * Sube uno o más antecedentes. El campo multipart debe llamarse `files` y
+     * repetirse una vez por archivo. El backend acumula documentos (no reemplaza).
+     */
+    @Multipart
+    @POST("documento/usuario/{usuarioUuid}/antecedentes")
+    suspend fun subirAntecedentes(
+        @Header("Authorization") token: String,
+        @Path("usuarioUuid") usuarioUuid: String,
+        @Part files: List<MultipartBody.Part>
+    ): Response<ResponseDto<List<DigitalDocumentDto>>>
+
+    /** Devuelve una URL prefirmada (caduca ~30 min) para abrir/descargar el documento. */
+    @GET("documento/{documentUuid}/descarga")
+    suspend fun descargarDocumento(
+        @Header("Authorization") token: String,
+        @Path("documentUuid") documentUuid: String
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Borrado lógico del documento. Un segundo intento sobre el mismo uuid da 400. */
+    @DELETE("documento/{documentUuid}")
+    suspend fun eliminarDocumento(
+        @Header("Authorization") token: String,
+        @Path("documentUuid") documentUuid: String
+    ): Response<ResponseDto<Any?>>
 
 }

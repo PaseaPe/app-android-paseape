@@ -59,6 +59,7 @@ import androidx.credentials.exceptions.GetCredentialException
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.ui.components.CatalogDropdownField
+import com.example.paseape.ui.components.FileUploadCard
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -482,6 +483,7 @@ private fun Paso2(
     } else {
         catalogsReady && uiState.tiposDocumento.isNotEmpty()
     }
+    val context = LocalContext.current
 
     if (uiState.isLoadingCatalogos) {
         LinearProgressIndicator(
@@ -643,15 +645,17 @@ private fun Paso2(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        RegisterTextField(
-            value = uiState.antecedentesPolicialesUrl,
-            onValueChange = { viewModel.onFieldChange(RegisterField.ANTECEDENTES_URL, it) },
-            label = "URL de Antecedentes Policiales / Penales",
-            placeholder = "https://.../certificado.pdf",
-            error = uiState.fieldErrors[RegisterField.ANTECEDENTES_URL],
-            supportingText = "Requerido para que un administrador apruebe tu perfil",
-            enabled = habilitado,
-            keyboardType = KeyboardType.Uri
+        FileUploadCard(
+            documentosExistentes = emptyList(),
+            archivosPendientes = uiState.archivosAntecedentes,
+            subiendo = uiState.subiendoAntecedentes,
+            progreso = uiState.progresoAntecedentes,
+            habilitado = habilitado,
+            error = uiState.fieldErrors[RegisterField.ANTECEDENTES],
+            onArchivosSeleccionados = { viewModel.onArchivosAntecedentesSeleccionados(it) },
+            onQuitarPendiente = { viewModel.onQuitarArchivoAntecedente(it) },
+            onEliminarDocumento = {},
+            onDescargarDocumento = {}
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -689,7 +693,7 @@ private fun Paso2(
         }
 
         Button(
-            onClick = { viewModel.registrar() },
+            onClick = { viewModel.registrar(context.contentResolver) },
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
             shape = RoundedCornerShape(24.dp),
