@@ -11,8 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarMascotaRequest
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
+import com.example.paseape.data.network.FotoUpload
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +45,7 @@ class MascotaDetalleActivity : ComponentActivity() {
                     uiState = uiState,
                     onRetry = { cargarDetalleMascota() },
                     onBack = { finish() },
-                    onActualizarMascota = { req -> actualizarMascota(req) }
+                    onActualizarMascota = { req, foto -> actualizarMascota(req, foto) }
                 )
             }
         }
@@ -107,7 +109,7 @@ class MascotaDetalleActivity : ComponentActivity() {
         }
     }
 
-    private fun actualizarMascota(req: ActualizarMascotaRequest) {
+    private fun actualizarMascota(req: ActualizarMascotaRequest, fotoPendiente: ArchivoPendiente? = null) {
         val uuid = mascotaUuid ?: return
         val token = getAuthToken() ?: run {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -120,19 +122,26 @@ class MascotaDetalleActivity : ComponentActivity() {
             try {
                 Log.d("MASCOTA_DETALLE", "Enviando PUT mascotas/$uuid con: $req")
                 val response = RetrofitClient.apiService.actualizarMascota(authHeader, uuid, req)
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(this@MascotaDetalleActivity, "¡Mascota actualizada con éxito!", Toast.LENGTH_SHORT).show()
-                        cargarDetalleMascota()
-                    } else {
-                        val errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
-                        Log.e("MASCOTA_DETALLE", "Error al actualizar: HTTP ${response.code()} - $errorMessage")
-                        Toast.makeText(
-                            this@MascotaDetalleActivity,
-                            errorMessage,
-                            Toast.LENGTH_LONG
-                        ).show()
+                if (!response.isSuccessful) {
+                    val errorMessage = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                    Log.e("MASCOTA_DETALLE", "Error al actualizar: HTTP ${response.code()} - $errorMessage")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MascotaDetalleActivity, errorMessage, Toast.LENGTH_LONG).show()
                     }
+                    return@launch
+                }
+
+                // La foto se sube como documento después de guardar los datos.
+                val avisoFoto = fotoPendiente?.let { subirFotoMascota(authHeader, uuid, it) }
+
+                withContext(Dispatchers.Main) {
+                    val mensaje = if (avisoFoto == null) {
+                        "¡Mascota actualizada con éxito!"
+                    } else {
+                        "Mascota actualizada, pero no se pudo subir la foto: $avisoFoto"
+                    }
+                    Toast.makeText(this@MascotaDetalleActivity, mensaje, Toast.LENGTH_LONG).show()
+                    cargarDetalleMascota()
                 }
             } catch (e: Exception) {
                 Log.e("MASCOTA_DETALLE", "Excepción al actualizar mascota", e)
@@ -144,6 +153,24 @@ class MascotaDetalleActivity : ComponentActivity() {
                     ).show()
                 }
             }
+        }
+    }
+
+    /** Sube/reemplaza la foto de la mascota. Devuelve el error o `null`. */
+    private suspend fun subirFotoMascota(
+        authHeader: String,
+        mascotaUuid: String,
+        foto: ArchivoPendiente
+    ): String? {
+        val parte = FotoUpload.crearParte(contentResolver, foto) { }
+            ?: return "No se pudo leer la imagen seleccionada."
+        return try {
+            val response = RetrofitClient.apiService.subirFotoMascota(authHeader, mascotaUuid, parte)
+            if (response.isSuccessful) null
+            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+        } catch (e: Exception) {
+            Log.e("MASCOTA_DETALLE", "Error al subir foto de mascota", e)
+            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
         }
     }
 }

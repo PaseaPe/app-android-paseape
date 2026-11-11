@@ -89,6 +89,9 @@ fun WalkerDashboardScreen(
     val isDocumentLoading by viewModel.isDocumentLoading.collectAsState()
     val uploadProgress by viewModel.uploadProgress.collectAsState()
     val documentError by viewModel.documentError.collectAsState()
+    val isFotoLoading by viewModel.isFotoLoading.collectAsState()
+    val fotoProgress by viewModel.fotoProgress.collectAsState()
+    val fotoError by viewModel.fotoError.collectAsState()
 
     // Insignia numérica de notificaciones no leídas (misma fuente que el dashboard del cliente)
     val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
@@ -230,13 +233,17 @@ fun WalkerDashboardScreen(
                     isDocumentLoading = isDocumentLoading,
                     uploadProgress = uploadProgress,
                     documentError = documentError,
+                    isFotoLoading = isFotoLoading,
+                    fotoProgress = fotoProgress,
+                    fotoError = fotoError,
                     onRetry = { viewModel.cargarPerfil(token = token, usuarioUuid = usuarioUuid) },
-                    onActualizarPerfil = { req, archivos, onSuccess ->
+                    onActualizarPerfil = { req, archivos, foto, onSuccess ->
                         viewModel.actualizarPerfil(
                             token = token,
                             usuarioUuid = usuarioUuid,
                             req = req,
                             archivosPendientes = archivos,
+                            fotoPendiente = foto,
                             resolver = context.contentResolver,
                             onSuccess = onSuccess
                         )

@@ -80,10 +80,13 @@ fun WalkerProfileScreen(
     distritos: List<DistritoParamDto>,
     isOperationLoading: Boolean,
     isDocumentLoading: Boolean,
+    isFotoLoading: Boolean,
     uploadProgress: Int?,
+    fotoProgress: Int?,
     documentError: String?,
+    fotoError: String?,
     onRetry: () -> Unit,
-    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, () -> Unit) -> Unit,
+    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, ArchivoPendiente?, () -> Unit) -> Unit,
     onActualizarCobertura: (Int, () -> Unit) -> Unit,
     onEliminarDocumento: (String, () -> Unit) -> Unit,
     onObtenerUrlDescarga: (String, (String) -> Unit) -> Unit,
@@ -92,6 +95,7 @@ fun WalkerProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showUpdateCoverageDialog by remember { mutableStateOf(false) }
     var archivosPendientes by remember { mutableStateOf<List<ArchivoPendiente>>(emptyList()) }
+    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
     val context = LocalContext.current
 
     Scaffold(
@@ -494,6 +498,7 @@ fun WalkerProfileScreen(
                             Button(
                                 onClick = {
                                     archivosPendientes = emptyList()
+                                    fotoPendiente = null
                                     onLimpiarErrorDocumentos()
                                     showEditProfileDialog = true
                                 },
@@ -521,10 +526,14 @@ fun WalkerProfileScreen(
                             distritos = distritos,
                             documentos = detalle.digitalDocuments.orEmpty(),
                             archivosPendientes = archivosPendientes,
+                            fotoPendiente = fotoPendiente,
                             isLoading = isOperationLoading,
                             isDocumentLoading = isDocumentLoading,
+                            isFotoLoading = isFotoLoading,
                             uploadProgress = uploadProgress,
+                            fotoProgress = fotoProgress,
                             documentError = documentError,
+                            fotoError = fotoError,
                             onArchivosSeleccionados = { nuevos ->
                                 archivosPendientes =
                                     (archivosPendientes + nuevos)
@@ -534,6 +543,8 @@ fun WalkerProfileScreen(
                                 archivosPendientes = archivosPendientes
                                     .filterNot { it.uri == archivo.uri }
                             },
+                            onFotoSeleccionada = { fotoPendiente = it },
+                            onQuitarFoto = { fotoPendiente = null },
                             onEliminarDocumento = { documento ->
                                 documento.uuid?.let { uuid ->
                                     onEliminarDocumento(uuid) {}
@@ -548,11 +559,13 @@ fun WalkerProfileScreen(
                             },
                             onDismiss = {
                                 archivosPendientes = emptyList()
+                                fotoPendiente = null
                                 showEditProfileDialog = false
                             },
                             onConfirm = { req ->
-                                onActualizarPerfil(req, archivosPendientes) {
+                                onActualizarPerfil(req, archivosPendientes, fotoPendiente) {
                                     archivosPendientes = emptyList()
+                                    fotoPendiente = null
                                     showEditProfileDialog = false
                                 }
                             }

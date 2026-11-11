@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.paseape.data.model.ActualizarMascotaRequest
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
@@ -78,7 +79,7 @@ fun MascotaDetalleScreen(
     uiState: MascotaDetalleUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    onActualizarMascota: (ActualizarMascotaRequest) -> Unit,
+    onActualizarMascota: (ActualizarMascotaRequest, ArchivoPendiente?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -215,7 +216,7 @@ fun MascotaDetalleScreen(
 @Composable
 fun MascotaDetalleContent(
     mascota: MascotaData,
-    onActualizarMascota: (ActualizarMascotaRequest) -> Unit
+    onActualizarMascota: (ActualizarMascotaRequest, ArchivoPendiente?) -> Unit
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -239,7 +240,7 @@ fun MascotaDetalleContent(
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val fotoUrl = mascota.fotoUrl?.takeIf { it.isNotBlank() }
+                val fotoUrl = mascota.fotoUrlEfectiva
                 if (fotoUrl != null) {
                     AsyncImage(
                         model = fotoUrl,
@@ -489,9 +490,9 @@ fun MascotaDetalleContent(
         EditarMascotaDialog(
             mascota = mascota,
             onDismiss = { showEditDialog = false },
-            onConfirm = { req ->
+            onConfirm = { req, foto ->
                 showEditDialog = false
-                onActualizarMascota(req)
+                onActualizarMascota(req, foto)
             }
         )
     }

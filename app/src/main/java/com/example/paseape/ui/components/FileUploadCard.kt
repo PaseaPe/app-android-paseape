@@ -1,8 +1,6 @@
 package com.example.paseape.ui.components
 
-import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -120,7 +118,7 @@ fun FileUploadCard(
         val rechazados = mutableListOf<String>()
 
         uris.forEach { uri ->
-            val archivo = leerArchivo(context, uri) ?: return@forEach
+            val archivo = leerArchivoSeleccionado(context, uri)
             when {
                 !esAntecedentePermitido(archivo.nombre) ->
                     rechazados += "${archivo.nombre}: formato no permitido (solo PDF o Word)."
@@ -504,46 +502,3 @@ private fun estiloPorTipo(nombre: String, contentType: String?): EstiloArchivo {
     }
 }
 
-private fun leerArchivo(context: Context, uri: Uri): ArchivoPendiente? {
-    val resolver = context.contentResolver
-    var nombre = uri.lastPathSegment?.substringAfterLast('/') ?: "antecedente"
-    var tamano = -1L
-
-    runCatching {
-        resolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val idxNombre = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val idxTamano = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (idxNombre >= 0 && !cursor.isNull(idxNombre)) {
-                    nombre = cursor.getString(idxNombre)
-                }
-                if (idxTamano >= 0 && !cursor.isNull(idxTamano)) {
-                    tamano = cursor.getLong(idxTamano)
-                }
-            }
-        }
-    }
-
-    if (tamano < 0) {
-        tamano = runCatching {
-            resolver.openAssetFileDescriptor(uri, "r")?.use { fd ->
-                fd.length.takeIf { it >= 0 } ?: 0L
-            }
-        }.getOrNull() ?: 0L
-    }
-
-    val contentType = runCatching { resolver.getType(uri) }.getOrNull()
-
-    return ArchivoPendiente(
-        uri = uri,
-        nombre = nombre,
-        tamanoBytes = tamano,
-        contentType = contentType
-    )
-}

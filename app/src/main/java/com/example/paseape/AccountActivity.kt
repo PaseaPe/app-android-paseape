@@ -12,12 +12,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
+import com.example.paseape.data.network.FotoUpload
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
 import kotlinx.coroutines.Dispatchers
@@ -53,8 +55,8 @@ class AccountActivity : ComponentActivity() {
                     onLogoutClick = { cerrarSesionYRedirigir() },
                     onLogout = { cerrarSesionYRedirigir() },
                     onBack = { finish() },
-                    onGuardarPerfil = { req -> actualizarDatosPerfil(req) },
-                    onCrearMascota = { req -> crearMascota(req) },
+                    onGuardarPerfil = { req, foto -> actualizarDatosPerfil(req, foto) },
+                    onCrearMascota = { req, foto -> crearMascota(req, foto) },
                     onMascotaClick = { mascota: MascotaData ->
                         val intent = Intent(this, MascotaDetalleActivity::class.java).apply {
                             putExtra(MascotaDetalleActivity.EXTRA_MASCOTA_UUID, mascota.uuid)
@@ -161,7 +163,7 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
-    fun actualizarDatosPerfil(req: ActualizarPerfilReqDto) {
+    fun actualizarDatosPerfil(req: ActualizarPerfilReqDto, fotoPendiente: ArchivoPendiente? = null) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -172,14 +174,25 @@ class AccountActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.apiService.actualizarPerfil(authHeader, req)
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(this@AccountActivity, "Perfil actualizado con éxito", Toast.LENGTH_SHORT).show()
-                        cargarPerfilCliente()
-                    } else {
-                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                if (!response.isSuccessful) {
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
+                    return@launch
+                }
+
+                // La foto real se sube como documento después de guardar los datos.
+                val avisoFoto = fotoPendiente?.let { subirFotoCliente(authHeader, it) }
+
+                withContext(Dispatchers.Main) {
+                    val mensaje = if (avisoFoto == null) {
+                        "Perfil actualizado con éxito"
+                    } else {
+                        "Perfil actualizado, pero no se pudo subir la foto: $avisoFoto"
+                    }
+                    Toast.makeText(this@AccountActivity, mensaje, Toast.LENGTH_LONG).show()
+                    cargarPerfilCliente()
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al actualizar perfil", e)
@@ -194,7 +207,7 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
-    fun crearMascota(req: CrearMascotaRequest) {
+    fun crearMascota(req: CrearMascotaRequest, fotoPendiente: ArchivoPendiente? = null) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -213,14 +226,33 @@ class AccountActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.apiService.crearMascota(authHeader, finalReq)
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(this@AccountActivity, "Mascota agregada con éxito", Toast.LENGTH_SHORT).show()
-                        cargarPerfilCliente()
-                    } else {
-                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                if (!response.isSuccessful) {
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
+                    return@launch
+                }
+
+                // La foto de mascota se sube después de crear la mascota, ya que
+                // el endpoint necesita su uuid.
+                val mascotaUuid = response.body()?.response?.uuid
+                val avisoFoto = when {
+                    fotoPendiente == null -> null
+                    mascotaUuid.isNullOrBlank() ->
+                        "no se recibió el identificador de la mascota"
+
+                    else -> subirFotoMascota(authHeader, mascotaUuid, fotoPendiente)
+                }
+
+                withContext(Dispatchers.Main) {
+                    val mensaje = if (avisoFoto == null) {
+                        "Mascota agregada con éxito"
+                    } else {
+                        "Mascota creada, pero no se pudo subir la foto: $avisoFoto"
+                    }
+                    Toast.makeText(this@AccountActivity, mensaje, Toast.LENGTH_LONG).show()
+                    cargarPerfilCliente()
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al crear mascota", e)
@@ -232,6 +264,38 @@ class AccountActivity : ComponentActivity() {
                     ).show()
                 }
             }
+        }
+    }
+
+    /** Sube/reemplaza la foto de perfil del cliente. Devuelve el error o `null`. */
+    private suspend fun subirFotoCliente(authHeader: String, foto: ArchivoPendiente): String? {
+        val parte = FotoUpload.crearParte(contentResolver, foto) { }
+            ?: return "No se pudo leer la imagen seleccionada."
+        return try {
+            val response = RetrofitClient.apiService.subirFotoCliente(authHeader, parte)
+            if (response.isSuccessful) null
+            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+        } catch (e: Exception) {
+            Log.e("ACCOUNT_DEBUG", "Error al subir foto de perfil", e)
+            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE)
+        }
+    }
+
+    /** Sube/reemplaza la foto de una mascota. Devuelve el error o `null`. */
+    private suspend fun subirFotoMascota(
+        authHeader: String,
+        mascotaUuid: String,
+        foto: ArchivoPendiente
+    ): String? {
+        val parte = FotoUpload.crearParte(contentResolver, foto) { }
+            ?: return "No se pudo leer la imagen seleccionada."
+        return try {
+            val response = RetrofitClient.apiService.subirFotoMascota(authHeader, mascotaUuid, parte)
+            if (response.isSuccessful) null
+            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+        } catch (e: Exception) {
+            Log.e("ACCOUNT_DEBUG", "Error al subir foto de mascota", e)
+            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
         }
     }
 

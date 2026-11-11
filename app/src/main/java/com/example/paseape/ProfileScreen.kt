@@ -80,10 +80,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
+import com.example.paseape.ui.components.PhotoPickerCard
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PrimaryDark
@@ -97,8 +99,8 @@ fun ProfileScreen(
     onLogoutClick: () -> Unit = {},
     onLogout: () -> Unit = onLogoutClick,
     onBack: () -> Unit = {},
-    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit = {},
-    onCrearMascota: (CrearMascotaRequest) -> Unit = {},
+    onGuardarPerfil: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit = { _, _ -> },
+    onCrearMascota: (CrearMascotaRequest, ArchivoPendiente?) -> Unit = { _, _ -> },
     onMascotaClick: (MascotaData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -296,8 +298,8 @@ fun ProfileSuccessContent(
     usuario: UsuarioClienteData,
     distritos: List<DistritoParamDto> = emptyList(),
     onLogout: () -> Unit,
-    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit,
-    onCrearMascota: (CrearMascotaRequest) -> Unit,
+    onGuardarPerfil: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit,
+    onCrearMascota: (CrearMascotaRequest, ArchivoPendiente?) -> Unit,
     onMascotaClick: (MascotaData) -> Unit
 ) {
     val detalle = usuario.detalleCliente
@@ -582,9 +584,9 @@ fun ProfileSuccessContent(
             usuario = usuario,
             distritos = distritos,
             onDismiss = { showEditProfileDialog = false },
-            onConfirm = { req ->
+            onConfirm = { req, foto ->
                 showEditProfileDialog = false
-                onGuardarPerfil(req)
+                onGuardarPerfil(req, foto)
             }
         )
     }
@@ -593,9 +595,9 @@ fun ProfileSuccessContent(
         AgregarMascotaDialog(
             usuarioUuid = usuario.uuid ?: "",
             onDismiss = { showAddPetDialog = false },
-            onConfirm = { req ->
+            onConfirm = { req, foto ->
                 showAddPetDialog = false
-                onCrearMascota(req)
+                onCrearMascota(req, foto)
             }
         )
     }
@@ -607,14 +609,14 @@ fun EditarPerfilDialog(
     usuario: UsuarioClienteData,
     distritos: List<DistritoParamDto> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (ActualizarPerfilReqDto) -> Unit
+    onConfirm: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit
 ) {
     val detalle = usuario.detalleCliente
 
     var nombres by remember { mutableStateOf(usuario.nombres ?: "") }
     var apellidos by remember { mutableStateOf(usuario.apellidos ?: "") }
     var telefono by remember { mutableStateOf(usuario.telefono ?: "") }
-    var fotoPerfilUrl by remember { mutableStateOf(usuario.fotoUrlEfectiva.orEmpty()) }
+    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
     var direccion by remember { mutableStateOf(detalle?.direccionReferencia ?: "") }
     var contactoEmergenciaNombre by remember { mutableStateOf(detalle?.contactoEmergenciaNombre ?: "") }
     var contactoEmergenciaTelefono by remember { mutableStateOf(detalle?.contactoEmergenciaTelefono ?: "") }
@@ -679,14 +681,13 @@ fun EditarPerfilDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                OutlinedTextField(
-                    value = fotoPerfilUrl,
-                    onValueChange = { fotoPerfilUrl = it },
-                    label = { Text("Foto de perfil URL (Opcional)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                PhotoPickerCard(
+                    fotoActualUrl = usuario.fotoUrlEfectiva,
+                    fotoPendiente = fotoPendiente,
+                    onFotoSeleccionada = { fotoPendiente = it },
+                    onQuitarFoto = { fotoPendiente = null },
+                    titulo = "Foto de perfil",
+                    descripcion = "Elige una imagen JPG, PNG o WEBP. Máximo 10 MB."
                 )
 
                 // Selector de Distrito
@@ -778,14 +779,13 @@ fun EditarPerfilDialog(
                                 nombres = nombres.trim().ifBlank { null },
                                 apellidos = apellidos.trim().ifBlank { null },
                                 telefono = telefono.trim().ifBlank { null },
-                                fotoPerfilUrl = fotoPerfilUrl.trim().ifBlank { null },
                                 distritoId = selectedDistrito?.id,
                                 direccionReferencia = direccion.trim().ifBlank { null },
                                 contactoEmergenciaNombre = contactoEmergenciaNombre.trim().ifBlank { null },
                                 contactoEmergenciaTelefono = contactoEmergenciaTelefono.trim().ifBlank { null },
                                 notasAdicionales = notasAdicionales.trim().ifBlank { null }
                             )
-                            onConfirm(req)
+                            onConfirm(req, fotoPendiente)
                         },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),
@@ -818,7 +818,7 @@ fun MascotaItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val fotoUrl = mascota.fotoUrl?.takeIf { it.isNotBlank() }
+                val fotoUrl = mascota.fotoUrlEfectiva
                 if (fotoUrl != null) {
                     AsyncImage(
                         model = fotoUrl,

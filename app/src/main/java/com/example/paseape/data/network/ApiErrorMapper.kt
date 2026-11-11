@@ -41,6 +41,8 @@ object ApiErrorMapper {
     private const val NOT_FOUND = "No encontramos la información solicitada."
     private const val CONFLICT = "Ya existe un registro con esos datos."
     private const val TOO_MANY_ATTEMPTS = "Demasiados intentos. Espera un momento e inténtalo de nuevo."
+    private const val FILE_TOO_LARGE =
+        "El archivo es demasiado grande para el servidor. Elige uno más pequeño."
     private const val SERVER_ERROR = "Ocurrió un error en el servidor. Inténtalo más tarde."
     private const val NO_CONNECTION =
         "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo."
@@ -97,6 +99,7 @@ object ApiErrorMapper {
             }
             code == 404 -> NOT_FOUND
             code == 409 -> CONFLICT
+            code == 413 -> FILE_TOO_LARGE
             code == 429 -> TOO_MANY_ATTEMPTS
             code in 500..599 -> SERVER_ERROR
             else -> backendMessage?.let { normalizeKnownMessage(it) ?: it } ?: fallback(context)

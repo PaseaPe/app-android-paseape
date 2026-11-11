@@ -12,6 +12,7 @@ import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.DocumentoUpload
+import com.example.paseape.data.network.FotoUpload
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,8 +53,18 @@ class WalkerProfileViewModel : ViewModel() {
     private val _documentError = MutableStateFlow<String?>(null)
     val documentError: StateFlow<String?> = _documentError.asStateFlow()
 
+    private val _isFotoLoading = MutableStateFlow(false)
+    val isFotoLoading: StateFlow<Boolean> = _isFotoLoading.asStateFlow()
+
+    private val _fotoProgress = MutableStateFlow<Int?>(null)
+    val fotoProgress: StateFlow<Int?> = _fotoProgress.asStateFlow()
+
+    private val _fotoError = MutableStateFlow<String?>(null)
+    val fotoError: StateFlow<String?> = _fotoError.asStateFlow()
+
     fun limpiarErrorDocumentos() {
         _documentError.value = null
+        _fotoError.value = null
     }
 
     fun cargarParametros(token: String?) {
@@ -123,13 +134,15 @@ class WalkerProfileViewModel : ViewModel() {
         usuarioUuid: String,
         req: UpdateProfileRequestDto,
         archivosPendientes: List<ArchivoPendiente> = emptyList(),
+        fotoPendiente: ArchivoPendiente? = null,
         resolver: ContentResolver? = null,
         onSuccess: () -> Unit
     ) {
-        if (_isOperationLoading.value || _isDocumentLoading.value) return
+        if (_isOperationLoading.value || _isDocumentLoading.value || _isFotoLoading.value) return
 
         _isOperationLoading.value = true
         _documentError.value = null
+        _fotoError.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
@@ -141,26 +154,34 @@ class WalkerProfileViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     _userMessage.emit("Perfil de paseador actualizado correctamente.")
 
-                    // Los documentos se envían después de guardar los datos del perfil.
-                    val errorSubida = if (archivosPendientes.isNotEmpty() && resolver != null) {
-                        enviarAntecedentes(
-                            token = token,
-                            usuarioUuid = usuarioUuid,
-                            archivos = archivosPendientes,
-                            resolver = resolver
-                        )
+                    // Primero la foto de perfil y luego los antecedentes.
+                    val errorFoto = if (fotoPendiente != null && resolver != null) {
+                        enviarFoto(token, fotoPendiente, resolver)
                     } else {
                         null
                     }
+
+                    val errorDocumentos =
+                        if (errorFoto == null && archivosPendientes.isNotEmpty() && resolver != null) {
+                            enviarAntecedentes(
+                                token = token,
+                                usuarioUuid = usuarioUuid,
+                                archivos = archivosPendientes,
+                                resolver = resolver
+                            )
+                        } else {
+                            null
+                        }
 
                     cargarPerfilSilencioso(token, usuarioUuid)
 
                     withContext(Dispatchers.Main) {
                         _isOperationLoading.value = false
-                        if (errorSubida == null) {
+                        if (errorFoto != null) _fotoError.value = errorFoto
+                        if (errorDocumentos != null) _documentError.value = errorDocumentos
+
+                        if (errorFoto == null && errorDocumentos == null) {
                             onSuccess()
-                        } else {
-                            _documentError.value = errorSubida
                         }
                     }
                 } else {
@@ -227,6 +248,42 @@ class WalkerProfileViewModel : ViewModel() {
     // ------------------------------------------------------------------
     // Documentos de antecedentes (subir / descargar / eliminar)
     // ------------------------------------------------------------------
+
+    /**
+     * Envía la foto de perfil del paseador al backend y devuelve el mensaje de
+     * error, o `null` si todo salió bien.
+     */
+    private suspend fun enviarFoto(
+        token: String,
+        foto: ArchivoPendiente,
+        resolver: ContentResolver
+    ): String? {
+        _isFotoLoading.value = true
+        _fotoProgress.value = 0
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val parte = FotoUpload.crearParte(resolver, foto) { porcentaje ->
+                _fotoProgress.value = porcentaje
+            }
+
+            if (parte == null) {
+                "No se pudo leer la imagen seleccionada."
+            } else {
+                val response = RetrofitClient.apiService.subirFotoPaseador(authHeader, parte)
+                if (response.isSuccessful) {
+                    _userMessage.emit("Foto de perfil actualizada correctamente.")
+                    null
+                } else {
+                    ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
+                }
+            }
+        } catch (e: Exception) {
+            ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
+        } finally {
+            _isFotoLoading.value = false
+            _fotoProgress.value = null
+        }
+    }
 
     /**
      * Envía los archivos seleccionados al backend y devuelve el mensaje de

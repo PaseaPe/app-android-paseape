@@ -624,9 +624,10 @@ private fun MascotaItemDrawerCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!mascota.fotoUrl.isNullOrBlank()) {
+                val fotoMascotaUrl = mascota.fotoUrlEfectiva
+                if (!fotoMascotaUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = mascota.fotoUrl,
+                        model = fotoMascotaUrl,
                         contentDescription = mascota.nombre,
                         modifier = Modifier
                             .size(44.dp)

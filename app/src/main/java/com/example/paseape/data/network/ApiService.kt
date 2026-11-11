@@ -12,6 +12,7 @@ import com.example.paseape.data.model.PaseadoresResponse
 import com.example.paseape.data.model.LoginRequest
 import com.example.paseape.data.model.AuthResData
 import com.example.paseape.data.model.LoginResponse
+import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
 import com.example.paseape.data.model.GoogleAuthReq
@@ -85,7 +86,7 @@ interface ApiService {
     suspend fun crearMascota(
         @Header("Authorization") token: String,
         @Body request: CrearMascotaRequest
-    ): Response<GenericResponse>
+    ): Response<ResponseDto<MascotaData>>
 
     @GET("mascotas/mascota/{uuid}")
     suspend fun getMascotaPorUuid(
@@ -375,5 +376,35 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("documentUuid") documentUuid: String
     ): Response<ResponseDto<Any?>>
+
+    // --- FOTOS DE PERFIL / MASCOTA ---
+
+    /**
+     * Sube o reemplaza la foto de perfil del cliente autenticado.
+     * El backend reemplaza la foto anterior y devuelve una URL prefirmada (~30 min).
+     */
+    @Multipart
+    @POST("cliente/foto")
+    suspend fun subirFotoCliente(
+        @Header("Authorization") token: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Sube o reemplaza la foto de perfil del paseador autenticado. */
+    @Multipart
+    @POST("paseadores/foto")
+    suspend fun subirFotoPaseador(
+        @Header("Authorization") token: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Sube o reemplaza la foto de una mascota del cliente autenticado. */
+    @Multipart
+    @POST("mascotas/{mascotaUuid}/foto")
+    suspend fun subirFotoMascota(
+        @Header("Authorization") token: String,
+        @Path("mascotaUuid") mascotaUuid: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
 
 }

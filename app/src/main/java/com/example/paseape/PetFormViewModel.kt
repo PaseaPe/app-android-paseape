@@ -46,7 +46,6 @@ data class PetFormUiState(
     val sociableConPerros: Boolean = true,
     val sociableConPersonas: Boolean = true,
     val precaucionesMedicas: String = "",
-    val fotoUrl: String = "",
 
     // Banderas de estado
     val isLoading: Boolean = false,
@@ -174,8 +173,7 @@ class PetFormViewModel : ViewModel() {
                 esterilizado = mascota.esterilizado == 1,
                 sociableConPerros = mascota.sociableConPerros == 1,
                 sociableConPersonas = mascota.sociableConPersonas == 1,
-                precaucionesMedicas = mascota.precaucionesMedicas.orEmpty(),
-                fotoUrl = mascota.fotoUrl.orEmpty()
+                precaucionesMedicas = mascota.precaucionesMedicas.orEmpty()
             )
         }
     }
@@ -265,10 +263,6 @@ class PetFormViewModel : ViewModel() {
         _uiState.update { it.copy(precaucionesMedicas = precauciones) }
     }
 
-    fun onFotoUrlChange(fotoUrl: String) {
-        _uiState.update { it.copy(fotoUrl = fotoUrl) }
-    }
-
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
@@ -320,8 +314,7 @@ class PetFormViewModel : ViewModel() {
             esterilizado = if (state.esterilizado) 1 else 0,
             sociableConPerros = if (state.sociableConPerros) 1 else 0,
             sociableConPersonas = if (state.sociableConPersonas) 1 else 0,
-            precaucionesMedicas = state.precaucionesMedicas.trim(),
-            fotoUrl = state.fotoUrl.trim().ifBlank { null }
+            precaucionesMedicas = state.precaucionesMedicas.trim()
         )
         return CrearMascotaRequest(
             usuarioUuid = usuarioUuid,
@@ -349,8 +342,7 @@ class PetFormViewModel : ViewModel() {
             esterilizado = if (state.esterilizado) 1 else 0,
             sociableConPerros = if (state.sociableConPerros) 1 else 0,
             sociableConPersonas = if (state.sociableConPersonas) 1 else 0,
-            precaucionesMedicas = state.precaucionesMedicas.trim(),
-            fotoUrl = state.fotoUrl.trim().ifBlank { null }
+            precaucionesMedicas = state.precaucionesMedicas.trim()
         )
     }
 
