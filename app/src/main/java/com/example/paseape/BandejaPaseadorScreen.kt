@@ -1,5 +1,9 @@
 package com.example.paseape
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -64,6 +69,7 @@ import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
+import com.google.gson.Gson
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -95,6 +101,15 @@ fun BandejaPaseadorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val accionesEnCurso by viewModel.accionesEnCurso.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    val detalleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { resultado ->
+        if (resultado.resultCode == Activity.RESULT_OK) {
+            viewModel.refrescarTodo()
+        }
+    }
 
     var tabActivo by remember { mutableStateOf(TabPaseos.INMEDIATOS) }
     var solicitudDescartar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
@@ -219,6 +234,20 @@ fun BandejaPaseadorScreen(
                                     TabPaseos.EN_CURSO,
                                     TabPaseos.HISTORIAL -> Unit
                                 }
+                            },
+                            onDetalle = { solicitud ->
+                                val json = Gson().toJson(solicitud)
+                                detalleLauncher.launch(
+                                    Intent(
+                                        context,
+                                        SolicitudDetallePaseadorActivity::class.java
+                                    ).apply {
+                                        putExtra(
+                                            SolicitudDetallePaseadorActivity.EXTRA_SOLICITUD_JSON,
+                                            json
+                                        )
+                                    }
+                                )
                             }
                         )
                     }
@@ -509,7 +538,8 @@ private fun PaseosTabContent(
     onAceptar: (SolicitudPaseoResDto) -> Unit,
     onIniciar: (SolicitudPaseoResDto) -> Unit,
     onCancelar: (SolicitudPaseoResDto) -> Unit,
-    onSecundario: (SolicitudPaseoResDto) -> Unit
+    onSecundario: (SolicitudPaseoResDto) -> Unit,
+    onDetalle: (SolicitudPaseoResDto) -> Unit
 ) {
     if (data == null || (data.cargando && data.items.isEmpty() && data.error == null)) {
         Box(
@@ -566,7 +596,8 @@ private fun PaseosTabContent(
                 onAceptar = { onAceptar(solicitud) },
                 onIniciar = { onIniciar(solicitud) },
                 onCancelar = { onCancelar(solicitud) },
-                onSecundario = { onSecundario(solicitud) }
+                onSecundario = { onSecundario(solicitud) },
+                onDetalle = { onDetalle(solicitud) }
             )
         }
 
@@ -639,7 +670,8 @@ private fun SolicitudPaseoCard(
     onAceptar: () -> Unit,
     onIniciar: () -> Unit,
     onCancelar: () -> Unit,
-    onSecundario: () -> Unit
+    onSecundario: () -> Unit,
+    onDetalle: () -> Unit
 ) {
     val mascotas = solicitud.mascotas.orEmpty()
     val mascota = mascotas.firstOrNull()
@@ -681,7 +713,18 @@ private fun SolicitudPaseoCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (estado == BandejaPaseadorViewModel.ESTADO_PENDIENTE ||
+                    estado == BandejaPaseadorViewModel.ESTADO_ACEPTADA ||
+                    estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO
+                ) {
+                    Modifier.clickable(onClick = onDetalle)
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
