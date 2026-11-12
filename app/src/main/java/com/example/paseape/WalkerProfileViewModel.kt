@@ -134,7 +134,6 @@ class WalkerProfileViewModel : ViewModel() {
         usuarioUuid: String,
         req: UpdateProfileRequestDto,
         archivosPendientes: List<ArchivoPendiente> = emptyList(),
-        fotoPendiente: ArchivoPendiente? = null,
         resolver: ContentResolver? = null,
         onSuccess: () -> Unit
     ) {
@@ -142,7 +141,6 @@ class WalkerProfileViewModel : ViewModel() {
 
         _isOperationLoading.value = true
         _documentError.value = null
-        _fotoError.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
@@ -154,15 +152,8 @@ class WalkerProfileViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     _userMessage.emit("Perfil de paseador actualizado correctamente.")
 
-                    // Primero la foto de perfil y luego los antecedentes.
-                    val errorFoto = if (fotoPendiente != null && resolver != null) {
-                        enviarFoto(token, fotoPendiente, resolver)
-                    } else {
-                        null
-                    }
-
                     val errorDocumentos =
-                        if (errorFoto == null && archivosPendientes.isNotEmpty() && resolver != null) {
+                        if (archivosPendientes.isNotEmpty() && resolver != null) {
                             enviarAntecedentes(
                                 token = token,
                                 usuarioUuid = usuarioUuid,
@@ -177,10 +168,9 @@ class WalkerProfileViewModel : ViewModel() {
 
                     withContext(Dispatchers.Main) {
                         _isOperationLoading.value = false
-                        if (errorFoto != null) _fotoError.value = errorFoto
                         if (errorDocumentos != null) _documentError.value = errorDocumentos
 
-                        if (errorFoto == null && errorDocumentos == null) {
+                        if (errorDocumentos == null) {
                             onSuccess()
                         }
                     }
@@ -282,6 +272,31 @@ class WalkerProfileViewModel : ViewModel() {
         } finally {
             _isFotoLoading.value = false
             _fotoProgress.value = null
+        }
+    }
+
+    /**
+     * Sube/reemplaza la foto de perfil del paseador desde el visor de foto.
+     * [onSuccess] se ejecuta en el hilo principal cuando el backend confirma.
+     */
+    fun subirFotoPerfil(
+        token: String,
+        usuarioUuid: String,
+        foto: ArchivoPendiente,
+        resolver: ContentResolver,
+        onSuccess: () -> Unit
+    ) {
+        if (_isFotoLoading.value) return
+
+        _fotoError.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val error = enviarFoto(token, foto, resolver)
+            if (error == null) cargarPerfilSilencioso(token, usuarioUuid)
+
+            withContext(Dispatchers.Main) {
+                _fotoError.value = error
+                if (error == null) onSuccess()
+            }
         }
     }
 

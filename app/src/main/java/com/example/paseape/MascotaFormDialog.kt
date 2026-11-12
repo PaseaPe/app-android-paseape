@@ -38,9 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,7 +51,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.ActualizarMascotaRequest
-import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.GeneroMascotaParamDto
 import com.example.paseape.data.model.MascotaData
@@ -62,7 +59,6 @@ import com.example.paseape.data.model.RazaParamDto
 import com.example.paseape.data.model.TamanoMascotaParamDto
 import com.example.paseape.data.model.TipoMascotaParamDto
 import com.example.paseape.ui.components.CatalogDropdownField
-import com.example.paseape.ui.components.PhotoPickerCard
 import com.example.paseape.ui.theme.PrimaryDark
 
 @Composable
@@ -70,7 +66,7 @@ fun AgregarMascotaDialog(
     usuarioUuid: String,
     token: String? = null,
     onDismiss: () -> Unit,
-    onConfirm: (CrearMascotaRequest, ArchivoPendiente?) -> Unit
+    onConfirm: (CrearMascotaRequest) -> Unit
 ) {
     val context = LocalContext.current
     val authToken = token ?: remember(context) { SessionManager.getToken(context) }
@@ -91,7 +87,7 @@ fun EditarMascotaDialog(
     mascota: MascotaData,
     token: String? = null,
     onDismiss: () -> Unit,
-    onConfirm: (ActualizarMascotaRequest, ArchivoPendiente?) -> Unit
+    onConfirm: (ActualizarMascotaRequest) -> Unit
 ) {
     val context = LocalContext.current
     val authToken = token ?: remember(context) { SessionManager.getToken(context) }
@@ -116,11 +112,10 @@ fun MascotaFormDialog(
     usuarioUuid: String = "",
     viewModel: PetFormViewModel = remember { PetFormViewModel() },
     onDismiss: () -> Unit,
-    onConfirmCrear: ((CrearMascotaRequest, ArchivoPendiente?) -> Unit)? = null,
-    onConfirmActualizar: ((ActualizarMascotaRequest, ArchivoPendiente?) -> Unit)? = null
+    onConfirmCrear: ((CrearMascotaRequest) -> Unit)? = null,
+    onConfirmActualizar: ((ActualizarMascotaRequest) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
 
     LaunchedEffect(initialMascota) {
         viewModel.cargarCatalogos(token, initialMascota)
@@ -433,19 +428,6 @@ fun MascotaFormDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
-
-                        // Foto de la mascota
-                        PhotoPickerCard(
-                            fotoActualUrl = initialMascota?.fotoUrlEfectiva,
-                            fotoPendiente = fotoPendiente,
-                            onFotoSeleccionada = { fotoPendiente = it },
-                            onQuitarFoto = { fotoPendiente = null },
-                            habilitado = !uiState.isSubmitting,
-                            titulo = "Foto de la mascota",
-                            descripcion = "Elige una imagen JPG, PNG o WEBP. Máximo 10 MB.",
-                            forma = RoundedCornerShape(16.dp),
-                            iconoVacio = Icons.Default.Pets
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -471,12 +453,12 @@ fun MascotaFormDialog(
                                 if (initialMascota != null) {
                                     val req = viewModel.buildActualizarMascotaRequest()
                                     if (req != null) {
-                                        onConfirmActualizar?.invoke(req, fotoPendiente)
+                                        onConfirmActualizar?.invoke(req)
                                     }
                                 } else {
                                     val req = viewModel.buildCrearMascotaRequest(usuarioUuid)
                                     if (req != null) {
-                                        onConfirmCrear?.invoke(req, fotoPendiente)
+                                        onConfirmCrear?.invoke(req)
                                     }
                                 }
                             },

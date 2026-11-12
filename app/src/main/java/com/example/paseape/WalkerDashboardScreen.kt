@@ -237,13 +237,21 @@ fun WalkerDashboardScreen(
                     fotoProgress = fotoProgress,
                     fotoError = fotoError,
                     onRetry = { viewModel.cargarPerfil(token = token, usuarioUuid = usuarioUuid) },
-                    onActualizarPerfil = { req, archivos, foto, onSuccess ->
+                    onActualizarPerfil = { req, archivos, onSuccess ->
                         viewModel.actualizarPerfil(
                             token = token,
                             usuarioUuid = usuarioUuid,
                             req = req,
                             archivosPendientes = archivos,
-                            fotoPendiente = foto,
+                            resolver = context.contentResolver,
+                            onSuccess = onSuccess
+                        )
+                    },
+                    onCambiarFoto = { foto, onSuccess ->
+                        viewModel.subirFotoPerfil(
+                            token = token,
+                            usuarioUuid = usuarioUuid,
+                            foto = foto,
                             resolver = context.contentResolver,
                             onSuccess = onSuccess
                         )

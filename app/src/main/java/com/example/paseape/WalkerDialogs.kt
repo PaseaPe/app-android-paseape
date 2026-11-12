@@ -42,7 +42,6 @@ import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.ui.components.FileUploadCard
-import com.example.paseape.ui.components.PhotoPickerCard
 import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
 
@@ -53,25 +52,19 @@ fun EditarPerfilPaseadorDialog(
     distritos: List<DistritoParamDto>,
     documentos: List<DigitalDocumentDto>,
     archivosPendientes: List<ArchivoPendiente>,
-    fotoPendiente: ArchivoPendiente?,
     isLoading: Boolean,
     isDocumentLoading: Boolean,
-    isFotoLoading: Boolean,
     uploadProgress: Int?,
-    fotoProgress: Int?,
     documentError: String?,
-    fotoError: String?,
     onArchivosSeleccionados: (List<ArchivoPendiente>) -> Unit,
     onQuitarArchivo: (ArchivoPendiente) -> Unit,
-    onFotoSeleccionada: (ArchivoPendiente) -> Unit,
-    onQuitarFoto: () -> Unit,
     onEliminarDocumento: (DigitalDocumentDto) -> Unit,
     onDescargarDocumento: (DigitalDocumentDto) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (UpdateProfileRequestDto) -> Unit
 ) {
     val paseador = detalle.paseador
-    val ocupado = isLoading || isDocumentLoading || isFotoLoading
+    val ocupado = isLoading || isDocumentLoading
 
     var nombres by remember { mutableStateOf(detalle.nombres ?: paseador?.nombres.orEmpty()) }
     var apellidos by remember { mutableStateOf(detalle.apellidos ?: paseador?.apellidos.orEmpty()) }
@@ -143,20 +136,6 @@ fun EditarPerfilPaseadorDialog(
                     enabled = !ocupado,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
-                )
-
-                // Foto de perfil
-                PhotoPickerCard(
-                    fotoActualUrl = detalle.fotoPerfilUrl,
-                    fotoPendiente = fotoPendiente,
-                    onFotoSeleccionada = onFotoSeleccionada,
-                    onQuitarFoto = onQuitarFoto,
-                    subiendo = isFotoLoading,
-                    progreso = fotoProgress,
-                    habilitado = !ocupado,
-                    error = fotoError,
-                    titulo = "Foto de perfil",
-                    descripcion = "Elige una imagen JPG, PNG o WEBP. Máximo 10 MB."
                 )
 
                 // Antecedentes Policiales / Penales: mismos controles que en el

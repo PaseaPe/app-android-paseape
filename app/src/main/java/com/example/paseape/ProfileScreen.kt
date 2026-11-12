@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -85,10 +86,11 @@ import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
-import com.example.paseape.ui.components.PhotoPickerCard
+import com.example.paseape.ui.components.VisorFotoDialog
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PrimaryDark
+import com.example.paseape.ui.theme.PrimaryOrange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,8 +101,12 @@ fun ProfileScreen(
     onLogoutClick: () -> Unit = {},
     onLogout: () -> Unit = onLogoutClick,
     onBack: () -> Unit = {},
-    onGuardarPerfil: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit = { _, _ -> },
-    onCrearMascota: (CrearMascotaRequest, ArchivoPendiente?) -> Unit = { _, _ -> },
+    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit = {},
+    onCrearMascota: (CrearMascotaRequest) -> Unit = {},
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit = { _, _ -> },
+    isFotoLoading: Boolean = false,
+    fotoProgress: Int? = null,
+    fotoError: String? = null,
     onMascotaClick: (MascotaData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -166,6 +172,10 @@ fun ProfileScreen(
                         onLogout = onLogoutClick,
                         onGuardarPerfil = onGuardarPerfil,
                         onCrearMascota = onCrearMascota,
+                        onCambiarFoto = onCambiarFoto,
+                        isFotoLoading = isFotoLoading,
+                        fotoProgress = fotoProgress,
+                        fotoError = fotoError,
                         onMascotaClick = onMascotaClick
                     )
                 }
@@ -298,8 +308,12 @@ fun ProfileSuccessContent(
     usuario: UsuarioClienteData,
     distritos: List<DistritoParamDto> = emptyList(),
     onLogout: () -> Unit,
-    onGuardarPerfil: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit,
-    onCrearMascota: (CrearMascotaRequest, ArchivoPendiente?) -> Unit,
+    onGuardarPerfil: (ActualizarPerfilReqDto) -> Unit,
+    onCrearMascota: (CrearMascotaRequest) -> Unit,
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit,
+    isFotoLoading: Boolean,
+    fotoProgress: Int?,
+    fotoError: String?,
     onMascotaClick: (MascotaData) -> Unit
 ) {
     val detalle = usuario.detalleCliente
@@ -307,6 +321,12 @@ fun ProfileSuccessContent(
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showAddPetDialog by remember { mutableStateOf(false) }
+    var showVisorFoto by remember { mutableStateOf(false) }
+    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
+
+    val inicialNombre = usuario.nombres?.firstOrNull()?.toString() ?: "U"
+    val inicialApellido = usuario.apellidos?.firstOrNull()?.toString() ?: ""
+    val avatarText = "$inicialNombre$inicialApellido".uppercase()
 
     LazyColumn(
         modifier = Modifier
@@ -330,35 +350,57 @@ fun ProfileSuccessContent(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val fotoPerfilUrl = usuario.fotoUrlEfectiva
-                    val inicialNombre = usuario.nombres?.firstOrNull()?.toString() ?: "U"
-                    val inicialApellido = usuario.apellidos?.firstOrNull()?.toString() ?: ""
-                    val avatarText = "$inicialNombre$inicialApellido".uppercase()
 
                     Box(
                         modifier = Modifier
                             .size(90.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (!fotoPerfilUrl.isNullOrBlank()) Color(0xFFF1F5F9) else PrimaryDark
-                            )
-                            .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
-                        contentAlignment = Alignment.Center
+                            .clickable {
+                                fotoPendiente = null
+                                showVisorFoto = true
+                            }
                     ) {
-                        if (!fotoPerfilUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = fotoPerfilUrl,
-                                contentDescription = "Foto de perfil",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                placeholder = painterResource(id = R.drawable.logoperro),
-                                error = painterResource(id = R.drawable.logoperro)
-                            )
-                        } else {
-                            Text(
-                                text = avatarText,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(
+                                    if (!fotoPerfilUrl.isNullOrBlank()) Color(0xFFF1F5F9) else PrimaryDark
+                                )
+                                .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!fotoPerfilUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = fotoPerfilUrl,
+                                    contentDescription = "Foto de perfil",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    placeholder = painterResource(id = R.drawable.logoperro),
+                                    error = painterResource(id = R.drawable.logoperro)
+                                )
+                            } else {
+                                Text(
+                                    text = avatarText,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(PrimaryOrange),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = "Cambiar foto",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }
@@ -584,9 +626,9 @@ fun ProfileSuccessContent(
             usuario = usuario,
             distritos = distritos,
             onDismiss = { showEditProfileDialog = false },
-            onConfirm = { req, foto ->
+            onConfirm = { req ->
                 showEditProfileDialog = false
-                onGuardarPerfil(req, foto)
+                onGuardarPerfil(req)
             }
         )
     }
@@ -595,9 +637,37 @@ fun ProfileSuccessContent(
         AgregarMascotaDialog(
             usuarioUuid = usuario.uuid ?: "",
             onDismiss = { showAddPetDialog = false },
-            onConfirm = { req, foto ->
+            onConfirm = { req ->
                 showAddPetDialog = false
-                onCrearMascota(req, foto)
+                onCrearMascota(req)
+            }
+        )
+    }
+
+    if (showVisorFoto) {
+        VisorFotoDialog(
+            titulo = "Foto de perfil",
+            fotoUrl = usuario.fotoUrlEfectiva,
+            inicial = avatarText,
+            fotoPendiente = fotoPendiente,
+            subiendo = isFotoLoading,
+            progreso = fotoProgress,
+            error = fotoError,
+            onSeleccionarFoto = { fotoPendiente = it },
+            onGuardarFoto = {
+                fotoPendiente?.let { foto ->
+                    onCambiarFoto(foto) {
+                        fotoPendiente = null
+                        showVisorFoto = false
+                    }
+                }
+            },
+            onDescartarPendiente = { fotoPendiente = null },
+            onDismiss = {
+                if (!isFotoLoading) {
+                    fotoPendiente = null
+                    showVisorFoto = false
+                }
             }
         )
     }
@@ -609,14 +679,13 @@ fun EditarPerfilDialog(
     usuario: UsuarioClienteData,
     distritos: List<DistritoParamDto> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (ActualizarPerfilReqDto, ArchivoPendiente?) -> Unit
+    onConfirm: (ActualizarPerfilReqDto) -> Unit
 ) {
     val detalle = usuario.detalleCliente
 
     var nombres by remember { mutableStateOf(usuario.nombres ?: "") }
     var apellidos by remember { mutableStateOf(usuario.apellidos ?: "") }
     var telefono by remember { mutableStateOf(usuario.telefono ?: "") }
-    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
     var direccion by remember { mutableStateOf(detalle?.direccionReferencia ?: "") }
     var contactoEmergenciaNombre by remember { mutableStateOf(detalle?.contactoEmergenciaNombre ?: "") }
     var contactoEmergenciaTelefono by remember { mutableStateOf(detalle?.contactoEmergenciaTelefono ?: "") }
@@ -679,15 +748,6 @@ fun EditarPerfilDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
-                )
-
-                PhotoPickerCard(
-                    fotoActualUrl = usuario.fotoUrlEfectiva,
-                    fotoPendiente = fotoPendiente,
-                    onFotoSeleccionada = { fotoPendiente = it },
-                    onQuitarFoto = { fotoPendiente = null },
-                    titulo = "Foto de perfil",
-                    descripcion = "Elige una imagen JPG, PNG o WEBP. Máximo 10 MB."
                 )
 
                 // Selector de Distrito
@@ -785,7 +845,7 @@ fun EditarPerfilDialog(
                                 contactoEmergenciaTelefono = contactoEmergenciaTelefono.trim().ifBlank { null },
                                 notasAdicionales = notasAdicionales.trim().ifBlank { null }
                             )
-                            onConfirm(req, fotoPendiente)
+                            onConfirm(req)
                         },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark),

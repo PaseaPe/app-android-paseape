@@ -36,6 +36,10 @@ class AccountActivity : ComponentActivity() {
 
     private var uiState by mutableStateOf<ProfileUiState>(ProfileUiState.Loading)
     private var distritosDisponibles by mutableStateOf<List<DistritoParamDto>>(emptyList())
+    private var isFotoLoading by mutableStateOf(false)
+    private var fotoProgress by mutableStateOf<Int?>(null)
+    private var fotoError by mutableStateOf<String?>(null)
+    private var recargarAlVolver by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,16 +59,32 @@ class AccountActivity : ComponentActivity() {
                     onLogoutClick = { cerrarSesionYRedirigir() },
                     onLogout = { cerrarSesionYRedirigir() },
                     onBack = { finish() },
-                    onGuardarPerfil = { req, foto -> actualizarDatosPerfil(req, foto) },
-                    onCrearMascota = { req, foto -> crearMascota(req, foto) },
+                    onGuardarPerfil = { req -> actualizarDatosPerfil(req) },
+                    onCrearMascota = { req -> crearMascota(req) },
+                    onCambiarFoto = { foto, onSuccess -> cambiarFotoPerfil(foto, onSuccess) },
+                    isFotoLoading = isFotoLoading,
+                    fotoProgress = fotoProgress,
+                    fotoError = fotoError,
                     onMascotaClick = { mascota: MascotaData ->
                         val intent = Intent(this, MascotaDetalleActivity::class.java).apply {
                             putExtra(MascotaDetalleActivity.EXTRA_MASCOTA_UUID, mascota.uuid)
                         }
+                        // Solo refrescamos al volver del detalle, no al volver
+                        // del selector de fotos (también dispara onResume).
+                        recargarAlVolver = true
                         startActivity(intent)
                     }
                 )
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Al volver del detalle de una mascota, refresca la foto de la lista.
+        if (recargarAlVolver) {
+            recargarAlVolver = false
+            if (uiState is ProfileUiState.Success) cargarPerfilCliente()
         }
     }
 
@@ -163,7 +183,7 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
-    fun actualizarDatosPerfil(req: ActualizarPerfilReqDto, fotoPendiente: ArchivoPendiente? = null) {
+    fun actualizarDatosPerfil(req: ActualizarPerfilReqDto) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -182,16 +202,12 @@ class AccountActivity : ComponentActivity() {
                     return@launch
                 }
 
-                // La foto real se sube como documento después de guardar los datos.
-                val avisoFoto = fotoPendiente?.let { subirFotoCliente(authHeader, it) }
-
                 withContext(Dispatchers.Main) {
-                    val mensaje = if (avisoFoto == null) {
-                        "Perfil actualizado con éxito"
-                    } else {
-                        "Perfil actualizado, pero no se pudo subir la foto: $avisoFoto"
-                    }
-                    Toast.makeText(this@AccountActivity, mensaje, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@AccountActivity,
+                        "Perfil actualizado con éxito",
+                        Toast.LENGTH_LONG
+                    ).show()
                     cargarPerfilCliente()
                 }
             } catch (e: Exception) {
@@ -207,7 +223,7 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
-    fun crearMascota(req: CrearMascotaRequest, fotoPendiente: ArchivoPendiente? = null) {
+    fun crearMascota(req: CrearMascotaRequest) {
         val token = getStoredToken()
         if (token.isNullOrBlank()) {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -234,24 +250,14 @@ class AccountActivity : ComponentActivity() {
                     return@launch
                 }
 
-                // La foto de mascota se sube después de crear la mascota, ya que
-                // el endpoint necesita su uuid.
-                val mascotaUuid = response.body()?.response?.uuid
-                val avisoFoto = when {
-                    fotoPendiente == null -> null
-                    mascotaUuid.isNullOrBlank() ->
-                        "no se recibió el identificador de la mascota"
-
-                    else -> subirFotoMascota(authHeader, mascotaUuid, fotoPendiente)
-                }
-
+                // La foto de mascota se agrega después desde el detalle, ya que
+                // el endpoint necesita el uuid de la mascota recién creada.
                 withContext(Dispatchers.Main) {
-                    val mensaje = if (avisoFoto == null) {
-                        "Mascota agregada con éxito"
-                    } else {
-                        "Mascota creada, pero no se pudo subir la foto: $avisoFoto"
-                    }
-                    Toast.makeText(this@AccountActivity, mensaje, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@AccountActivity,
+                        "Mascota agregada con éxito",
+                        Toast.LENGTH_LONG
+                    ).show()
                     cargarPerfilCliente()
                 }
             } catch (e: Exception) {
@@ -267,35 +273,62 @@ class AccountActivity : ComponentActivity() {
         }
     }
 
-    /** Sube/reemplaza la foto de perfil del cliente. Devuelve el error o `null`. */
-    private suspend fun subirFotoCliente(authHeader: String, foto: ArchivoPendiente): String? {
-        val parte = FotoUpload.crearParte(contentResolver, foto) { }
-            ?: return "No se pudo leer la imagen seleccionada."
-        return try {
-            val response = RetrofitClient.apiService.subirFotoCliente(authHeader, parte)
-            if (response.isSuccessful) null
-            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
-        } catch (e: Exception) {
-            Log.e("ACCOUNT_DEBUG", "Error al subir foto de perfil", e)
-            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE)
+    /**
+     * Sube/reemplaza la foto de perfil del cliente desde el visor de foto.
+     * [onSuccess] se ejecuta en el hilo principal cuando el backend confirma.
+     */
+    fun cambiarFotoPerfil(foto: ArchivoPendiente, onSuccess: () -> Unit = {}) {
+        val token = getStoredToken()
+        if (token.isNullOrBlank()) {
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            return
         }
-    }
+        if (isFotoLoading) return
 
-    /** Sube/reemplaza la foto de una mascota. Devuelve el error o `null`. */
-    private suspend fun subirFotoMascota(
-        authHeader: String,
-        mascotaUuid: String,
-        foto: ArchivoPendiente
-    ): String? {
-        val parte = FotoUpload.crearParte(contentResolver, foto) { }
-            ?: return "No se pudo leer la imagen seleccionada."
-        return try {
-            val response = RetrofitClient.apiService.subirFotoMascota(authHeader, mascotaUuid, parte)
-            if (response.isSuccessful) null
-            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
-        } catch (e: Exception) {
-            Log.e("ACCOUNT_DEBUG", "Error al subir foto de mascota", e)
-            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+        isFotoLoading = true
+        fotoProgress = 0
+        fotoError = null
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val parte = FotoUpload.crearParte(contentResolver, foto) { porcentaje ->
+                    runOnUiThread { fotoProgress = porcentaje }
+                }
+
+                if (parte == null) {
+                    withContext(Dispatchers.Main) {
+                        isFotoLoading = false
+                        fotoProgress = null
+                        fotoError = "No se pudo leer la imagen seleccionada."
+                    }
+                    return@launch
+                }
+
+                val response = RetrofitClient.apiService.subirFotoCliente(authHeader, parte)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    if (response.isSuccessful) {
+                        Toast.makeText(
+                            this@AccountActivity,
+                            "Foto de perfil actualizada",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        cargarPerfilCliente()
+                        onSuccess()
+                    } else {
+                        fotoError = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_DEBUG", "Error al subir foto de perfil", e)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    fotoError = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE)
+                }
+            }
         }
     }
 

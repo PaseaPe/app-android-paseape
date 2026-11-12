@@ -29,6 +29,9 @@ class MascotaDetalleActivity : ComponentActivity() {
 
     private var uiState by mutableStateOf<MascotaDetalleUiState>(MascotaDetalleUiState.Loading)
     private var mascotaUuid: String? = null
+    private var isFotoLoading by mutableStateOf(false)
+    private var fotoProgress by mutableStateOf<Int?>(null)
+    private var fotoError by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +48,11 @@ class MascotaDetalleActivity : ComponentActivity() {
                     uiState = uiState,
                     onRetry = { cargarDetalleMascota() },
                     onBack = { finish() },
-                    onActualizarMascota = { req, foto -> actualizarMascota(req, foto) }
+                    onActualizarMascota = { req -> actualizarMascota(req) },
+                    onCambiarFoto = { foto, onSuccess -> cambiarFotoMascota(foto, onSuccess) },
+                    isFotoLoading = isFotoLoading,
+                    fotoProgress = fotoProgress,
+                    fotoError = fotoError
                 )
             }
         }
@@ -109,7 +116,7 @@ class MascotaDetalleActivity : ComponentActivity() {
         }
     }
 
-    private fun actualizarMascota(req: ActualizarMascotaRequest, fotoPendiente: ArchivoPendiente? = null) {
+    private fun actualizarMascota(req: ActualizarMascotaRequest) {
         val uuid = mascotaUuid ?: return
         val token = getAuthToken() ?: run {
             Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
@@ -131,16 +138,12 @@ class MascotaDetalleActivity : ComponentActivity() {
                     return@launch
                 }
 
-                // La foto se sube como documento después de guardar los datos.
-                val avisoFoto = fotoPendiente?.let { subirFotoMascota(authHeader, uuid, it) }
-
                 withContext(Dispatchers.Main) {
-                    val mensaje = if (avisoFoto == null) {
-                        "¡Mascota actualizada con éxito!"
-                    } else {
-                        "Mascota actualizada, pero no se pudo subir la foto: $avisoFoto"
-                    }
-                    Toast.makeText(this@MascotaDetalleActivity, mensaje, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@MascotaDetalleActivity,
+                        "¡Mascota actualizada con éxito!",
+                        Toast.LENGTH_LONG
+                    ).show()
                     cargarDetalleMascota()
                 }
             } catch (e: Exception) {
@@ -156,21 +159,62 @@ class MascotaDetalleActivity : ComponentActivity() {
         }
     }
 
-    /** Sube/reemplaza la foto de la mascota. Devuelve el error o `null`. */
-    private suspend fun subirFotoMascota(
-        authHeader: String,
-        mascotaUuid: String,
-        foto: ArchivoPendiente
-    ): String? {
-        val parte = FotoUpload.crearParte(contentResolver, foto) { }
-            ?: return "No se pudo leer la imagen seleccionada."
-        return try {
-            val response = RetrofitClient.apiService.subirFotoMascota(authHeader, mascotaUuid, parte)
-            if (response.isSuccessful) null
-            else ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
-        } catch (e: Exception) {
-            Log.e("MASCOTA_DETALLE", "Error al subir foto de mascota", e)
-            ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
+    /**
+     * Sube/reemplaza la foto de la mascota desde el visor de foto.
+     * [onSuccess] se ejecuta en el hilo principal cuando el backend confirma.
+     */
+    private fun cambiarFotoMascota(foto: ArchivoPendiente, onSuccess: () -> Unit = {}) {
+        val uuid = mascotaUuid ?: return
+        val token = getAuthToken() ?: run {
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isFotoLoading) return
+
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+        isFotoLoading = true
+        fotoProgress = 0
+        fotoError = null
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val parte = FotoUpload.crearParte(contentResolver, foto) { porcentaje ->
+                    runOnUiThread { fotoProgress = porcentaje }
+                }
+
+                if (parte == null) {
+                    withContext(Dispatchers.Main) {
+                        isFotoLoading = false
+                        fotoProgress = null
+                        fotoError = "No se pudo leer la imagen seleccionada."
+                    }
+                    return@launch
+                }
+
+                val response = RetrofitClient.apiService.subirFotoMascota(authHeader, uuid, parte)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    if (response.isSuccessful) {
+                        Toast.makeText(
+                            this@MascotaDetalleActivity,
+                            "Foto de la mascota actualizada",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        cargarDetalleMascota()
+                        onSuccess()
+                    } else {
+                        fotoError = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MASCOTA_DETALLE", "Error al subir foto de mascota", e)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    fotoError = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET)
+                }
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.EditLocation
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Work
@@ -69,8 +71,10 @@ import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
 import com.example.paseape.ui.components.DocumentosSoloLecturaCard
+import com.example.paseape.ui.components.VisorFotoDialog
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
+import com.example.paseape.ui.theme.PrimaryOrange
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,7 +90,8 @@ fun WalkerProfileScreen(
     documentError: String?,
     fotoError: String?,
     onRetry: () -> Unit,
-    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, ArchivoPendiente?, () -> Unit) -> Unit,
+    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, () -> Unit) -> Unit,
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit,
     onActualizarCobertura: (Int, () -> Unit) -> Unit,
     onEliminarDocumento: (String, () -> Unit) -> Unit,
     onObtenerUrlDescarga: (String, (String) -> Unit) -> Unit,
@@ -94,6 +99,7 @@ fun WalkerProfileScreen(
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showUpdateCoverageDialog by remember { mutableStateOf(false) }
+    var showVisorFoto by remember { mutableStateOf(false) }
     var archivosPendientes by remember { mutableStateOf<List<ArchivoPendiente>>(emptyList()) }
     var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
     val context = LocalContext.current
@@ -192,6 +198,10 @@ fun WalkerProfileScreen(
                 is WalkerProfileUiState.Success -> {
                     val detalle = uiState.detalle
                     val paseador = detalle.paseador
+                    val iniciales = buildString {
+                        detalle.nombres?.take(1)?.let { append(it) }
+                        detalle.apellidos?.take(1)?.let { append(it) }
+                    }.uppercase().ifBlank { "P" }
 
                     Column(
                         modifier = Modifier
@@ -217,29 +227,51 @@ fun WalkerProfileScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(90.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFF1F5F9))
-                                        .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .clickable {
+                                            fotoPendiente = null
+                                            showVisorFoto = true
+                                        }
                                 ) {
-                                    if (!detalle.fotoPerfilUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = detalle.fotoPerfilUrl,
-                                            contentDescription = "Foto de perfil",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = painterResource(id = R.drawable.logoperro),
-                                            error = painterResource(id = R.drawable.logoperro)
-                                        )
-                                    } else {
-                                        val inicial1 = detalle.nombres?.take(1).orEmpty()
-                                        val inicial2 = detalle.apellidos?.take(1).orEmpty()
-                                        val iniciales = "$inicial1$inicial2".uppercase()
-                                        Text(
-                                            text = iniciales.ifBlank { "P" },
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryDark
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFF1F5F9))
+                                            .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!detalle.fotoPerfilUrl.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = detalle.fotoPerfilUrl,
+                                                contentDescription = "Foto de perfil",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                placeholder = painterResource(id = R.drawable.logoperro),
+                                                error = painterResource(id = R.drawable.logoperro)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = iniciales,
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryDark
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(PrimaryOrange),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhotoCamera,
+                                            contentDescription = "Cambiar foto",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(15.dp)
                                         )
                                     }
                                 }
@@ -526,14 +558,10 @@ fun WalkerProfileScreen(
                             distritos = distritos,
                             documentos = detalle.digitalDocuments.orEmpty(),
                             archivosPendientes = archivosPendientes,
-                            fotoPendiente = fotoPendiente,
                             isLoading = isOperationLoading,
                             isDocumentLoading = isDocumentLoading,
-                            isFotoLoading = isFotoLoading,
                             uploadProgress = uploadProgress,
-                            fotoProgress = fotoProgress,
                             documentError = documentError,
-                            fotoError = fotoError,
                             onArchivosSeleccionados = { nuevos ->
                                 archivosPendientes =
                                     (archivosPendientes + nuevos)
@@ -543,8 +571,6 @@ fun WalkerProfileScreen(
                                 archivosPendientes = archivosPendientes
                                     .filterNot { it.uri == archivo.uri }
                             },
-                            onFotoSeleccionada = { fotoPendiente = it },
-                            onQuitarFoto = { fotoPendiente = null },
                             onEliminarDocumento = { documento ->
                                 documento.uuid?.let { uuid ->
                                     onEliminarDocumento(uuid) {}
@@ -559,14 +585,40 @@ fun WalkerProfileScreen(
                             },
                             onDismiss = {
                                 archivosPendientes = emptyList()
-                                fotoPendiente = null
                                 showEditProfileDialog = false
                             },
                             onConfirm = { req ->
-                                onActualizarPerfil(req, archivosPendientes, fotoPendiente) {
+                                onActualizarPerfil(req, archivosPendientes) {
                                     archivosPendientes = emptyList()
-                                    fotoPendiente = null
                                     showEditProfileDialog = false
+                                }
+                            }
+                        )
+                    }
+
+                    if (showVisorFoto) {
+                        VisorFotoDialog(
+                            titulo = "Foto de perfil",
+                            fotoUrl = detalle.fotoPerfilUrl,
+                            inicial = iniciales,
+                            fotoPendiente = fotoPendiente,
+                            subiendo = isFotoLoading,
+                            progreso = fotoProgress,
+                            error = fotoError,
+                            onSeleccionarFoto = { fotoPendiente = it },
+                            onGuardarFoto = {
+                                fotoPendiente?.let { foto ->
+                                    onCambiarFoto(foto) {
+                                        fotoPendiente = null
+                                        showVisorFoto = false
+                                    }
+                                }
+                            },
+                            onDescartarPendiente = { fotoPendiente = null },
+                            onDismiss = {
+                                if (!isFotoLoading) {
+                                    fotoPendiente = null
+                                    showVisorFoto = false
                                 }
                             }
                         )
