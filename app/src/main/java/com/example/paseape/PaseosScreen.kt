@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.ui.theme.BackgroundOffWhite
+import com.example.paseape.ui.theme.PrimaryDark
+import com.example.paseape.ui.theme.PrimaryOrange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,8 +50,8 @@ fun PaseosScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val naranja = Color(0xFFFF6B00)
-    val azulOscuro = Color(0xFF1E293B)
+    val naranja = PrimaryOrange
+    val azulOscuro = PrimaryDark
 
     // Si se abrió desde el inicio como "Paseo Inmediato", mostrar como ventana independiente
     var modoVentanaInmediata by remember { mutableStateOf(abrirInmediataInicial) }
@@ -56,6 +59,78 @@ fun PaseosScreen(
     // 0: Activos, 1: Pendientes, 2: Historial (Mis Paseos sin la pestaña Inmediato)
     var selectedTab by remember { mutableIntStateOf(tabInicial.coerceIn(0, 2)) }
     var solicitudParaCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+
+    // Pantallas Sprint 3 del flujo Dueño (Cliente):
+    // 1. Detalle de Reserva (SCR_S3_01)
+    // 2. Seguimiento en Mapa en Vivo (SCR_S3_03)
+    // 3. Resumen Post-Paseo con Recorrido Consolidado (SCR_S3_05)
+    var solicitudDetalleSeleccionada by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+    var solicitudMapaEnVivo by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+    var solicitudResumenPaseo by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+
+    solicitudMapaEnVivo?.let { solicitudActiva ->
+        SeguimientoPaseoEnVivoScreen(
+            solicitud = solicitudActiva,
+            authHeader = authHeader,
+            onBack = { solicitudMapaEnVivo = null },
+            onVerResumenClick = {
+                solicitudMapaEnVivo = null
+                solicitudResumenPaseo = solicitudActiva
+            }
+        )
+        return
+    }
+
+    solicitudResumenPaseo?.let { solicitudFinalizada ->
+        ResumenPaseoClienteScreen(
+            solicitud = solicitudFinalizada,
+            authHeader = authHeader,
+            formatearMoneda = { viewModel.formatearMoneda(it) },
+            onBack = { solicitudResumenPaseo = null }
+        )
+        return
+    }
+
+    solicitudDetalleSeleccionada?.let { solicitudDetalle ->
+        DetalleReservaClienteScreen(
+            solicitud = solicitudDetalle,
+            authHeader = authHeader,
+            formatearMoneda = { viewModel.formatearMoneda(it) },
+            cancelando = viewModel.cancelandoUuid == solicitudDetalle.uuid,
+            onBack = { solicitudDetalleSeleccionada = null },
+            onCancelarClick = { solicitudParaCancelar = solicitudDetalle },
+            onAbrirMapaEnVivo = {
+                solicitudMapaEnVivo = solicitudDetalle
+            },
+            onAbrirResumenPaseo = {
+                solicitudResumenPaseo = solicitudDetalle
+            }
+        )
+        solicitudParaCancelar?.let { solicitud ->
+            DialogoCancelarSolicitudCliente(
+                solicitud = solicitud,
+                cancelando = viewModel.cancelandoUuid == solicitud.uuid,
+                onDismiss = { solicitudParaCancelar = null },
+                onConfirmar = { motivo ->
+                    val uuid = solicitud.uuid.orEmpty()
+                    viewModel.cancelarSolicitud(
+                        authHeader = authHeader,
+                        solicitudUuid = uuid,
+                        motivo = motivo,
+                        onSuccess = {
+                            solicitudParaCancelar = null
+                            solicitudDetalleSeleccionada = null
+                            Toast.makeText(context, "Solicitud cancelada exitosamente", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }
+            )
+        }
+        return
+    }
 
     if (modoVentanaInmediata) {
         Scaffold(
@@ -80,7 +155,7 @@ fun PaseosScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .background(Color(0xFFF8F9FA))
+                    .background(BackgroundOffWhite)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 FormularioSolicitudInmediata(
@@ -311,7 +386,10 @@ fun PaseosScreen(
                             formatearMoneda = { viewModel.formatearMoneda(it) },
                             permiteCancelar = permiteCancelar,
                             cancelando = viewModel.cancelandoUuid == solicitudReal.uuid,
-                            onCancelarClick = { solicitudParaCancelar = solicitudReal }
+                            onCancelarClick = { solicitudParaCancelar = solicitudReal },
+                            onVerDetalleClick = { solicitudDetalleSeleccionada = solicitudReal },
+                            onVerMapaEnVivoClick = { solicitudMapaEnVivo = solicitudReal },
+                            onVerResumenPaseoClick = { solicitudResumenPaseo = solicitudReal }
                         )
                     }
                 }
@@ -995,7 +1073,10 @@ fun CardSolicitudInmediataReal(
     formatearMoneda: (Double) -> String,
     permiteCancelar: Boolean = false,
     cancelando: Boolean = false,
-    onCancelarClick: () -> Unit = {}
+    onCancelarClick: () -> Unit = {},
+    onVerDetalleClick: () -> Unit = {},
+    onVerMapaEnVivoClick: () -> Unit = {},
+    onVerResumenPaseoClick: () -> Unit = {}
 ) {
     val nombresMascotas = solicitud.mascotas
         ?.mapNotNull { it.nombre }
@@ -1022,7 +1103,7 @@ fun CardSolicitudInmediataReal(
         5 -> Color(0xFF3B82F6)
         3, 4, 7 -> Color(0xFFE2E8F0)
         6 -> Color(0xFFCBD5E1)
-        else -> Color(0xFFFF6B00)
+        else -> PrimaryOrange
     }
 
     Card(
@@ -1030,7 +1111,9 @@ fun CardSolicitudInmediataReal(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.5.dp, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onVerDetalleClick)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1043,7 +1126,7 @@ fun CardSolicitudInmediataReal(
                         Icon(
                             imageVector = if (esProgramado) Icons.Default.Pets else Icons.Default.Bolt,
                             contentDescription = null,
-                            tint = Color(0xFFFF6B00),
+                            tint = PrimaryOrange,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -1051,7 +1134,7 @@ fun CardSolicitudInmediataReal(
                             text = "$tituloModalidad • $nombresMascotas",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = Color(0xFF1E293B)
+                            color = PrimaryDark
                         )
                     }
                     Text(
@@ -1149,13 +1232,107 @@ fun CardSolicitudInmediataReal(
                         text = "Total: ${formatearMoneda(montoTotal)} PEN",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFFF6B00)
+                        color = PrimaryOrange
                     )
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            when (solicitud.estadoId) {
+                5 -> {
+                    // EN_CURSO (Pestaña Activos): Botón principal de Seguimiento en Mapa en Vivo + Ver Detalle
+                    Button(
+                        onClick = onVerMapaEnVivoClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Ver Seguimiento en Mapa en Vivo",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = onVerDetalleClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                    ) {
+                        Text(
+                            text = "Ver Detalle de Reserva",
+                            color = Color(0xFF334155),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                6 -> {
+                    // FINALIZADA (Pestaña Historial): Botón principal de Resumen del Paseo y Recorrido
+                    Button(
+                        onClick = onVerResumenPaseoClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Ver Resumen y Ruta del Paseo",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = onVerDetalleClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                    ) {
+                        Text(
+                            text = "Ver Detalle de Reserva",
+                            color = Color(0xFF334155),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                else -> {
+                    OutlinedButton(
+                        onClick = onVerDetalleClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, PrimaryOrange),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryOrange)
+                    ) {
+                        Text(
+                            text = "Ver Detalle de Reserva",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
             if (permiteCancelar && !solicitud.uuid.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onCancelarClick,
                     enabled = !cancelando,

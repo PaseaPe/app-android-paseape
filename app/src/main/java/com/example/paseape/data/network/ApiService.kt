@@ -47,7 +47,9 @@ import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
 import com.example.paseape.data.model.CancelarSolicitudReqDto
 import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.RechazarSolicitudRequest
+import com.example.paseape.data.model.SolicitudPaseoRecorridoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.data.model.UbicacionEnVivoResDto
 import retrofit2.Response
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
@@ -262,6 +264,20 @@ interface ApiService {
         @Path("uuid") uuid: String,
         @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
     ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // Seguimiento en tiempo real del paseo activo por el cliente (Sprint 3 - HU24)
+    @GET("cliente/solicitudes/{uuid}/ubicacion-actual")
+    suspend fun obtenerUbicacionActualPaseo(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<UbicacionEnVivoResDto>>
+
+    // Recorrido consolidado histórico post-paseo (Sprint 3 - HU24)
+    @GET("solicitudes/{uuid}/recorrido")
+    suspend fun obtenerRecorridoPaseo(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoRecorridoResDto>>
 
     // Notificaciones internas activas (HU22 y HU23)
     @GET("notificaciones")

@@ -17,6 +17,9 @@ val localProperties = Properties().apply {
 val baseUrl: String = localProperties.getProperty("BASE_URL")
     ?: "http://192.168.100.114:7001/api-paseape/"
 
+val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
+    ?: "AIzaSyDUc0m8wC2UWfrDe-hyrQvhzpnK3GGktv0"
+
 android {
     namespace = "com.example.paseape"
     compileSdk {
@@ -32,8 +35,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Expone BASE_URL en BuildConfig
+        // Expone BASE_URL y MAPS_API_KEY en BuildConfig y AndroidManifest
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -87,6 +92,11 @@ dependencies {
 
     // Carga de imágenes asíncronas
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Google Maps SDK, Location & Polyline Utils (Sprint 3)
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("com.google.maps.android:android-maps-utils:3.8.2")
 
     // Credential Manager y Autenticación Google
     implementation("androidx.credentials:credentials:1.3.0")

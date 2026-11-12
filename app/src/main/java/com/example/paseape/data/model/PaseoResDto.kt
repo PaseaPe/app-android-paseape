@@ -70,7 +70,9 @@ data class SolicitudPaseoResDto(
     @SerializedName("cliente_nombre_completo") val clienteNombreCompleto: String? = null,
     @SerializedName("mascotas") val mascotas: List<SolicitudMascotaResDto>? = emptyList(),
     @SerializedName("hora_vencimiento") val horaVencimiento: String? = null,
-    @SerializedName("creado_el") val creadoEl: String? = null
+    @SerializedName("creado_el") val creadoEl: String? = null,
+    @SerializedName("fecha_hora_inicio_real") val fechaHoraInicioReal: String? = null,
+    @SerializedName("fecha_hora_fin_real") val fechaHoraFinReal: String? = null
 )
 
 data class PageResponseDto<T>(
@@ -87,4 +89,37 @@ data class PageResponseDto<T>(
 
 data class CancelarSolicitudReqDto(
     @SerializedName("motivo") val motivo: String? = null
+)
+
+/**
+ * Respuesta de seguimiento activo en vivo (Sprint 3 - HU24):
+ * `GET /cliente/solicitudes/{uuid}/ubicacion-actual`
+ */
+data class UbicacionEnVivoResDto(
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("solicitud_paseo_uuid") val solicitudPaseoUuid: String? = null,
+    @SerializedName("latitud") val latitud: Double? = null,
+    @SerializedName("longitud") val longitud: Double? = null,
+    @SerializedName("precision_m") val precisionM: Double? = null,
+    @SerializedName("velocidad_ms") val velocidadMs: Double? = null,
+    @SerializedName("rumbo_grados") val rumboGrados: Double? = null,
+    @SerializedName("fecha_hora_gps") val fechaHoraGps: String? = null,
+    @SerializedName("senal_degradada") val senalDegradada: Boolean? = false
+)
+
+/**
+ * Respuesta de recorrido histórico consolidado post-paseo (Sprint 3 - HU24):
+ * `GET /solicitudes/{uuid}/recorrido`
+ */
+data class SolicitudPaseoRecorridoResDto(
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("solicitud_paseo_uuid") val solicitudPaseoUuid: String? = null,
+    @SerializedName("distancia_metros") val distanciaMetros: Double? = null,
+    @SerializedName("duracion_segundos") val duracionSegundos: Int? = null,
+    @SerializedName("velocidad_promedio_kmh") val velocidadPromedioKmh: Double? = null,
+    @SerializedName("coordenadas_codificadas") val coordenadasCodificadas: String? = null,
+    @SerializedName("coordenadas_total_puntos") val coordenadasTotalPuntos: Int? = null,
+    @SerializedName("tipo_origen_traza_descripcion") val tipoOrigenTrazaDescripcion: String? = null,
+    @SerializedName("fecha_hora_inicio") val fechaHoraInicio: String? = null,
+    @SerializedName("fecha_hora_fin") val fechaHoraFin: String? = null
 )

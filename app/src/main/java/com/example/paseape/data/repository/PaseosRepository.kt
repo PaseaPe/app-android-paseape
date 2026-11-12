@@ -6,7 +6,9 @@ import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
 import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
 import com.example.paseape.data.model.PageResponseDto
 import com.example.paseape.data.model.PaseoResDto
+import com.example.paseape.data.model.SolicitudPaseoRecorridoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.data.model.UbicacionEnVivoResDto
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
@@ -180,6 +182,48 @@ class PaseosRepository {
             }
         } catch (e: Exception) {
             Result.failure(Exception(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALK)))
+        }
+    }
+
+    /**
+     * Consulta la posición GPS actual del paseador en un paseo activo (Sprint 3 - HU24).
+     */
+    suspend fun obtenerUbicacionActualPaseo(
+        token: String,
+        solicitudUuid: String
+    ): Result<UbicacionEnVivoResDto?> {
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val response = apiService.obtenerUbicacionActualPaseo(authHeader, solicitudUuid)
+            val body = response.body()
+            if (response.isSuccessful) {
+                Result.success(body?.response)
+            } else {
+                Result.failure(Exception(body?.message ?: "Endpoint de ubicación en vivo aún no disponible"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Consulta el recorrido consolidado post-paseo (Sprint 3 - HU24).
+     */
+    suspend fun obtenerRecorridoPaseo(
+        token: String,
+        solicitudUuid: String
+    ): Result<SolicitudPaseoRecorridoResDto?> {
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val response = apiService.obtenerRecorridoPaseo(authHeader, solicitudUuid)
+            val body = response.body()
+            if (response.isSuccessful) {
+                Result.success(body?.response)
+            } else {
+                Result.failure(Exception(body?.message ?: "Endpoint de recorrido aún no disponible"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }
