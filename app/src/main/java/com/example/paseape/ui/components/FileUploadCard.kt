@@ -104,7 +104,7 @@ fun FileUploadCard(
     onSubir: (() -> Unit)? = null,
     titulo: String = "Certificado de antecedentes policiales / penales",
     descripcion: String =
-        "Adjunta tu certificado en PDF o Word. Máximo 1 MB por archivo."
+        "Adjunta tu certificado en PDF o Word. Máximo 10 MB por archivo."
 ) {
     val context = LocalContext.current
     var errorSeleccion by remember { mutableStateOf<String?>(null) }
@@ -124,7 +124,7 @@ fun FileUploadCard(
                     rechazados += "${archivo.nombre}: formato no permitido (solo PDF o Word)."
 
                 archivo.tamanoBytes > MAX_ANTECEDENTE_BYTES ->
-                    rechazados += "${archivo.nombre}: supera el límite de 1 MB."
+                    rechazados += "${archivo.nombre}: supera el límite de 10 MB."
 
                 else -> aceptados += archivo
             }
@@ -220,7 +220,7 @@ fun FileUploadCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "PDF o Word · máx. 1 MB",
+                        text = "PDF o Word · máx. 10 MB",
                         fontSize = 11.sp,
                         color = HintGray
                     )

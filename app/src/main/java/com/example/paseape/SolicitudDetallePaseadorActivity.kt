@@ -20,7 +20,6 @@ import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
-import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -29,29 +28,34 @@ import retrofit2.Response
 /**
  * Pantalla de detalle de una solicitud de paseo del lado del paseador.
  *
- * Se abre desde un card de la bandeja: recibe la solicitud ya cargada como JSON
- * (snapshot) para no requerir un endpoint de detalle en el backend. A partir de
- * ese snapshot se enriquecen las mascotas con su detalle y se permiten las
- * acciones aceptar/rechazar (PENDIENTE), iniciar paseo o cancelar (ACEPTADA).
+ * Recibe el uuid desde la bandeja y carga todo desde `GET /solicitudes/{uuid}`:
+ * cliente (con teléfono), mascotas con foto y precauciones, horario y monto.
+ * Permite aceptar/rechazar (PENDIENTE), tomar/descartar (BUSCANDO) e iniciar o
+ * cancelar (ACEPTADA).
  */
 class SolicitudDetallePaseadorActivity : ComponentActivity() {
 
     companion object {
-        /** JSON de [SolicitudPaseoResDto] enviado por la bandeja. */
-        const val EXTRA_SOLICITUD_JSON = "extra_solicitud_json"
+        /** UUID de la solicitud seleccionada en la bandeja. */
+        const val EXTRA_SOLICITUD_UUID = "extra_solicitud_uuid"
         private const val TAG = "SOLICITUD_DETALLE"
     }
 
     private var uiState by mutableStateOf<SolicitudDetalleUiState>(SolicitudDetalleUiState.Loading)
     private var accionEnCurso by mutableStateOf<AccionPaseo?>(null)
     private var authHeader: String = ""
+    private var solicitudUuid: String? = null
     private var huboCambios = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         authHeader = leerAuthHeader()
-        inicializar()
+        solicitudUuid = intent.getStringExtra(EXTRA_SOLICITUD_UUID)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        cargarDetalle()
 
         setContent {
             PaseaPETheme {
@@ -59,7 +63,7 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                     uiState = uiState,
                     accionEnCurso = accionEnCurso,
                     onBack = { finish() },
-                    onRetry = { inicializar() },
+                    onRetry = { cargarDetalle() },
                     onAceptar = { aceptar() },
                     onRechazar = { rechazar(it) },
                     onIniciar = { iniciar() },
@@ -91,20 +95,10 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
             .orEmpty()
     }
 
-    private fun leerSnapshot(): SolicitudPaseoResDto? {
-        val json = intent.getStringExtra(EXTRA_SOLICITUD_JSON) ?: return null
-        return try {
-            Gson().fromJson(json, SolicitudPaseoResDto::class.java)
-        } catch (e: Exception) {
-            Log.e(TAG, "No se pudo leer el snapshot de la solicitud", e)
-            null
-        }
-    }
-
-    private fun inicializar() {
-        val solicitud = leerSnapshot()
-        if (solicitud == null) {
-            uiState = SolicitudDetalleUiState.Error("No se encontraron los datos de la solicitud.")
+    private fun cargarDetalle() {
+        val uuid = solicitudUuid
+        if (uuid.isNullOrBlank()) {
+            uiState = SolicitudDetalleUiState.Error("No se encontró el identificador de la solicitud.")
             return
         }
         if (authHeader.isBlank()) {
@@ -112,55 +106,60 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
             return
         }
 
-        uiState = SolicitudDetalleUiState.Success(solicitud, emptyList())
-        cargarMascotasEnriquecidas(solicitud)
-    }
-
-    /** Completa el snapshot con la foto y las precauciones médicas de cada mascota. */
-    private fun cargarMascotasEnriquecidas(solicitud: SolicitudPaseoResDto) {
-        if (solicitud.mascotas.isNullOrEmpty()) return
-
+        uiState = SolicitudDetalleUiState.Loading
         lifecycleScope.launch {
-            val mascotas = cargarMascotas(solicitud)
-            val actual = uiState as? SolicitudDetalleUiState.Success ?: return@launch
-            uiState = actual.copy(mascotas = mascotas)
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    RetrofitClient.apiService.getSolicitudDetalle(authHeader, uuid)
+                }
+                if (!response.isSuccessful) {
+                    uiState = SolicitudDetalleUiState.Error(
+                        ApiErrorMapper.fromResponse(response, ApiErrorContext.WALK)
+                    )
+                    return@launch
+                }
+
+                val solicitud = response.body()?.response
+                if (solicitud == null) {
+                    uiState = SolicitudDetalleUiState.Error(
+                        "No se encontraron los datos de la solicitud."
+                    )
+                    return@launch
+                }
+
+                uiState = SolicitudDetalleUiState.Success(
+                    solicitud = solicitud,
+                    mascotas = mascotasDetalle(solicitud)
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error de red al cargar el detalle de la solicitud", e)
+                uiState = SolicitudDetalleUiState.Error(
+                    ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALK)
+                )
+            }
         }
     }
 
-
-    private suspend fun cargarMascotas(solicitud: SolicitudPaseoResDto): List<MascotaDetalleItem> {
-        return solicitud.mascotas.orEmpty().map { mascota ->
-            val detalle = mascota.uuid
-                ?.takeIf { it.isNotBlank() }
-                ?.let { uuid ->
-                    try {
-                        val response = withContext(Dispatchers.IO) {
-                            RetrofitClient.apiService.getMascotaPorUuid(authHeader, uuid)
-                        }
-                        if (response.isSuccessful) response.body()?.extraerMascota() else null
-                    } catch (e: Exception) {
-                        Log.e(TAG, "No se pudo cargar el detalle de la mascota $uuid", e)
-                        null
-                    }
-                }
-
+    /** Adapta las mascotas del endpoint al modelo que ya usa la pantalla. */
+    private fun mascotasDetalle(solicitud: SolicitudPaseoResDto): List<MascotaDetalleItem> =
+        solicitud.mascotas.orEmpty().map { mascota ->
             MascotaDetalleItem(
                 uuid = mascota.uuid,
                 nombre = mascota.nombre?.trim()?.takeIf { it.isNotBlank() } ?: "Mascota",
-                raza = detalle?.tipoRazaDescripcion?.takeIf { it.isNotBlank() } ?: mascota.raza,
-                tamano = detalle?.tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() } ?: mascota.tamano,
-                precaucionesMedicas = detalle?.precaucionesMedicas,
-                fotoUrl = detalle?.fotoUrlEfectiva ?: mascota.fotoUrl,
-                edadAnos = detalle?.edadAnos,
-                edadMeses = detalle?.edadMeses,
-                pesoKg = detalle?.pesoKg,
-                nivelEnergia = detalle?.tipoNivelEnergiaDescripcion,
-                sociablePerros = detalle?.sociableConPerros == 1,
-                sociablePersonas = detalle?.sociableConPersonas == 1,
-                esterilizado = detalle?.esterilizado == 1
+                raza = mascota.tipoRazaDescripcion?.takeIf { it.isNotBlank() } ?: mascota.raza,
+                tamano = mascota.tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() }
+                    ?: mascota.tamano,
+                precaucionesMedicas = mascota.precaucionesMedicas,
+                fotoUrl = mascota.fotoUrlEfectiva,
+                edadAnos = mascota.edadAnos,
+                edadMeses = mascota.edadMeses,
+                pesoKg = mascota.pesoKg,
+                nivelEnergia = mascota.tipoNivelEnergiaDescripcion,
+                sociablePerros = mascota.sociableConPerros == 1,
+                sociablePersonas = mascota.sociableConPersonas == 1,
+                esterilizado = mascota.esterilizado == 1
             )
         }
-    }
 
     private fun aceptar() {
         ejecutarAccion(AccionPaseo.ACEPTAR) { uuid ->
@@ -279,10 +278,7 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
         }
     }
 
-    private fun uuidActual(): String? = (uiState as? SolicitudDetalleUiState.Success)
-        ?.solicitud
-        ?.uuid
-        ?.takeIf { it.isNotBlank() }
+    private fun uuidActual(): String? = solicitudUuid?.takeIf { it.isNotBlank() }
 
     private fun cancelar(motivo: String) {
         ejecutarAccion(AccionPaseo.CANCELAR) { uuid ->
@@ -323,26 +319,17 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                 }
 
                 huboCambios = true
-                val detalle = response.body()?.response
 
                 when (accion) {
                     AccionPaseo.ACEPTAR -> {
-                        val actual = (uiState as? SolicitudDetalleUiState.Success)
-                        val actualizado = detalle ?: actual?.solicitud?.copy(
-                            estadoId = 2,
-                            estadoDescripcion = "ACEPTADA"
-                        )
-                        if (actualizado != null) {
-                            uiState = SolicitudDetalleUiState.Success(
-                                solicitud = actualizado,
-                                mascotas = actual?.mascotas.orEmpty()
-                            )
-                        }
                         Toast.makeText(
                             this@SolicitudDetallePaseadorActivity,
                             "Paseo aceptado",
                             Toast.LENGTH_SHORT
                         ).show()
+                        // Recarga el detalle para reflejar el nuevo estado y
+                        // conservar los datos completos (incluido el teléfono).
+                        cargarDetalle()
                     }
 
                     AccionPaseo.RECHAZAR -> {

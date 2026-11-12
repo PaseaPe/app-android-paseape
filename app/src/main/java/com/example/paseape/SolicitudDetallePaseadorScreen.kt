@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
@@ -124,9 +125,8 @@ sealed interface SolicitudDetalleUiState {
  * - PENDIENTE: permite aceptar o rechazar (con motivo opcional).
  * - ACEPTADA: muestra "Iniciar paseo" y "Cancelar".
  *
- * La pantalla trabaja con el snapshot de la solicitud que envía la bandeja
- * (sin endpoint de detalle). Para la foto y los datos extra de cada mascota se
- * consulta `GET /mascotas/mascota/{uuid}` (endpoint ya existente).
+ * Los datos vienen de `GET /solicitudes/{uuid}`: cliente (con teléfono),
+ * mascotas con foto y precauciones, horario y monto en una sola llamada.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -305,6 +305,7 @@ private fun ContenidoDetalle(
         item {
             ClienteCard(
                 nombre = solicitud.clienteNombreCompleto?.trim()?.takeIf { it.isNotBlank() },
+                telefono = solicitud.clienteTelefono?.trim()?.takeIf { it.isNotBlank() },
                 direccion = direccion,
                 referencia = referencia,
                 onAbrirMapa = onAbrirMapa
@@ -450,6 +451,7 @@ private fun HeroSolicitudCard(
 @Composable
 private fun ClienteCard(
     nombre: String?,
+    telefono: String?,
     direccion: String,
     referencia: String?,
     onAbrirMapa: (String) -> Unit
@@ -489,6 +491,23 @@ private fun ClienteCard(
                         fontWeight = FontWeight.Bold,
                         color = PrimaryDark
                     )
+                    if (telefono != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = null,
+                                tint = TextoGrisDetalle,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = telefono,
+                                fontSize = 13.sp,
+                                color = TextoGrisDetalle
+                            )
+                        }
+                    }
                 }
             }
 

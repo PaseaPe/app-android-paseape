@@ -296,6 +296,18 @@ interface ApiService {
 
     // --- BANDEJA DEL PASEADOR (HU de gestion de solicitudes) ---
 
+    /**
+     * Detalle completo de una solicitud (cliente, mascotas con foto y
+     * precauciones, horario y monto). Lo usan la bandeja y el detalle del
+     * paseador; también responde para solicitudes inmediatas en BUSCANDO
+     * dentro del distrito de cobertura del paseador.
+     */
+    @GET("solicitudes/{uuid}")
+    suspend fun getSolicitudDetalle(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
     // Bandeja de solicitudes/paseos del paseador
     @GET("paseador/solicitudes")
     suspend fun obtenerBandejaPaseador(

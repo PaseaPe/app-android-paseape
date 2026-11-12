@@ -153,7 +153,7 @@ fun EditarPerfilPaseadorDialog(
                     onDescargarDocumento = onDescargarDocumento,
                     onSubir = null,
                     titulo = "Antecedentes policiales / penales",
-                    descripcion = "Adjunta tu certificado en PDF o Word. Máximo 1 MB por archivo. Los archivos nuevos se envían al guardar los cambios."
+                    descripcion = "Adjunta tu certificado en PDF o Word. Máximo 10 MB por archivo. Los archivos nuevos se envían al guardar los cambios."
                 )
 
                 // Biografía

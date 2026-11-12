@@ -2,6 +2,7 @@ package com.example.paseape
 
 import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -69,7 +70,6 @@ import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
-import com.google.gson.Gson
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -236,18 +236,26 @@ fun BandejaPaseadorScreen(
                                 }
                             },
                             onDetalle = { solicitud ->
-                                val json = Gson().toJson(solicitud)
-                                detalleLauncher.launch(
-                                    Intent(
+                                val uuid = solicitud.uuid?.trim()
+                                if (uuid.isNullOrBlank()) {
+                                    Toast.makeText(
                                         context,
-                                        SolicitudDetallePaseadorActivity::class.java
-                                    ).apply {
-                                        putExtra(
-                                            SolicitudDetallePaseadorActivity.EXTRA_SOLICITUD_JSON,
-                                            json
-                                        )
-                                    }
-                                )
+                                        "No se pudo abrir la solicitud.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    detalleLauncher.launch(
+                                        Intent(
+                                            context,
+                                            SolicitudDetallePaseadorActivity::class.java
+                                        ).apply {
+                                            putExtra(
+                                                SolicitudDetallePaseadorActivity.EXTRA_SOLICITUD_UUID,
+                                                uuid
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         )
                     }

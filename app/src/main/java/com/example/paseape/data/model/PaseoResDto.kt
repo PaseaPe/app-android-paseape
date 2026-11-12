@@ -41,8 +41,25 @@ data class SolicitudMascotaResDto(
     @SerializedName("nombre") val nombre: String? = null,
     @SerializedName("raza") val raza: String? = null,
     @SerializedName("tamano") val tamano: String? = null,
-    @SerializedName("foto_url") val fotoUrl: String? = null
-)
+    @SerializedName("foto_url") val fotoUrl: String? = null,
+    // Campos que agrega el endpoint de detalle GET /solicitudes/{uuid}
+    @SerializedName("tipo_raza_descripcion") val tipoRazaDescripcion: String? = null,
+    @SerializedName("tipo_tamano_mascota_descripcion") val tipoTamanoMascotaDescripcion: String? = null,
+    @SerializedName("tipo_nivel_energia_descripcion") val tipoNivelEnergiaDescripcion: String? = null,
+    @SerializedName("precauciones_medicas") val precaucionesMedicas: String? = null,
+    @SerializedName("edad_anos") val edadAnos: Int? = null,
+    @SerializedName("edad_meses") val edadMeses: Int? = null,
+    @SerializedName("peso_kg") val pesoKg: Double? = null,
+    @SerializedName("sociable_con_perros") val sociableConPerros: Int? = null,
+    @SerializedName("sociable_con_personas") val sociableConPersonas: Int? = null,
+    @SerializedName("esterilizado") val esterilizado: Int? = null,
+    @SerializedName("foto_mascota") val fotoMascota: DocumentUrlDto? = null
+) {
+    /** El detalle devuelve `foto_mascota`; la bandeja mantiene `foto_url`. */
+    val fotoUrlEfectiva: String?
+        get() = fotoMascota?.url?.takeIf { it.isNotBlank() }
+            ?: fotoUrl?.takeIf { it.isNotBlank() }
+}
 
 data class SolicitudPaseoResDto(
     @SerializedName("uuid") val uuid: String? = null,
@@ -68,6 +85,7 @@ data class SolicitudPaseoResDto(
     @SerializedName("paseador_nombre_completo") val paseadorNombreCompleto: String? = null,
     @SerializedName("cliente_uuid") val clienteUuid: String? = null,
     @SerializedName("cliente_nombre_completo") val clienteNombreCompleto: String? = null,
+    @SerializedName("cliente_telefono") val clienteTelefono: String? = null,
     @SerializedName("mascotas") val mascotas: List<SolicitudMascotaResDto>? = emptyList(),
     @SerializedName("hora_vencimiento") val horaVencimiento: String? = null,
     @SerializedName("creado_el") val creadoEl: String? = null

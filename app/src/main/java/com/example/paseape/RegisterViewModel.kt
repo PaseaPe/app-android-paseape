@@ -489,7 +489,7 @@ class RegisterViewModel : ViewModel() {
                         "Solo se aceptan archivos PDF o Word."
                 archivos.any { it.tamanoBytes > MAX_ANTECEDENTE_BYTES } ->
                     errores[RegisterField.ANTECEDENTES] =
-                        "Cada archivo debe pesar como máximo 1 MB."
+                        "Cada archivo debe pesar como máximo 10 MB."
             }
         }
 
