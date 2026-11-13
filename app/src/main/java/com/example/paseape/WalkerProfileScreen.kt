@@ -1,7 +1,12 @@
 package com.example.paseape
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +29,7 @@ import androidx.compose.material.icons.filled.EditLocation
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Work
@@ -39,6 +45,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,17 +59,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.ui.components.DocumentosSoloLecturaCard
+import com.example.paseape.ui.components.VisorFotoDialog
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
+import com.example.paseape.ui.theme.PrimaryOrange
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,12 +83,26 @@ fun WalkerProfileScreen(
     uiState: WalkerProfileUiState,
     distritos: List<DistritoParamDto>,
     isOperationLoading: Boolean,
+    isDocumentLoading: Boolean,
+    isFotoLoading: Boolean,
+    uploadProgress: Int?,
+    fotoProgress: Int?,
+    documentError: String?,
+    fotoError: String?,
     onRetry: () -> Unit,
-    onActualizarPerfil: (UpdateProfileRequestDto, () -> Unit) -> Unit,
-    onActualizarCobertura: (Int, () -> Unit) -> Unit
+    onActualizarPerfil: (UpdateProfileRequestDto, List<ArchivoPendiente>, () -> Unit) -> Unit,
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit,
+    onActualizarCobertura: (Int, () -> Unit) -> Unit,
+    onEliminarDocumento: (String, () -> Unit) -> Unit,
+    onObtenerUrlDescarga: (String, (String) -> Unit) -> Unit,
+    onLimpiarErrorDocumentos: () -> Unit
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showUpdateCoverageDialog by remember { mutableStateOf(false) }
+    var showVisorFoto by remember { mutableStateOf(false) }
+    var archivosPendientes by remember { mutableStateOf<List<ArchivoPendiente>>(emptyList()) }
+    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -172,6 +198,10 @@ fun WalkerProfileScreen(
                 is WalkerProfileUiState.Success -> {
                     val detalle = uiState.detalle
                     val paseador = detalle.paseador
+                    val iniciales = buildString {
+                        detalle.nombres?.take(1)?.let { append(it) }
+                        detalle.apellidos?.take(1)?.let { append(it) }
+                    }.uppercase().ifBlank { "P" }
 
                     Column(
                         modifier = Modifier
@@ -197,29 +227,51 @@ fun WalkerProfileScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(90.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFF1F5F9))
-                                        .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .clickable {
+                                            fotoPendiente = null
+                                            showVisorFoto = true
+                                        }
                                 ) {
-                                    if (!detalle.fotoPerfilUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = detalle.fotoPerfilUrl,
-                                            contentDescription = "Foto de perfil",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = painterResource(id = R.drawable.logoperro),
-                                            error = painterResource(id = R.drawable.logoperro)
-                                        )
-                                    } else {
-                                        val inicial1 = detalle.nombres?.take(1).orEmpty()
-                                        val inicial2 = detalle.apellidos?.take(1).orEmpty()
-                                        val iniciales = "$inicial1$inicial2".uppercase()
-                                        Text(
-                                            text = iniciales.ifBlank { "P" },
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryDark
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFF1F5F9))
+                                            .border(2.dp, PrimaryDark.copy(alpha = 0.2f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!detalle.fotoPerfilUrl.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = detalle.fotoPerfilUrl,
+                                                contentDescription = "Foto de perfil",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                placeholder = painterResource(id = R.drawable.logoperro),
+                                                error = painterResource(id = R.drawable.logoperro)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = iniciales,
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryDark
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(PrimaryOrange),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhotoCamera,
+                                            contentDescription = "Cambiar foto",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(15.dp)
                                         )
                                     }
                                 }
@@ -374,15 +426,46 @@ fun WalkerProfileScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // Antecedentes Policiales / Penales
-                                val antecedentesUrl = paseador?.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
-                                ItemResumenAtributo(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    titulo = "Certificado de antecedentes policiales / penales",
-                                    valor = antecedentesUrl ?: "Pendiente de adjuntar (presiona Editar Perfil)",
-                                    icono = Icons.Default.CheckCircle,
-                                    destacado = antecedentesUrl != null
+                                // Antecedentes Policiales / Penales: solo lectura en el
+                                // perfil. Agregar o eliminar se hace desde Editar Perfil.
+                                DocumentosSoloLecturaCard(
+                                    documentos = detalle.digitalDocuments.orEmpty(),
+                                    habilitado = !isDocumentLoading,
+                                    onDescargarDocumento = { documento ->
+                                        documento.uuid?.let { uuid ->
+                                            onObtenerUrlDescarga(uuid) { url ->
+                                                abrirDocumento(context, url)
+                                            }
+                                        }
+                                    }
                                 )
+
+                                // Compatibilidad con el campo legado de URL, solo si no
+                                // hay documentos digitales todavía.
+                                val legacyUrl = paseador?.antecedentesPolicialesUrl
+                                    ?.takeIf { it.isNotBlank() }
+                                if (detalle.digitalDocuments.isNullOrEmpty() && legacyUrl != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Certificado registrado previamente",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF64748B),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        TextButton(onClick = { abrirDocumento(context, legacyUrl) }) {
+                                            Text(
+                                                text = "Abrir enlace",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryDark
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -445,7 +528,12 @@ fun WalkerProfileScreen(
                             }
 
                             Button(
-                                onClick = { showEditProfileDialog = true },
+                                onClick = {
+                                    archivosPendientes = emptyList()
+                                    fotoPendiente = null
+                                    onLimpiarErrorDocumentos()
+                                    showEditProfileDialog = true
+                                },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryDark)
@@ -468,11 +556,69 @@ fun WalkerProfileScreen(
                         EditarPerfilPaseadorDialog(
                             detalle = detalle,
                             distritos = distritos,
+                            documentos = detalle.digitalDocuments.orEmpty(),
+                            archivosPendientes = archivosPendientes,
                             isLoading = isOperationLoading,
-                            onDismiss = { showEditProfileDialog = false },
+                            isDocumentLoading = isDocumentLoading,
+                            uploadProgress = uploadProgress,
+                            documentError = documentError,
+                            onArchivosSeleccionados = { nuevos ->
+                                archivosPendientes =
+                                    (archivosPendientes + nuevos)
+                                        .distinctBy { it.uri.toString() }
+                            },
+                            onQuitarArchivo = { archivo ->
+                                archivosPendientes = archivosPendientes
+                                    .filterNot { it.uri == archivo.uri }
+                            },
+                            onEliminarDocumento = { documento ->
+                                documento.uuid?.let { uuid ->
+                                    onEliminarDocumento(uuid) {}
+                                }
+                            },
+                            onDescargarDocumento = { documento ->
+                                documento.uuid?.let { uuid ->
+                                    onObtenerUrlDescarga(uuid) { url ->
+                                        abrirDocumento(context, url)
+                                    }
+                                }
+                            },
+                            onDismiss = {
+                                archivosPendientes = emptyList()
+                                showEditProfileDialog = false
+                            },
                             onConfirm = { req ->
-                                onActualizarPerfil(req) {
+                                onActualizarPerfil(req, archivosPendientes) {
+                                    archivosPendientes = emptyList()
                                     showEditProfileDialog = false
+                                }
+                            }
+                        )
+                    }
+
+                    if (showVisorFoto) {
+                        VisorFotoDialog(
+                            titulo = "Foto de perfil",
+                            fotoUrl = detalle.fotoPerfilUrl,
+                            inicial = iniciales,
+                            fotoPendiente = fotoPendiente,
+                            subiendo = isFotoLoading,
+                            progreso = fotoProgress,
+                            error = fotoError,
+                            onSeleccionarFoto = { fotoPendiente = it },
+                            onGuardarFoto = {
+                                fotoPendiente?.let { foto ->
+                                    onCambiarFoto(foto) {
+                                        fotoPendiente = null
+                                        showVisorFoto = false
+                                    }
+                                }
+                            },
+                            onDescartarPendiente = { fotoPendiente = null },
+                            onDismiss = {
+                                if (!isFotoLoading) {
+                                    fotoPendiente = null
+                                    showVisorFoto = false
                                 }
                             }
                         )
@@ -585,5 +731,19 @@ fun ItemResumenAtributo(
                 )
             }
         }
+    }
+}
+
+/** Abre una URL prefirmada de documento en el navegador/visor del sistema. */
+private fun abrirDocumento(context: Context, url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            "No se pudo abrir el documento.",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 }

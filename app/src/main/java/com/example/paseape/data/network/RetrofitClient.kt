@@ -5,11 +5,16 @@ import com.example.paseape.BuildConfig
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // Las subidas multipart pueden tardar más que una petición normal.
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request()
                 Log.d("RETROFIT_DEBUG", "--> ${request.method} ${request.url}")

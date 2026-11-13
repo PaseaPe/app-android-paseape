@@ -23,6 +23,8 @@ class RegisterActivity : ComponentActivity() {
                     viewModel = viewModel,
                     onRegisterSuccess = { rol, uuid ->
                         val token = viewModel.uiState.value.authToken
+                        val aviso = viewModel.uiState.value.avisoRegistro
+                        val duracion = if (aviso != null) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
 
                         if (!token.isNullOrBlank()) {
                             // Registro con Google: el backend ya devolvió la sesión.
@@ -34,12 +36,16 @@ class RegisterActivity : ComponentActivity() {
                             )
                             Toast.makeText(
                                 this,
-                                "¡Cuenta creada con Google!",
-                                Toast.LENGTH_SHORT
+                                aviso ?: "¡Cuenta creada con Google!",
+                                duracion
                             ).show()
                             irAlDashboard(rolFinal, uuid)
                         } else {
-                            Toast.makeText(this, "¡Registro exitoso!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                this,
+                                aviso ?: "¡Registro exitoso!",
+                                duracion
+                            ).show()
                             startActivity(Intent(this, LoginActivity::class.java))
                             finish()
                         }

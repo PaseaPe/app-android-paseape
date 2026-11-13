@@ -12,12 +12,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.ActualizarPerfilReqDto
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.CrearMascotaRequest
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioClienteData
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
+import com.example.paseape.data.network.FotoUpload
 import com.example.paseape.data.network.RetrofitClient
 import com.example.paseape.ui.theme.PaseaPETheme
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,10 @@ class AccountActivity : ComponentActivity() {
 
     private var uiState by mutableStateOf<ProfileUiState>(ProfileUiState.Loading)
     private var distritosDisponibles by mutableStateOf<List<DistritoParamDto>>(emptyList())
+    private var isFotoLoading by mutableStateOf(false)
+    private var fotoProgress by mutableStateOf<Int?>(null)
+    private var fotoError by mutableStateOf<String?>(null)
+    private var recargarAlVolver by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,14 +61,30 @@ class AccountActivity : ComponentActivity() {
                     onBack = { finish() },
                     onGuardarPerfil = { req -> actualizarDatosPerfil(req) },
                     onCrearMascota = { req -> crearMascota(req) },
+                    onCambiarFoto = { foto, onSuccess -> cambiarFotoPerfil(foto, onSuccess) },
+                    isFotoLoading = isFotoLoading,
+                    fotoProgress = fotoProgress,
+                    fotoError = fotoError,
                     onMascotaClick = { mascota: MascotaData ->
                         val intent = Intent(this, MascotaDetalleActivity::class.java).apply {
                             putExtra(MascotaDetalleActivity.EXTRA_MASCOTA_UUID, mascota.uuid)
                         }
+                        // Solo refrescamos al volver del detalle, no al volver
+                        // del selector de fotos (también dispara onResume).
+                        recargarAlVolver = true
                         startActivity(intent)
                     }
                 )
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Al volver del detalle de una mascota, refresca la foto de la lista.
+        if (recargarAlVolver) {
+            recargarAlVolver = false
+            if (uiState is ProfileUiState.Success) cargarPerfilCliente()
         }
     }
 
@@ -172,14 +194,21 @@ class AccountActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.apiService.actualizarPerfil(authHeader, req)
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(this@AccountActivity, "Perfil actualizado con éxito", Toast.LENGTH_SHORT).show()
-                        cargarPerfilCliente()
-                    } else {
-                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                if (!response.isSuccessful) {
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@AccountActivity,
+                        "Perfil actualizado con éxito",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    cargarPerfilCliente()
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al actualizar perfil", e)
@@ -213,14 +242,23 @@ class AccountActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val response = RetrofitClient.apiService.crearMascota(authHeader, finalReq)
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(this@AccountActivity, "Mascota agregada con éxito", Toast.LENGTH_SHORT).show()
-                        cargarPerfilCliente()
-                    } else {
-                        val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                if (!response.isSuccessful) {
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.PET)
+                    withContext(Dispatchers.Main) {
                         Toast.makeText(this@AccountActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
+                    return@launch
+                }
+
+                // La foto de mascota se agrega después desde el detalle, ya que
+                // el endpoint necesita el uuid de la mascota recién creada.
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@AccountActivity,
+                        "Mascota agregada con éxito",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    cargarPerfilCliente()
                 }
             } catch (e: Exception) {
                 Log.e("ACCOUNT_DEBUG", "Error al crear mascota", e)
@@ -230,6 +268,65 @@ class AccountActivity : ComponentActivity() {
                         ApiErrorMapper.fromThrowable(e, ApiErrorContext.PET),
                         Toast.LENGTH_LONG
                     ).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Sube/reemplaza la foto de perfil del cliente desde el visor de foto.
+     * [onSuccess] se ejecuta en el hilo principal cuando el backend confirma.
+     */
+    fun cambiarFotoPerfil(foto: ArchivoPendiente, onSuccess: () -> Unit = {}) {
+        val token = getStoredToken()
+        if (token.isNullOrBlank()) {
+            Toast.makeText(this, "Tu sesión expiró. Inicia sesión nuevamente.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isFotoLoading) return
+
+        val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+        isFotoLoading = true
+        fotoProgress = 0
+        fotoError = null
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val parte = FotoUpload.crearParte(contentResolver, foto) { porcentaje ->
+                    runOnUiThread { fotoProgress = porcentaje }
+                }
+
+                if (parte == null) {
+                    withContext(Dispatchers.Main) {
+                        isFotoLoading = false
+                        fotoProgress = null
+                        fotoError = "No se pudo leer la imagen seleccionada."
+                    }
+                    return@launch
+                }
+
+                val response = RetrofitClient.apiService.subirFotoCliente(authHeader, parte)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    if (response.isSuccessful) {
+                        Toast.makeText(
+                            this@AccountActivity,
+                            "Foto de perfil actualizada",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        cargarPerfilCliente()
+                        onSuccess()
+                    } else {
+                        fotoError = ApiErrorMapper.fromResponse(response, ApiErrorContext.PROFILE)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ACCOUNT_DEBUG", "Error al subir foto de perfil", e)
+                withContext(Dispatchers.Main) {
+                    isFotoLoading = false
+                    fotoProgress = null
+                    fotoError = ApiErrorMapper.fromThrowable(e, ApiErrorContext.PROFILE)
                 }
             }
         }

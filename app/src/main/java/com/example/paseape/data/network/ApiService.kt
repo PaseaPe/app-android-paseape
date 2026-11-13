@@ -12,6 +12,7 @@ import com.example.paseape.data.model.PaseadoresResponse
 import com.example.paseape.data.model.LoginRequest
 import com.example.paseape.data.model.AuthResData
 import com.example.paseape.data.model.LoginResponse
+import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.GenericResponse
 import com.example.paseape.data.model.GoogleAuthReq
@@ -50,10 +51,16 @@ import com.example.paseape.data.model.RechazarSolicitudRequest
 import com.example.paseape.data.model.SolicitudPaseoRecorridoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.data.model.UbicacionEnVivoResDto
+import com.example.paseape.data.model.DigitalDocumentDto
+import com.example.paseape.data.model.DocumentUrlDto
+import okhttp3.MultipartBody
 import retrofit2.Response
+import retrofit2.http.DELETE
 import retrofit2.http.Headers
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.PUT
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -81,7 +88,7 @@ interface ApiService {
     suspend fun crearMascota(
         @Header("Authorization") token: String,
         @Body request: CrearMascotaRequest
-    ): Response<GenericResponse>
+    ): Response<ResponseDto<MascotaData>>
 
     @GET("mascotas/mascota/{uuid}")
     suspend fun getMascotaPorUuid(
@@ -305,6 +312,18 @@ interface ApiService {
 
     // --- BANDEJA DEL PASEADOR (HU de gestion de solicitudes) ---
 
+    /**
+     * Detalle completo de una solicitud (cliente, mascotas con foto y
+     * precauciones, horario y monto). Lo usan la bandeja y el detalle del
+     * paseador; también responde para solicitudes inmediatas en BUSCANDO
+     * dentro del distrito de cobertura del paseador.
+     */
+    @GET("solicitudes/{uuid}")
+    suspend fun getSolicitudDetalle(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
     // Bandeja de solicitudes/paseos del paseador
     @GET("paseador/solicitudes")
     suspend fun obtenerBandejaPaseador(
@@ -357,5 +376,63 @@ interface ApiService {
         @Path("uuid") uuid: String,
         @Body request: CancelarSolicitudReqDto = CancelarSolicitudReqDto()
     ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    // --- DOCUMENTOS DIGITALES (antecedentes policiales / penales) ---
+
+    /**
+     * Sube uno o más antecedentes. El campo multipart debe llamarse `files` y
+     * repetirse una vez por archivo. El backend acumula documentos (no reemplaza).
+     */
+    @Multipart
+    @POST("documento/usuario/{usuarioUuid}/antecedentes")
+    suspend fun subirAntecedentes(
+        @Header("Authorization") token: String,
+        @Path("usuarioUuid") usuarioUuid: String,
+        @Part files: List<MultipartBody.Part>
+    ): Response<ResponseDto<List<DigitalDocumentDto>>>
+
+    /** Devuelve una URL prefirmada (caduca ~30 min) para abrir/descargar el documento. */
+    @GET("documento/{documentUuid}/descarga")
+    suspend fun descargarDocumento(
+        @Header("Authorization") token: String,
+        @Path("documentUuid") documentUuid: String
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Borrado lógico del documento. Un segundo intento sobre el mismo uuid da 400. */
+    @DELETE("documento/{documentUuid}")
+    suspend fun eliminarDocumento(
+        @Header("Authorization") token: String,
+        @Path("documentUuid") documentUuid: String
+    ): Response<ResponseDto<Any?>>
+
+    // --- FOTOS DE PERFIL / MASCOTA ---
+
+    /**
+     * Sube o reemplaza la foto de perfil del cliente autenticado.
+     * El backend reemplaza la foto anterior y devuelve una URL prefirmada (~30 min).
+     */
+    @Multipart
+    @POST("cliente/foto")
+    suspend fun subirFotoCliente(
+        @Header("Authorization") token: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Sube o reemplaza la foto de perfil del paseador autenticado. */
+    @Multipart
+    @POST("paseadores/foto")
+    suspend fun subirFotoPaseador(
+        @Header("Authorization") token: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
+
+    /** Sube o reemplaza la foto de una mascota del cliente autenticado. */
+    @Multipart
+    @POST("mascotas/{mascotaUuid}/foto")
+    suspend fun subirFotoMascota(
+        @Header("Authorization") token: String,
+        @Path("mascotaUuid") mascotaUuid: String,
+        @Part file: MultipartBody.Part
+    ): Response<ResponseDto<DocumentUrlDto>>
 
 }

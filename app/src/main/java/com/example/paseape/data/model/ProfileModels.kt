@@ -99,8 +99,17 @@ data class MascotaData(
     @SerializedName("sociable_con_perros") val sociableConPerros: Int? = null,
     @SerializedName("sociable_con_personas") val sociableConPersonas: Int? = null,
     @SerializedName("precauciones_medicas") val precaucionesMedicas: String? = null,
-    @SerializedName("foto_url") val fotoUrl: String? = null
-)
+    @SerializedName("foto_url") val fotoUrl: String? = null,
+    @SerializedName("foto_mascota") val fotoMascota: DocumentUrlDto? = null
+) {
+    /**
+     * El backend devuelve la foto como objeto `foto_mascota` con URL prefirmada.
+     * Se mantiene `foto_url` como respaldo por compatibilidad.
+     */
+    val fotoUrlEfectiva: String?
+        get() = fotoMascota?.url?.takeIf { it.isNotBlank() }
+            ?: fotoUrl?.takeIf { it.isNotBlank() }
+}
 
 // Modelos conservados para retrocompatibilidad con RegistroRequest y RegistroGoogleRequest
 data class MascotaResponse(

@@ -86,6 +86,12 @@ fun WalkerDashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val distritos by viewModel.distritos.collectAsState()
     val isOperationLoading by viewModel.isOperationLoading.collectAsState()
+    val isDocumentLoading by viewModel.isDocumentLoading.collectAsState()
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
+    val documentError by viewModel.documentError.collectAsState()
+    val isFotoLoading by viewModel.isFotoLoading.collectAsState()
+    val fotoProgress by viewModel.fotoProgress.collectAsState()
+    val fotoError by viewModel.fotoError.collectAsState()
 
     // Insignia numérica de notificaciones no leídas (misma fuente que el dashboard del cliente)
     val unreadCount by NotificacionesViewModel.unreadCount.collectAsState()
@@ -224,12 +230,29 @@ fun WalkerDashboardScreen(
                     uiState = uiState,
                     distritos = distritos,
                     isOperationLoading = isOperationLoading,
+                    isDocumentLoading = isDocumentLoading,
+                    uploadProgress = uploadProgress,
+                    documentError = documentError,
+                    isFotoLoading = isFotoLoading,
+                    fotoProgress = fotoProgress,
+                    fotoError = fotoError,
                     onRetry = { viewModel.cargarPerfil(token = token, usuarioUuid = usuarioUuid) },
-                    onActualizarPerfil = { req, onSuccess ->
+                    onActualizarPerfil = { req, archivos, onSuccess ->
                         viewModel.actualizarPerfil(
                             token = token,
                             usuarioUuid = usuarioUuid,
                             req = req,
+                            archivosPendientes = archivos,
+                            resolver = context.contentResolver,
+                            onSuccess = onSuccess
+                        )
+                    },
+                    onCambiarFoto = { foto, onSuccess ->
+                        viewModel.subirFotoPerfil(
+                            token = token,
+                            usuarioUuid = usuarioUuid,
+                            foto = foto,
+                            resolver = context.contentResolver,
                             onSuccess = onSuccess
                         )
                     },
@@ -240,7 +263,23 @@ fun WalkerDashboardScreen(
                             distritoId = distritoId,
                             onSuccess = onSuccess
                         )
-                    }
+                    },
+                    onEliminarDocumento = { documentUuid, onSuccess ->
+                        viewModel.eliminarDocumento(
+                            token = token,
+                            usuarioUuid = usuarioUuid,
+                            documentUuid = documentUuid,
+                            onSuccess = onSuccess
+                        )
+                    },
+                    onObtenerUrlDescarga = { documentUuid, onUrl ->
+                        viewModel.obtenerUrlDescarga(
+                            token = token,
+                            documentUuid = documentUuid,
+                            onUrl = onUrl
+                        )
+                    },
+                    onLimpiarErrorDocumentos = { viewModel.limpiarErrorDocumentos() }
                 )
             }
         }

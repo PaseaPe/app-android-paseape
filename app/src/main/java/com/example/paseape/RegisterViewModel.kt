@@ -1,15 +1,20 @@
 package com.example.paseape
 
+import android.content.ContentResolver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.GoogleAuthReq
 import com.example.paseape.data.model.GoogleAuthResponse
+import com.example.paseape.data.model.MAX_ANTECEDENTE_BYTES
 import com.example.paseape.data.model.RegistroGoogleRequest
 import com.example.paseape.data.model.RegistroRequest
 import com.example.paseape.data.model.TipoDocumentoParamDto
+import com.example.paseape.data.model.esAntecedentePermitido
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
+import com.example.paseape.data.network.DocumentoUpload
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +46,7 @@ enum class RegisterField {
     EXPERIENCIA,
     TARIFA,
     BIOGRAFIA,
-    ANTECEDENTES_URL
+    ANTECEDENTES
 }
 
 /** Resultado de consultar si el correo de Google ya tiene una cuenta. */
@@ -73,7 +78,11 @@ data class RegisterUiState(
     val experienciaAnos: String = "",
     val tarifaHora: String = "",
     val biografia: String = "",
-    val antecedentesPolicialesUrl: String = "",
+    val archivosAntecedentes: List<ArchivoPendiente> = emptyList(),
+
+    // Estado de la subida de antecedentes
+    val subiendoAntecedentes: Boolean = false,
+    val progresoAntecedentes: Int? = null,
 
     // Catálogos del backend
     val distritos: List<DistritoParamDto> = emptyList(),
@@ -95,7 +104,10 @@ data class RegisterUiState(
     // Sesión devuelta por el backend al registrar con Google
     val authToken: String? = null,
     val authUuid: String? = null,
-    val authRole: Int? = null
+    val authRole: Int? = null,
+
+    // Aviso mostrado cuando la cuenta se creó pero la subida de antecedentes falló
+    val avisoRegistro: String? = null
 )
 
 class RegisterViewModel : ViewModel() {
@@ -166,7 +178,7 @@ class RegisterViewModel : ViewModel() {
                     RegisterField.TIPO_DOCUMENTO,
                     RegisterField.NUMERO_DOCUMENTO,
                     RegisterField.DISTRITO_COBERTURA,
-                    RegisterField.ANTECEDENTES_URL
+                    RegisterField.ANTECEDENTES
                 ),
                 errorGeneral = null
             )
@@ -190,7 +202,6 @@ class RegisterViewModel : ViewModel() {
                 RegisterField.TARIFA ->
                     state.copy(tarifaHora = value.filter { it.isDigit() || it == '.' }.take(7))
                 RegisterField.BIOGRAFIA -> state.copy(biografia = value)
-                RegisterField.ANTECEDENTES_URL -> state.copy(antecedentesPolicialesUrl = value)
                 RegisterField.NUMERO_DOCUMENTO -> state.copy(numeroDocumento = value)
                 else -> state
             }
@@ -247,6 +258,29 @@ class RegisterViewModel : ViewModel() {
         }
 
         onFieldChange(RegisterField.NUMERO_DOCUMENTO, filtrado)
+    }
+
+    /** Agrega los archivos elegidos con el selector del sistema (sin duplicados). */
+    fun onArchivosAntecedentesSeleccionados(archivos: List<ArchivoPendiente>) {
+        if (archivos.isEmpty()) return
+        _uiState.update { state ->
+            val combinados = (state.archivosAntecedentes + archivos)
+                .distinctBy { it.uri.toString() }
+            state.copy(
+                archivosAntecedentes = combinados,
+                fieldErrors = state.fieldErrors - RegisterField.ANTECEDENTES,
+                errorGeneral = null
+            )
+        }
+    }
+
+    fun onQuitarArchivoAntecedente(archivo: ArchivoPendiente) {
+        _uiState.update { state ->
+            state.copy(
+                archivosAntecedentes = state.archivosAntecedentes
+                    .filterNot { it.uri == archivo.uri }
+            )
+        }
     }
 
     // ------------------------------------------------------------------
@@ -445,15 +479,17 @@ class RegisterViewModel : ViewModel() {
                 }
             }
 
-            val antecedentes = state.antecedentesPolicialesUrl.trim()
+            val archivos = state.archivosAntecedentes
             when {
-                antecedentes.isBlank() ->
-                    errores[RegisterField.ANTECEDENTES_URL] =
-                        "El enlace de antecedentes es obligatorio."
-                !antecedentes.startsWith("http://", ignoreCase = true) &&
-                    !antecedentes.startsWith("https://", ignoreCase = true) ->
-                    errores[RegisterField.ANTECEDENTES_URL] =
-                        "Ingresa una URL válida (debe empezar con http:// o https://)."
+                archivos.isEmpty() ->
+                    errores[RegisterField.ANTECEDENTES] =
+                        "Adjunta al menos un archivo de antecedentes."
+                archivos.any { !esAntecedentePermitido(it.nombre) } ->
+                    errores[RegisterField.ANTECEDENTES] =
+                        "Solo se aceptan archivos PDF o Word."
+                archivos.any { it.tamanoBytes > MAX_ANTECEDENTE_BYTES } ->
+                    errores[RegisterField.ANTECEDENTES] =
+                        "Cada archivo debe pesar como máximo 10 MB."
             }
         }
 
@@ -468,7 +504,7 @@ class RegisterViewModel : ViewModel() {
     // ------------------------------------------------------------------
     // Registro
     // ------------------------------------------------------------------
-    fun registrar() {
+    fun registrar(resolver: ContentResolver) {
         val state = _uiState.value
         if (state.isSubmitting) return
 
@@ -513,7 +549,7 @@ class RegisterViewModel : ViewModel() {
         }
 
         if (state.modoGoogle) {
-            registrarConGoogle(state)
+            registrarConGoogle(state, resolver)
             return
         }
 
@@ -522,7 +558,21 @@ class RegisterViewModel : ViewModel() {
                 val response = RetrofitClient.apiService.registrarUsuario(construirRequest(_uiState.value))
 
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isSubmitting = false, registroExitoso = true) }
+                    val data = response.body()?.response
+                    val aviso = subirAntecedentesSiCorresponde(
+                        tipoUsuarioId = _uiState.value.tipoUsuarioId,
+                        token = data?.token,
+                        usuarioUuid = data?.uuid,
+                        archivos = _uiState.value.archivosAntecedentes,
+                        resolver = resolver
+                    )
+                    _uiState.update {
+                        it.copy(
+                            isSubmitting = false,
+                            registroExitoso = true,
+                            avisoRegistro = aviso
+                        )
+                    }
                 } else {
                     val mensaje = ApiErrorMapper.fromResponse(response, ApiErrorContext.REGISTER)
                     _uiState.update { it.copy(isSubmitting = false, errorGeneral = mensaje) }
@@ -542,7 +592,7 @@ class RegisterViewModel : ViewModel() {
      * Registra la cuenta usando el token de Google ya obtenido. El backend
      * devuelve el JWT, el uuid y el rol para iniciar sesión automáticamente.
      */
-    private fun registrarConGoogle(state: RegisterUiState) {
+    private fun registrarConGoogle(state: RegisterUiState, resolver: ContentResolver) {
         val idToken = googleIdToken
         if (idToken.isNullOrBlank()) {
             _uiState.update {
@@ -564,13 +614,22 @@ class RegisterViewModel : ViewModel() {
 
                 val token = response.effectiveToken
                 if (!token.isNullOrBlank()) {
+                    val uuid = response.effectiveUuid
+                    val aviso = subirAntecedentesSiCorresponde(
+                        tipoUsuarioId = state.tipoUsuarioId,
+                        token = token,
+                        usuarioUuid = uuid,
+                        archivos = state.archivosAntecedentes,
+                        resolver = resolver
+                    )
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
                             registroExitoso = true,
                             authToken = token,
-                            authUuid = response.effectiveUuid,
-                            authRole = resolverRol(response)
+                            authUuid = uuid,
+                            authRole = resolverRol(response),
+                            avisoRegistro = aviso
                         )
                     }
                 } else {
@@ -600,6 +659,63 @@ class RegisterViewModel : ViewModel() {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Sube los antecedentes inmediatamente después de crear la cuenta, usando el
+     * JWT que devuelve el backend en el propio registro. Si falla, la cuenta ya
+     * está creada: se devuelve un aviso y el usuario podrá subirlos desde su perfil.
+     */
+    private suspend fun subirAntecedentesSiCorresponde(
+        tipoUsuarioId: Int,
+        token: String?,
+        usuarioUuid: String?,
+        archivos: List<ArchivoPendiente>,
+        resolver: ContentResolver
+    ): String? {
+        if (tipoUsuarioId != TIPO_USUARIO_PASEADOR || archivos.isEmpty()) return null
+
+        if (token.isNullOrBlank() || usuarioUuid.isNullOrBlank()) {
+            return "Cuenta creada, pero no se pudieron subir los antecedentes. " +
+                "Puedes subirlos desde tu perfil."
+        }
+
+        _uiState.update {
+            it.copy(subiendoAntecedentes = true, progresoAntecedentes = 0)
+        }
+
+        val motivo: String? = try {
+            val partes = DocumentoUpload.crearPartes(resolver, archivos) { porcentaje ->
+                _uiState.update { it.copy(progresoAntecedentes = porcentaje) }
+            }
+
+            if (partes.isEmpty()) {
+                "no se pudieron leer los archivos seleccionados"
+            } else {
+                val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+                val response = RetrofitClient.apiService.subirAntecedentes(
+                    token = authHeader,
+                    usuarioUuid = usuarioUuid,
+                    files = partes
+                )
+                if (response.isSuccessful) {
+                    null
+                } else {
+                    ApiErrorMapper.fromResponse(response, ApiErrorContext.REGISTER)
+                }
+            }
+        } catch (e: Exception) {
+            ApiErrorMapper.fromThrowable(e, ApiErrorContext.REGISTER)
+        } finally {
+            _uiState.update {
+                it.copy(subiendoAntecedentes = false, progresoAntecedentes = null)
+            }
+        }
+
+        return motivo?.let {
+            "Cuenta creada, pero no se pudieron subir los antecedentes ($it). " +
+                "Puedes subirlos desde tu perfil."
         }
     }
 
@@ -653,8 +769,7 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
-                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
             )
         }
     }
@@ -698,8 +813,7 @@ class RegisterViewModel : ViewModel() {
                 experienciaAnos = state.experienciaAnos.trim().toIntOrNull(),
                 biografia = state.biografia.trim().ifBlank { null },
                 tarifaHoraPen = state.tarifaHora.trim().toDoubleOrNull(),
-                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id,
-                antecedentesPolicialesUrl = state.antecedentesPolicialesUrl.trim().ifBlank { null }
+                distritoCoberturaId = state.distritoCoberturaSeleccionado?.id
             )
         }
     }

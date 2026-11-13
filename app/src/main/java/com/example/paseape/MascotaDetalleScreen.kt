@@ -3,6 +3,7 @@ package com.example.paseape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -61,10 +63,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.paseape.data.model.ActualizarMascotaRequest
+import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.MascotaData
+import com.example.paseape.ui.components.VisorFotoDialog
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.CardSurface
 import com.example.paseape.ui.theme.PrimaryDark
+import com.example.paseape.ui.theme.PrimaryOrange
 
 sealed interface MascotaDetalleUiState {
     data object Loading : MascotaDetalleUiState
@@ -79,6 +84,10 @@ fun MascotaDetalleScreen(
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onActualizarMascota: (ActualizarMascotaRequest) -> Unit,
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit,
+    isFotoLoading: Boolean,
+    fotoProgress: Int?,
+    fotoError: String?,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -204,7 +213,11 @@ fun MascotaDetalleScreen(
                 is MascotaDetalleUiState.Success -> {
                     MascotaDetalleContent(
                         mascota = uiState.data,
-                        onActualizarMascota = onActualizarMascota
+                        onActualizarMascota = onActualizarMascota,
+                        onCambiarFoto = onCambiarFoto,
+                        isFotoLoading = isFotoLoading,
+                        fotoProgress = fotoProgress,
+                        fotoError = fotoError
                     )
                 }
             }
@@ -215,9 +228,15 @@ fun MascotaDetalleScreen(
 @Composable
 fun MascotaDetalleContent(
     mascota: MascotaData,
-    onActualizarMascota: (ActualizarMascotaRequest) -> Unit
+    onActualizarMascota: (ActualizarMascotaRequest) -> Unit,
+    onCambiarFoto: (ArchivoPendiente, () -> Unit) -> Unit,
+    isFotoLoading: Boolean,
+    fotoProgress: Int?,
+    fotoError: String?
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
+    var showVisorFoto by remember { mutableStateOf(false) }
+    var fotoPendiente by remember { mutableStateOf<ArchivoPendiente?>(null) }
 
     Column(
         modifier = Modifier
@@ -239,30 +258,55 @@ fun MascotaDetalleContent(
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val fotoUrl = mascota.fotoUrl?.takeIf { it.isNotBlank() }
-                if (fotoUrl != null) {
-                    AsyncImage(
-                        model = fotoUrl,
-                        contentDescription = mascota.nombre,
-                        placeholder = painterResource(id = R.drawable.logoperro),
-                        error = painterResource(id = R.drawable.logoperro),
+                val fotoUrl = mascota.fotoUrlEfectiva
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .clickable {
+                            fotoPendiente = null
+                            showVisorFoto = true
+                        }
+                ) {
+                    if (fotoUrl != null) {
+                        AsyncImage(
+                            model = fotoUrl,
+                            contentDescription = mascota.nombre,
+                            placeholder = painterResource(id = R.drawable.logoperro),
+                            error = painterResource(id = R.drawable.logoperro),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(CardSurface),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = R.drawable.logoperro),
+                            contentDescription = mascota.nombre,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(CardSurface)
+                                .padding(12.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+
+                    Box(
                         modifier = Modifier
-                            .size(110.dp)
+                            .align(Alignment.BottomEnd)
+                            .size(30.dp)
                             .clip(CircleShape)
-                            .background(CardSurface),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Image(
-                        painter = painterResource(id = R.drawable.logoperro),
-                        contentDescription = mascota.nombre,
-                        modifier = Modifier
-                            .size(110.dp)
-                            .clip(CircleShape)
-                            .background(CardSurface)
-                            .padding(12.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                            .background(PrimaryOrange),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = "Cambiar foto",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -492,6 +536,34 @@ fun MascotaDetalleContent(
             onConfirm = { req ->
                 showEditDialog = false
                 onActualizarMascota(req)
+            }
+        )
+    }
+
+    if (showVisorFoto) {
+        VisorFotoDialog(
+            titulo = "Foto de ${mascota.nombre ?: "la mascota"}",
+            fotoUrl = mascota.fotoUrlEfectiva,
+            iconoVacio = Icons.Default.Pets,
+            fotoPendiente = fotoPendiente,
+            subiendo = isFotoLoading,
+            progreso = fotoProgress,
+            error = fotoError,
+            onSeleccionarFoto = { fotoPendiente = it },
+            onGuardarFoto = {
+                fotoPendiente?.let { foto ->
+                    onCambiarFoto(foto) {
+                        fotoPendiente = null
+                        showVisorFoto = false
+                    }
+                }
+            },
+            onDescartarPendiente = { fotoPendiente = null },
+            onDismiss = {
+                if (!isFotoLoading) {
+                    fotoPendiente = null
+                    showVisorFoto = false
+                }
             }
         )
     }

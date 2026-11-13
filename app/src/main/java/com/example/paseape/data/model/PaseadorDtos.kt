@@ -53,7 +53,8 @@ data class UsuarioPaseadorDetalleDto(
     @SerializedName("tipo_proveedor_auth_descripcion") val tipoProveedorAuthDescripcion: String? = null,
     @SerializedName("estado") val estado: Int? = null,
     @SerializedName("cliente") val cliente: Any? = null,
-    @SerializedName("paseador") val paseador: PaseadorDto? = null
+    @SerializedName("paseador") val paseador: PaseadorDto? = null,
+    @SerializedName("digital_documents") val digitalDocuments: List<DigitalDocumentDto>? = null
 ) {
     val nombreCompleto: String
         get() {
@@ -86,10 +87,17 @@ data class PaseadorDetalleResponseData(
     @SerializedName("tipo_proveedor_auth_descripcion") val tipoProveedorAuthDescripcion: String? = null,
     @SerializedName("estado") val estado: Int? = null,
     @SerializedName("cliente") val cliente: Any? = null,
-    @SerializedName("paseador") val paseador: PaseadorDto? = null
+    @SerializedName("paseador") val paseador: PaseadorDto? = null,
+    @SerializedName("digital_documents") val digitalDocuments: List<DigitalDocumentDto>? = null
 ) {
     fun extraerUsuario(): UsuarioPaseadorDetalleDto? {
-        if (usuario != null) return usuario
+        if (usuario != null) {
+            return if (usuario.digitalDocuments == null && digitalDocuments != null) {
+                usuario.copy(digitalDocuments = digitalDocuments)
+            } else {
+                usuario
+            }
+        }
         if (!uuid.isNullOrBlank() || !nombres.isNullOrBlank() || paseador != null) {
             return UsuarioPaseadorDetalleDto(
                 id = id,
@@ -108,7 +116,8 @@ data class PaseadorDetalleResponseData(
                 tipoProveedorAuthDescripcion = tipoProveedorAuthDescripcion,
                 estado = estado,
                 cliente = cliente,
-                paseador = paseador
+                paseador = paseador,
+                digitalDocuments = digitalDocuments
             )
         }
         return null

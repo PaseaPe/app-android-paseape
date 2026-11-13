@@ -38,9 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -426,19 +424,6 @@ fun MascotaFormDialog(
                             placeholder = { Text("Tratamientos, alergias, indicaciones especiales...") },
                             minLines = 2,
                             maxLines = 4,
-                            enabled = !uiState.isSubmitting,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        // Foto URL opcional
-                        OutlinedTextField(
-                            value = uiState.fotoUrl,
-                            onValueChange = { viewModel.onFotoUrlChange(it) },
-                            label = { Text("URL de Foto (Opcional)") },
-                            placeholder = { Text("https://storage.paseape.com/...") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                             enabled = !uiState.isSubmitting,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)

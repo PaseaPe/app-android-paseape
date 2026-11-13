@@ -15,8 +15,7 @@ data class CrearMascotaPayload(
     @SerializedName("esterilizado") val esterilizado: Int = 0,
     @SerializedName("sociable_con_perros") val sociableConPerros: Int = 1,
     @SerializedName("sociable_con_personas") val sociableConPersonas: Int = 1,
-    @SerializedName("precauciones_medicas") val precaucionesMedicas: String = "",
-    @SerializedName("foto_url") val fotoUrl: String? = null
+    @SerializedName("precauciones_medicas") val precaucionesMedicas: String = ""
 )
 
 data class CrearMascotaRequest(
@@ -37,8 +36,7 @@ data class ActualizarMascotaRequest(
     @SerializedName("esterilizado") val esterilizado: Int,
     @SerializedName("sociable_con_perros") val sociableConPerros: Int,
     @SerializedName("sociable_con_personas") val sociableConPersonas: Int,
-    @SerializedName("precauciones_medicas") val precaucionesMedicas: String,
-    @SerializedName("foto_url") val fotoUrl: String?
+    @SerializedName("precauciones_medicas") val precaucionesMedicas: String
 )
 
 data class DetalleMascotaResponse(
@@ -67,7 +65,8 @@ data class DetalleMascotaResponse(
     @SerializedName("sociable_con_perros") val sociableConPerros: Int? = null,
     @SerializedName("sociable_con_personas") val sociableConPersonas: Int? = null,
     @SerializedName("precauciones_medicas") val precaucionesMedicas: String? = null,
-    @SerializedName("foto_url") val fotoUrl: String? = null
+    @SerializedName("foto_url") val fotoUrl: String? = null,
+    @SerializedName("foto_mascota") val fotoMascota: DocumentUrlDto? = null
 ) {
     fun extraerMascota(): MascotaData? {
         if (response != null) return response
@@ -94,7 +93,8 @@ data class DetalleMascotaResponse(
                 sociableConPerros = sociableConPerros,
                 sociableConPersonas = sociableConPersonas,
                 precaucionesMedicas = precaucionesMedicas,
-                fotoUrl = fotoUrl
+                fotoUrl = fotoUrl,
+                fotoMascota = fotoMascota
             )
         }
         return null
