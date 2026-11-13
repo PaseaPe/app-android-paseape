@@ -186,6 +186,32 @@ class PaseosRepository {
     }
 
     /**
+     * Consulta el detalle completo de una solicitud de paseo:
+     * `GET /solicitudes/{uuid}` (estado actual, paseador con foto/teléfono/calificación, mascotas con foto/precauciones, horarios).
+     */
+    suspend fun obtenerDetalleSolicitud(
+        token: String,
+        solicitudUuid: String
+    ): Result<SolicitudPaseoResDto> {
+        return try {
+            val authHeader = if (token.startsWith("Bearer ")) token else "Bearer $token"
+            val response = apiService.getSolicitudDetalle(authHeader, solicitudUuid)
+            val body = response.body()
+            if (response.isSuccessful && body?.response != null) {
+                Result.success(body.response)
+            } else if (body != null && !body.message.isNullOrBlank()) {
+                Result.failure(Exception(body.message))
+            } else {
+                Result.failure(
+                    Exception(ApiErrorMapper.fromResponse(response, ApiErrorContext.WALK))
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALK)))
+        }
+    }
+
+    /**
      * Consulta la posición GPS actual del paseador en un paseo activo (Sprint 3 - HU24).
      */
     suspend fun obtenerUbicacionActualPaseo(

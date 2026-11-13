@@ -73,9 +73,10 @@ fun PaseosScreen(
             solicitud = solicitudActiva,
             authHeader = authHeader,
             onBack = { solicitudMapaEnVivo = null },
-            onVerResumenClick = {
+            onVerResumenClick = { solicitudActualizada ->
                 solicitudMapaEnVivo = null
-                solicitudResumenPaseo = solicitudActiva
+                solicitudResumenPaseo = solicitudActualizada
+                viewModel.cargarBandejaCliente(authHeader)
             }
         )
         return
@@ -99,11 +100,11 @@ fun PaseosScreen(
             cancelando = viewModel.cancelandoUuid == solicitudDetalle.uuid,
             onBack = { solicitudDetalleSeleccionada = null },
             onCancelarClick = { solicitudParaCancelar = solicitudDetalle },
-            onAbrirMapaEnVivo = {
-                solicitudMapaEnVivo = solicitudDetalle
+            onAbrirMapaEnVivo = { solicitudActualizada ->
+                solicitudMapaEnVivo = solicitudActualizada
             },
-            onAbrirResumenPaseo = {
-                solicitudResumenPaseo = solicitudDetalle
+            onAbrirResumenPaseo = { solicitudActualizada ->
+                solicitudResumenPaseo = solicitudActualizada
             }
         )
         solicitudParaCancelar?.let { solicitud ->

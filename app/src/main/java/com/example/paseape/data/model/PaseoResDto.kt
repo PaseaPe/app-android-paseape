@@ -59,7 +59,36 @@ data class SolicitudMascotaResDto(
     val fotoUrlEfectiva: String?
         get() = fotoMascota?.url?.takeIf { it.isNotBlank() }
             ?: fotoUrl?.takeIf { it.isNotBlank() }
+
+    val razaEfectiva: String?
+        get() = tipoRazaDescripcion?.takeIf { it.isNotBlank() }
+            ?: raza?.takeIf { it.isNotBlank() }
+
+    val tamanoEfectivo: String?
+        get() = tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() }
+            ?: tamano?.takeIf { it.isNotBlank() }
 }
+
+/**
+ * Datos detallados del paseador incluidos dentro de `GET /solicitudes/{uuid}` (`SolicitudPaseoDetalleResDto`).
+ */
+data class SolicitudPaseadorDetalleResDto(
+    @SerializedName("uuid") val uuid: String? = null,
+    @SerializedName("usuario_uuid") val usuarioUuid: String? = null,
+    @SerializedName("nombres") val nombres: String? = null,
+    @SerializedName("apellidos") val apellidos: String? = null,
+    @SerializedName("nombre_completo") val nombreCompleto: String? = null,
+    @SerializedName("correo") val correo: String? = null,
+    @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
+    @SerializedName("experiencia_anos") val experienciaAnos: Int? = null,
+    @SerializedName("biografia") val biografia: String? = null,
+    @SerializedName("tarifa_hora_pen") val tarifaHoraPen: Double? = null,
+    @SerializedName("distrito_cobertura_id") val distritoCoberturaId: Int? = null,
+    @SerializedName("distrito_cobertura_descripcion") val distritoCoberturaDescripcion: String? = null,
+    @SerializedName("paseos_completados") val paseosCompletados: Int? = null,
+    @SerializedName("calificacion_promedio") val calificacionPromedio: Double? = null
+)
 
 data class SolicitudPaseoResDto(
     @SerializedName("uuid") val uuid: String? = null,
@@ -72,6 +101,7 @@ data class SolicitudPaseoResDto(
     @SerializedName("tipo_metodo_pago_descripcion") val tipoMetodoPagoDescripcion: String? = null,
     @SerializedName("tipo_duracion_paseo_id") val tipoDuracionPaseoId: Int? = null,
     @SerializedName("tipo_duracion_paseo_descripcion") val tipoDuracionPaseoDescripcion: String? = null,
+    @SerializedName("duracion_minutos") val duracionMinutos: Int? = null,
     @SerializedName("distrito_id") val distritoId: Int? = null,
     @SerializedName("distrito_descripcion") val distritoDescripcion: String? = null,
     @SerializedName("direccion_recojo") val direccionRecojo: String? = null,
@@ -79,19 +109,52 @@ data class SolicitudPaseoResDto(
     @SerializedName("fecha_programada") val fechaProgramada: String? = null,
     @SerializedName("bloque_horario_id") val bloqueHorarioId: Int? = null,
     @SerializedName("bloque_horario_codigo") val bloqueHorarioCodigo: String? = null,
+    @SerializedName("bloque_horario_hora_inicio") val bloqueHorarioHoraInicio: String? = null,
+    @SerializedName("bloque_horario_hora_fin") val bloqueHorarioHoraFin: String? = null,
     @SerializedName("tarifa_hora_pen_snapshot") val tarifaHoraPenSnapshot: Double? = null,
     @SerializedName("monto_total") val montoTotal: Double? = null,
+    @SerializedName("motivo_rechazo_cancelacion") val motivoRechazoCancelacion: String? = null,
     @SerializedName("paseador_uuid") val paseadorUuid: String? = null,
     @SerializedName("paseador_nombre_completo") val paseadorNombreCompleto: String? = null,
+    @SerializedName("paseador") val paseador: SolicitudPaseadorDetalleResDto? = null,
     @SerializedName("cliente_uuid") val clienteUuid: String? = null,
     @SerializedName("cliente_nombre_completo") val clienteNombreCompleto: String? = null,
     @SerializedName("cliente_telefono") val clienteTelefono: String? = null,
     @SerializedName("mascotas") val mascotas: List<SolicitudMascotaResDto>? = emptyList(),
     @SerializedName("hora_vencimiento") val horaVencimiento: String? = null,
     @SerializedName("creado_el") val creadoEl: String? = null,
+    @SerializedName("fecha_hora_aceptada") val fechaHoraAceptada: String? = null,
     @SerializedName("fecha_hora_inicio_real") val fechaHoraInicioReal: String? = null,
     @SerializedName("fecha_hora_fin_real") val fechaHoraFinReal: String? = null
-)
+) {
+    val paseadorUuidEfectivo: String?
+        get() = paseador?.uuid?.takeIf { it.isNotBlank() }
+            ?: paseadorUuid?.takeIf { it.isNotBlank() }
+
+    val paseadorUsuarioUuidEfectivo: String?
+        get() = paseador?.usuarioUuid?.takeIf { it.isNotBlank() }
+            ?: paseadorUuid?.takeIf { it.isNotBlank() }
+
+    val paseadorNombreEfectivo: String?
+        get() = paseador?.nombreCompleto?.takeIf { it.isNotBlank() }
+            ?: listOfNotNull(paseador?.nombres?.trim(), paseador?.apellidos?.trim())
+                .joinToString(" ")
+                .trim()
+                .takeIf { it.isNotBlank() }
+            ?: paseadorNombreCompleto?.takeIf { it.isNotBlank() }
+
+    val paseadorTelefonoEfectivo: String?
+        get() = paseador?.telefono?.takeIf { it.isNotBlank() }
+
+    val paseadorFotoUrlEfectiva: String?
+        get() = paseador?.fotoPerfilUrl?.takeIf { it.isNotBlank() }
+
+    val paseadorCalificacionEfectiva: Double?
+        get() = paseador?.calificacionPromedio
+
+    val paseadorPaseosCompletadosEfectivos: Int?
+        get() = paseador?.paseosCompletados
+}
 
 data class PageResponseDto<T>(
     @SerializedName("items") val items: List<T>? = emptyList(),

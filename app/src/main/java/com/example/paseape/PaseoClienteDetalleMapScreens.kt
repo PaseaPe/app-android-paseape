@@ -112,38 +112,55 @@ fun DetalleReservaClienteScreen(
     cancelando: Boolean = false,
     onBack: () -> Unit,
     onCancelarClick: () -> Unit,
-    onAbrirMapaEnVivo: () -> Unit,
-    onAbrirResumenPaseo: () -> Unit
+    onAbrirMapaEnVivo: (SolicitudPaseoResDto) -> Unit,
+    onAbrirResumenPaseo: (SolicitudPaseoResDto) -> Unit
 ) {
     val context = LocalContext.current
+    val repository = remember { PaseosRepository() }
     val naranja = PrimaryOrange
     val textoOscuro = PrimaryDark
     val textoGris = Color(0xFF64748B)
 
-    // Carga complementaria de datos del paseador (teléfono, calificación, foto) si tiene paseador asignado
+    // Estado dinámico de la solicitud sincronizado desde GET /solicitudes/{uuid}
+    var solicitudActual by remember(solicitud.uuid) {
+        mutableStateOf(solicitud)
+    }
+
+    // Carga complementaria de respaldo si el endpoint de detalle aún no trajo el objeto paseador
     var detallePaseador by remember(solicitud.paseadorUuid) {
         mutableStateOf<UsuarioPaseadorDetalleDto?>(null)
     }
 
-    LaunchedEffect(solicitud.paseadorUuid, authHeader) {
-        val pUuid = solicitud.paseadorUuid
-        if (!pUuid.isNullOrBlank() && authHeader.isNotBlank()) {
-            withContext(Dispatchers.IO) {
-                val res = runCatching {
-                    RetrofitClient.apiService.getPaseadorPorUsuarioUuid(authHeader, pUuid)
-                }.getOrNull()
-                val extraido = res?.body()?.response?.extraerUsuario()
-                if (extraido != null) {
-                    withContext(Dispatchers.Main) {
-                        detallePaseador = extraido
+    LaunchedEffect(solicitud.uuid, authHeader) {
+        val uuid = solicitud.uuid.orEmpty()
+        if (uuid.isNotBlank() && authHeader.isNotBlank()) {
+            val resDetalle = withContext(Dispatchers.IO) {
+                repository.obtenerDetalleSolicitud(authHeader, uuid)
+            }
+            resDetalle.getOrNull()?.let { detalleRemoto ->
+                solicitudActual = detalleRemoto
+            }
+
+            // Respaldo opcional si no vino anidado el objeto paseador en el detalle
+            val pUuid = solicitudActual.paseadorUsuarioUuidEfectivo
+            if (solicitudActual.paseador == null && !pUuid.isNullOrBlank()) {
+                withContext(Dispatchers.IO) {
+                    val res = runCatching {
+                        RetrofitClient.apiService.getPaseadorPorUsuarioUuid(authHeader, pUuid)
+                    }.getOrNull()
+                    val extraido = res?.body()?.response?.extraerUsuario()
+                    if (extraido != null) {
+                        withContext(Dispatchers.Main) {
+                            detallePaseador = extraido
+                        }
                     }
                 }
             }
         }
     }
 
-    val codigoReserva = solicitud.codigoReserva ?: "PAS-PROG-202611-032A"
-    val estadoId = solicitud.estadoId ?: 1
+    val codigoReserva = solicitudActual.codigoReserva ?: "PAS-PROG-202611-032A"
+    val estadoId = solicitudActual.estadoId ?: 1
     val permiteCancelar = estadoId == 1 || estadoId == 2 || estadoId == 8
 
     Scaffold(
@@ -213,7 +230,7 @@ fun DetalleReservaClienteScreen(
                 ) {
                     if (estadoId == 5) {
                         Button(
-                            onClick = onAbrirMapaEnVivo,
+                            onClick = { onAbrirMapaEnVivo(solicitudActual) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
@@ -231,7 +248,7 @@ fun DetalleReservaClienteScreen(
                         }
                     } else if (estadoId == 6) {
                         Button(
-                            onClick = onAbrirResumenPaseo,
+                            onClick = { onAbrirResumenPaseo(solicitudActual) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
@@ -291,8 +308,7 @@ fun DetalleReservaClienteScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. BANNER DE ESTADO SEGÚN FSM DEL PASEO
-            val nombrePaseador = solicitud.paseadorNombreCompleto
-                ?.takeIf { it.isNotBlank() }
+            val nombrePaseador = solicitudActual.paseadorNombreEfectivo
                 ?: detallePaseador?.nombreCompleto
                 ?: "El paseador asignado"
 
@@ -333,7 +349,7 @@ fun DetalleReservaClienteScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = if (estadoId == 8) {
-                                        "Los paseadores de ${solicitud.distritoDescripcion ?: "tu distrito"} están recibiendo tu oferta."
+                                        "Los paseadores de ${solicitudActual.distritoDescripcion ?: "tu distrito"} están recibiendo tu oferta."
                                     } else {
                                         "$nombrePaseador tiene hasta 2 horas antes para aceptar."
                                     },
@@ -490,7 +506,7 @@ fun DetalleReservaClienteScreen(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = solicitud.estadoDescripcion ?: "CERRADA",
+                                    text = solicitudActual.estadoDescripcion ?: "CERRADA",
                                     color = Color(0xFFB91C1C),
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 10.sp,
@@ -530,8 +546,8 @@ fun DetalleReservaClienteScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     val direccionCompleta = listOfNotNull(
-                        solicitud.direccionRecojo?.takeIf { it.isNotBlank() },
-                        solicitud.distritoDescripcion?.takeIf { it.isNotBlank() }
+                        solicitudActual.direccionRecojo?.takeIf { it.isNotBlank() },
+                        solicitudActual.distritoDescripcion?.takeIf { it.isNotBlank() }
                     ).joinToString(", ").ifBlank { "Dirección registrada en Lima" }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -550,7 +566,7 @@ fun DetalleReservaClienteScreen(
                         )
                     }
 
-                    val referencia = solicitud.referenciaDireccion?.takeIf { it.isNotBlank() }
+                    val referencia = solicitudActual.referenciaDireccion?.takeIf { it.isNotBlank() }
                         ?: "Domicilio principal del cliente"
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -562,11 +578,11 @@ fun DetalleReservaClienteScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val horarioFormateado = remember(solicitud.fechaProgramada, solicitud.bloqueHorarioCodigo, solicitud.creadoEl) {
+                    val horarioFormateado = remember(solicitudActual.fechaProgramada, solicitudActual.bloqueHorarioCodigo, solicitudActual.creadoEl) {
                         formatearFechaYBloqueDetalle(
-                            fechaProgramada = solicitud.fechaProgramada,
-                            bloqueCodigo = solicitud.bloqueHorarioCodigo,
-                            creadoEl = solicitud.creadoEl
+                            fechaProgramada = solicitudActual.fechaProgramada,
+                            bloqueCodigo = solicitudActual.bloqueHorarioCodigo,
+                            creadoEl = solicitudActual.creadoEl
                         )
                     }
 
@@ -593,7 +609,7 @@ fun DetalleReservaClienteScreen(
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = (solicitud.tipoDuracionPaseoDescripcion ?: "60 MINUTOS").uppercase(),
+                            text = (solicitudActual.tipoDuracionPaseoDescripcion ?: "60 MINUTOS").uppercase(),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = textoOscuro,
@@ -624,7 +640,7 @@ fun DetalleReservaClienteScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val mascotas = solicitud.mascotas.orEmpty()
+                    val mascotas = solicitudActual.mascotas.orEmpty()
                     if (mascotas.isEmpty()) {
                         Text(
                             text = "1 mascota registrada en el paseo",
@@ -655,17 +671,23 @@ fun DetalleReservaClienteScreen(
             }
 
             // 4. TARJETA: PASEADOR ASIGNADO
-            if (!solicitud.paseadorNombreCompleto.isNullOrBlank() || detallePaseador != null) {
-                val nombreMostrar = detallePaseador?.nombreCompleto
-                    ?.takeIf { it.isNotBlank() }
-                    ?: solicitud.paseadorNombreCompleto
+            if (!solicitudActual.paseadorNombreEfectivo.isNullOrBlank() || solicitudActual.paseador != null || detallePaseador != null) {
+                val nombreMostrar = solicitudActual.paseadorNombreEfectivo
+                    ?: detallePaseador?.nombreCompleto?.takeIf { it.isNotBlank() }
                     ?: "Paseador Verificado"
                 val iniciales = obtenerInicialesNombre(nombreMostrar)
-                val calif = detallePaseador?.paseador?.calificacionPromedio ?: 4.9
-                val paseosTotal = detallePaseador?.paseador?.paseosCompletados ?: 42
-                val telefonoPaseador = detallePaseador?.telefono
+                val calif = solicitudActual.paseadorCalificacionEfectiva
+                    ?: detallePaseador?.paseador?.calificacionPromedio
+                    ?: 4.9
+                val paseosTotal = solicitudActual.paseadorPaseosCompletadosEfectivos
+                    ?: detallePaseador?.paseador?.paseosCompletados
+                    ?: 42
+                val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo
+                    ?: detallePaseador?.telefono
                     ?: detallePaseador?.paseador?.telefono
-                    ?: "+51 987 654 321"
+                    ?: "No registrado"
+                val fotoPaseador = solicitudActual.paseadorFotoUrlEfectiva
+                    ?: detallePaseador?.fotoPerfilUrl
 
                 Card(
                     shape = RoundedCornerShape(14.dp),
@@ -690,9 +712,9 @@ fun DetalleReservaClienteScreen(
                                     .border(1.dp, Color(0xFFE2E8F0), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (!detallePaseador?.fotoPerfilUrl.isNullOrBlank()) {
+                                if (!fotoPaseador.isNullOrBlank()) {
                                     AsyncImage(
-                                        model = detallePaseador?.fotoPerfilUrl,
+                                        model = fotoPaseador,
                                         contentDescription = nombreMostrar,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
@@ -745,13 +767,13 @@ fun DetalleReservaClienteScreen(
             }
 
             // 5. TARJETA: DESGLOSE FINANCIERO
-            val tarifaHora = solicitud.tarifaHoraPenSnapshot ?: 25.0
-            val montoTotal = solicitud.montoTotal ?: tarifaHora
-            val totalMascotas = (solicitud.mascotas?.size ?: 1).coerceAtLeast(1)
+            val tarifaHora = solicitudActual.tarifaHoraPenSnapshot ?: 25.0
+            val montoTotal = solicitudActual.montoTotal ?: tarifaHora
+            val totalMascotas = (solicitudActual.mascotas?.size ?: 1).coerceAtLeast(1)
             val mascotasAdicionales = (totalMascotas - 1).coerceAtLeast(0)
             val costoBasePorMascota = if (totalMascotas > 0) montoTotal / totalMascotas else montoTotal
             val costoMascotasAdicionales = (montoTotal - costoBasePorMascota).coerceAtLeast(0.0)
-            val metodoPagoTexto = (solicitud.tipoMetodoPagoDescripcion ?: "YAPE / PLIN").uppercase()
+            val metodoPagoTexto = (solicitudActual.tipoMetodoPagoDescripcion ?: "YAPE / PLIN").uppercase()
 
             Card(
                 shape = RoundedCornerShape(14.dp),
@@ -858,9 +880,10 @@ private fun MascotaIncluidaChipCard(
 ) {
     val inicial = mascota.nombre?.trim()?.take(1)?.uppercase().orEmpty().ifBlank { "M" }
     val subtitulo = listOfNotNull(
-        mascota.raza?.takeIf { it.isNotBlank() },
-        mascota.tamano?.takeIf { it.isNotBlank() }?.uppercase()
+        mascota.razaEfectiva,
+        mascota.tamanoEfectivo?.uppercase()
     ).joinToString(" • ").ifBlank { "Mascota registrada" }
+    val fotoUrl = mascota.fotoUrlEfectiva
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -880,9 +903,9 @@ private fun MascotaIncluidaChipCard(
                     .border(1.dp, Color(0xFFE2E8F0), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (!mascota.fotoUrl.isNullOrBlank()) {
+                if (!fotoUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = mascota.fotoUrl,
+                        model = fotoUrl,
                         contentDescription = mascota.nombre,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -920,7 +943,7 @@ private fun MascotaIncluidaChipCard(
 }
 
 // =========================================================================
-// 2. PANTALLA: SEGUIMIENTO DE PASEO EN VIVO (MAPA EN VIVO - SIN VELOCIDAD)
+// 2. PANTALLA: SEGUIMIENTO DE PASEO EN VIVO (MAPA EN VIVO - SOLO MARCADOR GPS REAL)
 // =========================================================================
 
 @Composable
@@ -928,61 +951,44 @@ fun SeguimientoPaseoEnVivoScreen(
     solicitud: SolicitudPaseoResDto,
     authHeader: String,
     onBack: () -> Unit,
-    onVerResumenClick: () -> Unit
+    onVerResumenClick: (SolicitudPaseoResDto) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { PaseosRepository() }
 
-    val rutaDistrito = remember(solicitud.distritoDescripcion, solicitud.uuid) {
-        obtenerRutaBasePorDistrito(solicitud.distritoDescripcion)
+    // Estado dinámico de la solicitud desde GET /solicitudes/{uuid}
+    var solicitudActual by remember(solicitud.uuid) {
+        mutableStateOf(solicitud)
     }
 
-    var puntosRecorridos by remember {
-        mutableStateOf(rutaDistrito.take(5))
-    }
-    var recibioCoordenadaReal by remember { mutableStateOf(false) }
-    var esperandoPrimeraSenalGps by remember { mutableStateOf(false) }
-    var indiceSimulado by remember { mutableIntStateOf(4) }
-    var rumboActual by remember { mutableFloatStateOf(184f) }
-    var precisionMetros by remember { mutableDoubleStateOf(3.8) }
+    // Ubicación exacta y actual del paseador desde GET /cliente/solicitudes/{uuid}/ubicacion-actual (sin traza simulada)
+    var ubicacionActualPaseador by remember { mutableStateOf<LatLng?>(null) }
+    var esperandoPrimeraSenalGps by remember { mutableStateOf(true) }
+    var rumboActual by remember { mutableFloatStateOf(0f) }
+    var precisionMetros by remember { mutableDoubleStateOf(0.0) }
     var senalDegradada by remember { mutableStateOf(false) }
-    var segundosDesdeUltimaSenal by remember { mutableIntStateOf(2) }
+    var segundosDesdeUltimaSenal by remember { mutableIntStateOf(0) }
     var isScreenActive by remember { mutableStateOf(true) }
 
-    // Datos complementarios del paseador (teléfono para llamar/WhatsApp)
-    var telefonoPaseador by remember { mutableStateOf("+51987654321") }
-    var fotoPaseadorUrl by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(solicitud.paseadorUuid, authHeader) {
-        val pUuid = solicitud.paseadorUuid
-        if (!pUuid.isNullOrBlank() && authHeader.isNotBlank()) {
-            withContext(Dispatchers.IO) {
-                val res = runCatching {
-                    RetrofitClient.apiService.getPaseadorPorUsuarioUuid(authHeader, pUuid)
-                }.getOrNull()
-                val detalle = res?.body()?.response?.extraerUsuario()
-                if (detalle != null) {
-                    withContext(Dispatchers.Main) {
-                        detalle.telefono?.takeIf { it.isNotBlank() }?.let { telefonoPaseador = it }
-                        fotoPaseadorUrl = detalle.fotoPerfilUrl
-                    }
-                }
-            }
-        }
-    }
+    // Datos complementarios de respaldo del paseador
+    var telefonoPaseadorFallback by remember { mutableStateOf<String?>(null) }
+    var fotoPaseadorFallback by remember { mutableStateOf<String?>(null) }
+    var calificacionPaseadorFallback by remember { mutableStateOf<Double?>(null) }
 
     // Reloj en vivo del tiempo transcurrido del paseo (MM:SS min)
-    val segundosIniciales = remember(solicitud.fechaHoraInicioReal, solicitud.creadoEl) {
-        calcularSegundosTranscurridosPaseo(solicitud.fechaHoraInicioReal ?: solicitud.creadoEl)
+    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal, solicitudActual.creadoEl) {
+        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal ?: solicitudActual.creadoEl)
     }
-    var segundosTranscurridos by remember { mutableLongStateOf(segundosIniciales) }
+    var segundosTranscurridos by remember(segundosIniciales) { mutableLongStateOf(segundosIniciales) }
 
     LaunchedEffect(isScreenActive) {
         while (isActive && isScreenActive) {
             delay(1_000L)
             segundosTranscurridos += 1L
-            segundosDesdeUltimaSenal = (segundosDesdeUltimaSenal + 1).coerceAtMost(45)
+            if (!esperandoPrimeraSenalGps) {
+                segundosDesdeUltimaSenal = (segundosDesdeUltimaSenal + 1).coerceAtMost(999)
+            }
         }
     }
 
@@ -1001,57 +1007,62 @@ fun SeguimientoPaseoEnVivoScreen(
         }
     }
 
-    // Short Polling cada 6 segundos a GET /cliente/solicitudes/{uuid}/ubicacion-actual (HU24)
+    // Cuando el paseo está EN CURSO (estado 5):
+    // 1. Consume GET /solicitudes/{uuid} (Detalle de Solicitud) y verifica cambios dinámicos de estado.
+    // 2. Consume GET /cliente/solicitudes/{uuid}/ubicacion-actual cada 6 segundos (Short Polling HU24).
     LaunchedEffect(solicitud.uuid, authHeader, isScreenActive) {
         while (isActive && isScreenActive) {
             val uuid = solicitud.uuid.orEmpty()
-            var respuestaBackendManejada = false
-
             if (uuid.isNotBlank() && authHeader.isNotBlank()) {
-                val res = withContext(Dispatchers.IO) {
-                    repository.obtenerUbicacionActualPaseo(authHeader, uuid)
+                // 1. Consultar Detalle de Solicitud (GET /solicitudes/{uuid})
+                val resDetalle = withContext(Dispatchers.IO) {
+                    repository.obtenerDetalleSolicitud(authHeader, uuid)
                 }
-                if (res.isSuccess) {
-                    val dto: UbicacionEnVivoResDto? = res.getOrNull()
-                    if (dto?.latitud != null && dto.longitud != null) {
-                        val nuevoPunto = LatLng(dto.latitud, dto.longitud)
-                        if (!recibioCoordenadaReal) {
-                            puntosRecorridos = listOf(nuevoPunto)
-                            recibioCoordenadaReal = true
-                        } else {
-                            val ultimo = puntosRecorridos.lastOrNull()
-                            if (ultimo == null || ultimo != nuevoPunto) {
-                                puntosRecorridos = puntosRecorridos + nuevoPunto
+                resDetalle.getOrNull()?.let { detalleRemoto ->
+                    solicitudActual = detalleRemoto
+                    // Si el paseo ya pasó a FINALIZADO (estado 6), cambiar dinámicamente a la vista de Resumen y Recorrido
+                    if (detalleRemoto.estadoId == 6) {
+                        onVerResumenClick(detalleRemoto)
+                        return@LaunchedEffect
+                    }
+                }
+
+                // Respaldo opcional si el objeto paseador no trajo teléfono/foto
+                val pUuid = solicitudActual.paseadorUsuarioUuidEfectivo
+                if (solicitudActual.paseador == null && telefonoPaseadorFallback == null && !pUuid.isNullOrBlank()) {
+                    withContext(Dispatchers.IO) {
+                        val resPaseador = runCatching {
+                            RetrofitClient.apiService.getPaseadorPorUsuarioUuid(authHeader, pUuid)
+                        }.getOrNull()
+                        val extraido = resPaseador?.body()?.response?.extraerUsuario()
+                        if (extraido != null) {
+                            withContext(Dispatchers.Main) {
+                                telefonoPaseadorFallback = extraido.telefono ?: extraido.paseador?.telefono
+                                fotoPaseadorFallback = extraido.fotoPerfilUrl
+                                calificacionPaseadorFallback = extraido.paseador?.calificacionPromedio
                             }
                         }
+                    }
+                }
+
+                // 2. Consultar Ubicación Actual en tiempo real (GET /cliente/solicitudes/{uuid}/ubicacion-actual)
+                val resUbicacion = withContext(Dispatchers.IO) {
+                    repository.obtenerUbicacionActualPaseo(authHeader, uuid)
+                }
+                if (resUbicacion.isSuccess) {
+                    val dto: UbicacionEnVivoResDto? = resUbicacion.getOrNull()
+                    if (dto?.latitud != null && dto.longitud != null) {
+                        ubicacionActualPaseador = LatLng(dto.latitud, dto.longitud)
                         rumboActual = dto.rumboGrados?.toFloat() ?: rumboActual
-                        precisionMetros = dto.precisionM ?: 3.8
+                        precisionMetros = dto.precisionM ?: 0.0
                         senalDegradada = dto.senalDegradada == true
                         segundosDesdeUltimaSenal = calcularSegundosAntiguedadGps(dto.fechaHoraGps)
                         esperandoPrimeraSenalGps = false
                     } else {
-                        // HTTP 200 con response = null -> Constant.MSJ_ESPERA_PRIMERA_SENAL_GPS
-                        esperandoPrimeraSenalGps = true
+                        // HTTP 200 con response = null -> Esperando primera señal GPS real del paseador
+                        esperandoPrimeraSenalGps = ubicacionActualPaseador == null
                     }
-                    respuestaBackendManejada = true
                 }
-            }
-
-            if (!respuestaBackendManejada) {
-                esperandoPrimeraSenalGps = false
-                val siguienteIndice = if (indiceSimulado + 1 < rutaDistrito.size) {
-                    indiceSimulado + 1
-                } else {
-                    2
-                }
-                val anterior = rutaDistrito[indiceSimulado]
-                val siguiente = rutaDistrito[siguienteIndice]
-                rumboActual = calcularRumboGrados(anterior, siguiente)
-                indiceSimulado = siguienteIndice
-                puntosRecorridos = rutaDistrito.take(indiceSimulado + 1)
-                precisionMetros = 3.6 + ((indiceSimulado % 3) * 0.2)
-                senalDegradada = false
-                segundosDesdeUltimaSenal = 2
             }
 
             delay(6_000L)
@@ -1060,63 +1071,32 @@ fun SeguimientoPaseoEnVivoScreen(
 
     var googleMapRef by remember { mutableStateOf<GoogleMap?>(null) }
     var walkerMarkerRef by remember { mutableStateOf<Marker?>(null) }
-    var startMarkerRef by remember { mutableStateOf<Marker?>(null) }
-    var routePolylineRef by remember { mutableStateOf<Polyline?>(null) }
 
     val mapView = rememberMapViewWithLifecycle()
-
-    val iconStart = remember(context) { crearIconoInicioVerde(context) }
     val iconWalker = remember(context) { crearIconoPaseadorNaranja(context) }
 
-    // Actualiza la polilínea y el marcador en el GoogleMap cada vez que cambia puntosRecorridos o rumboActual
-    LaunchedEffect(googleMapRef, puntosRecorridos, senalDegradada, rumboActual) {
+    val centroReferenciaDistrito = remember(solicitudActual.distritoDescripcion) {
+        obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion).first()
+    }
+
+    // Actualiza ÚNICAMENTE el marcador de la ubicación actual del paseador en el GoogleMap (sin polilínea simulada)
+    LaunchedEffect(googleMapRef, ubicacionActualPaseador, senalDegradada, rumboActual) {
         val map = googleMapRef ?: return@LaunchedEffect
-        if (puntosRecorridos.isEmpty()) return@LaunchedEffect
-
-        val puntoInicio = puntosRecorridos.first()
-        val puntoActual = puntosRecorridos.last()
-
-        if (startMarkerRef == null) {
-            startMarkerRef = map.addMarker(
-                MarkerOptions()
-                    .position(puntoInicio)
-                    .title("Punto de Inicio")
-                    .anchor(0.5f, 0.5f)
-                    .icon(iconStart)
-            )
-        } else {
-            startMarkerRef?.position = puntoInicio
-        }
-
-        val poly = routePolylineRef
-        if (poly == null) {
-            routePolylineRef = map.addPolyline(
-                PolylineOptions()
-                    .addAll(puntosRecorridos)
-                    .width(14f)
-                    .color(android.graphics.Color.parseColor("#FF5722"))
-                    .geodesic(true)
-                    .startCap(RoundCap())
-                    .endCap(RoundCap())
-                    .jointType(JointType.ROUND)
-            )
-        } else {
-            poly.points = puntosRecorridos
-        }
+        val puntoActual = ubicacionActualPaseador ?: return@LaunchedEffect
 
         val marker = walkerMarkerRef
         if (marker == null) {
             walkerMarkerRef = map.addMarker(
                 MarkerOptions()
                     .position(puntoActual)
-                    .title(solicitud.paseadorNombreCompleto ?: "Paseador")
+                    .title(solicitudActual.paseadorNombreEfectivo ?: "Paseador")
                     .anchor(0.5f, 0.5f)
                     .flat(true)
                     .rotation(rumboActual)
                     .alpha(if (senalDegradada) 0.5f else 1.0f)
                     .icon(iconWalker)
             )
-            map.moveCamera(CameraUpdateFactory.newLatLngZoom(puntoActual, 16.5f))
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(puntoActual, 17f))
         } else {
             marker.position = puntoActual
             marker.rotation = rumboActual
@@ -1128,12 +1108,12 @@ fun SeguimientoPaseoEnVivoScreen(
     val minutos = segundosTranscurridos / 60
     val segundos = segundosTranscurridos % 60
     val tiempoFormateado = String.format(Locale.US, "%02d:%02d min", minutos, segundos)
-    val duracionMetaTexto = (solicitud.tipoDuracionPaseoDescripcion ?: "60 min")
+    val duracionMetaTexto = (solicitudActual.tipoDuracionPaseoDescripcion ?: "60 min")
         .lowercase()
         .replace("minutos", "min")
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 1. GOOGLE MAP EN VIVO (PARTE SUPERIOR)
+        // 1. GOOGLE MAP EN VIVO (PARTE SUPERIOR - SOLO MARCADOR DE UBICACIÓN ACTUAL)
         AndroidView(
             factory = { mapView },
             modifier = Modifier
@@ -1148,8 +1128,8 @@ fun SeguimientoPaseoEnVivoScreen(
                             isCompassEnabled = false
                             isMyLocationButtonEnabled = false
                         }
-                        val posInicial = puntosRecorridos.lastOrNull() ?: rutaDistrito.first()
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(posInicial, 16.5f))
+                        val posInicial = ubicacionActualPaseador ?: centroReferenciaDistrito
+                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(posInicial, 16f))
                         googleMapRef = gMap
                     }
                 }
@@ -1213,34 +1193,36 @@ fun SeguimientoPaseoEnVivoScreen(
                     }
                 }
 
-                // Pill de rumbo (ej. 184°) como en el Figma
-                Surface(
-                    color = Color(0xFFDBEAFE),
-                    shape = RoundedCornerShape(20.dp),
-                    shadowElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Pill de rumbo (solo cuando ya se recibió señal GPS real)
+                if (ubicacionActualPaseador != null) {
+                    Surface(
+                        color = Color(0xFFDBEAFE),
+                        shape = RoundedCornerShape(20.dp),
+                        shadowElevation = 2.dp
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = null,
-                            tint = Color(0xFF1D4ED8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "${rumboActual.toInt()}°",
-                            color = Color(0xFF1D4ED8),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Navigation,
+                                contentDescription = null,
+                                tint = Color(0xFF1D4ED8),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "${rumboActual.toInt()}°",
+                                color = Color(0xFF1D4ED8),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
                     }
                 }
             }
 
-            // Botón flotante para centrar cámara en el paseador
+            // Botón flotante para centrar cámara en la ubicación actual del paseador
             Surface(
                 shape = CircleShape,
                 color = Color.White,
@@ -1248,11 +1230,17 @@ fun SeguimientoPaseoEnVivoScreen(
                 modifier = Modifier
                     .size(42.dp)
                     .clickable {
-                        val posActual = puntosRecorridos.lastOrNull()
+                        val posActual = ubicacionActualPaseador
                         if (posActual != null) {
                             googleMapRef?.animateCamera(
                                 CameraUpdateFactory.newLatLngZoom(posActual, 17f)
                             )
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Aún esperando la primera ubicación GPS del paseador",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
             ) {
@@ -1320,7 +1308,7 @@ fun SeguimientoPaseoEnVivoScreen(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = "EN CURSO",
+                            text = solicitudActual.estadoDescripcion ?: "EN CURSO",
                             color = Color(0xFF1D4ED8),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp,
@@ -1331,11 +1319,13 @@ fun SeguimientoPaseoEnVivoScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Tarjeta del Paseador con botones de Llamada y Chat
-                val nombrePaseador = solicitud.paseadorNombreCompleto
-                    ?.takeIf { it.isNotBlank() }
-                    ?: "Roberto Gómez Salas"
+                // Tarjeta del Paseador con botones de Llamada y Chat (datos desde GET /solicitudes/{uuid})
+                val nombrePaseador = solicitudActual.paseadorNombreEfectivo
+                    ?: "Paseador Asignado"
                 val inicialesPaseador = obtenerInicialesNombre(nombrePaseador)
+                val fotoPaseadorUrl = solicitudActual.paseadorFotoUrlEfectiva ?: fotoPaseadorFallback
+                val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo ?: telefonoPaseadorFallback.orEmpty()
+                val calificacionPaseador = solicitudActual.paseadorCalificacionEfectiva ?: calificacionPaseadorFallback ?: 4.9
 
                 Surface(
                     shape = RoundedCornerShape(14.dp),
@@ -1386,7 +1376,7 @@ fun SeguimientoPaseoEnVivoScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "⭐ 4.9 • Paseador verificado",
+                                text = "⭐ ${String.format(Locale.US, "%.1f", calificacionPaseador)} • Paseador verificado",
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -1399,9 +1389,13 @@ fun SeguimientoPaseoEnVivoScreen(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clickable {
-                                    runCatching {
-                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$telefonoPaseador"))
-                                        context.startActivity(intent)
+                                    if (telefonoPaseador.isNotBlank()) {
+                                        runCatching {
+                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$telefonoPaseador"))
+                                            context.startActivity(intent)
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "Teléfono del paseador no disponible", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                         ) {
@@ -1424,10 +1418,15 @@ fun SeguimientoPaseoEnVivoScreen(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clickable {
-                                    runCatching {
-                                        val numLimpio = telefonoPaseador.filter { it.isDigit() }
-                                        val uri = Uri.parse("https://wa.me/$numLimpio")
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                    val numLimpio = telefonoPaseador.filter { it.isDigit() }
+                                    if (numLimpio.isNotBlank()) {
+                                        runCatching {
+                                            val telefonoWa = if (numLimpio.length == 9) "51$numLimpio" else numLimpio
+                                            val uri = Uri.parse("https://wa.me/$telefonoWa")
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "Teléfono del paseador no disponible", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                         ) {
@@ -1445,8 +1444,8 @@ fun SeguimientoPaseoEnVivoScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Chips naranjas de las mascotas del paseo (ej. Bobby (Golden), Luna (Schnauzer))
-                val mascotas = solicitud.mascotas.orEmpty()
+                // Chips naranjas de las mascotas del paseo (desde GET /solicitudes/{uuid})
+                val mascotas = solicitudActual.mascotas.orEmpty()
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1468,8 +1467,9 @@ fun SeguimientoPaseoEnVivoScreen(
                         }
                     } else {
                         mascotas.forEach { m ->
-                            val etiquetaMascota = if (!m.raza.isNullOrBlank()) {
-                                "${m.nombre ?: "Mascota"} (${m.raza.split(" ").first()})"
+                            val razaMostrar = m.razaEfectiva
+                            val etiquetaMascota = if (!razaMostrar.isNullOrBlank()) {
+                                "${m.nombre ?: "Mascota"} (${razaMostrar.split(" ").first()})"
                             } else {
                                 m.nombre ?: "Mascota"
                             }
@@ -1491,7 +1491,7 @@ fun SeguimientoPaseoEnVivoScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Estado de última señal GPS + Acceso rápido a Resumen del Paseo
+                // Estado de última señal GPS
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1528,18 +1528,6 @@ fun SeguimientoPaseoEnVivoScreen(
                             fontWeight = FontWeight.Medium
                         )
                     }
-
-                    TextButton(
-                        onClick = onVerResumenClick,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "Ver resumen ➔",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryOrange
-                        )
-                    }
                 }
             }
         }
@@ -1547,7 +1535,7 @@ fun SeguimientoPaseoEnVivoScreen(
 }
 
 // =========================================================================
-// 3. PANTALLA: RESUMEN DEL PASEO POST-SERVICIO (SCR_S3_05 - SIN VELOCIDAD)
+// 3. PANTALLA: RESUMEN DEL PASEO POST-SERVICIO (ESTADO 6 - FINALIZADO -> GET /solicitudes/{uuid}/recorrido)
 // =========================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1564,49 +1552,48 @@ fun ResumenPaseoClienteScreen(
     val textoOscuro = PrimaryDark
     val textoGris = Color(0xFF64748B)
 
+    var solicitudActual by remember(solicitud.uuid) { mutableStateOf(solicitud) }
     var recorridoRemoto by remember { mutableStateOf<SolicitudPaseoRecorridoResDto?>(null) }
 
+    // Cuando el paseo está FINALIZADO (estado 6), consume el endpoint de Recorrido completo
+    // GET /solicitudes/{uuid}/recorrido (y complementa el detalle con GET /solicitudes/{uuid})
     LaunchedEffect(solicitud.uuid, authHeader) {
         val uuid = solicitud.uuid.orEmpty()
         if (uuid.isNotBlank() && authHeader.isNotBlank()) {
-            val res = withContext(Dispatchers.IO) {
+            val resRecorrido = withContext(Dispatchers.IO) {
                 repository.obtenerRecorridoPaseo(authHeader, uuid)
             }
-            res.getOrNull()?.let { recorridoRemoto = it }
+            resRecorrido.getOrNull()?.let { recorridoRemoto = it }
+
+            val resDetalle = withContext(Dispatchers.IO) {
+                repository.obtenerDetalleSolicitud(authHeader, uuid)
+            }
+            resDetalle.getOrNull()?.let { solicitudActual = it }
         }
     }
 
-    // Decodificación de polilínea con android-maps-utils (PolyUtil.decode)
-    val puntosRutaFinal = remember(recorridoRemoto, solicitud.distritoDescripcion) {
+    // Decodificación de polilínea del endpoint GET /solicitudes/{uuid}/recorrido con android-maps-utils (PolyUtil.decode)
+    val puntosRutaFinal = remember(recorridoRemoto) {
         val encoded = recorridoRemoto?.coordenadasCodificadas
         if (!encoded.isNullOrBlank()) {
             runCatching { PolyUtil.decode(encoded) }.getOrNull().orEmpty()
-                .ifEmpty { obtenerRutaBasePorDistrito(solicitud.distritoDescripcion) }
         } else {
-            val base = obtenerRutaBasePorDistrito(solicitud.distritoDescripcion)
-            val encodedLocal = PolyUtil.encode(base)
-            runCatching { PolyUtil.decode(encodedLocal) }.getOrDefault(base)
+            emptyList()
         }
     }
 
-    val distanciaKm = remember(recorridoRemoto, solicitud.tipoDuracionPaseoId) {
-        recorridoRemoto?.distanciaMetros?.let { it / 1000.0 }
-            ?: when (solicitud.tipoDuracionPaseoId) {
-                1 -> 1.35
-                3 -> 3.60
-                4 -> 4.80
-                else -> 2.45
-            }
+    val distanciaKm = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
+        recorridoRemoto?.distanciaMetros?.let { it / 1000.0 } ?: 0.0
     }
 
-    val duracionTextoResumen = remember(recorridoRemoto, solicitud.tipoDuracionPaseoId) {
+    val duracionTextoResumen = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
         val seg = recorridoRemoto?.duracionSegundos
         if (seg != null && seg > 0) {
             val h = seg / 3600
             val m = (seg % 3600) / 60
             if (h > 0) "${h}h ${String.format(Locale.US, "%02dm", m)}" else "${m}m"
         } else {
-            when (solicitud.tipoDuracionPaseoId) {
+            when (solicitudActual.tipoDuracionPaseoId) {
                 1 -> "30m"
                 3 -> "1h 30m"
                 4 -> "2h 00m"
@@ -1615,12 +1602,12 @@ fun ResumenPaseoClienteScreen(
         }
     }
 
-    val totalPuntosRegistrados = recorridoRemoto?.coordenadasTotalPuntos ?: 320
-    val (horaInicioTexto, horaFinTexto) = remember(solicitud.bloqueHorarioCodigo, recorridoRemoto) {
+    val totalPuntosRegistrados = recorridoRemoto?.coordenadasTotalPuntos ?: puntosRutaFinal.size
+    val (horaInicioTexto, horaFinTexto) = remember(solicitudActual.bloqueHorarioCodigo, recorridoRemoto, solicitudActual.fechaHoraInicioReal, solicitudActual.fechaHoraFinReal) {
         obtenerHorasInicioFinResumen(
-            bloqueCodigo = solicitud.bloqueHorarioCodigo,
-            fechaHoraInicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitud.fechaHoraInicioReal,
-            fechaHoraFinIso = recorridoRemoto?.fechaHoraFin ?: solicitud.fechaHoraFinReal
+            bloqueCodigo = solicitudActual.bloqueHorarioCodigo,
+            fechaHoraInicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitudActual.fechaHoraInicioReal,
+            fechaHoraFinIso = recorridoRemoto?.fechaHoraFin ?: solicitudActual.fechaHoraFinReal
         )
     }
 
@@ -1628,9 +1615,9 @@ fun ResumenPaseoClienteScreen(
     val prefsCalificacion = remember {
         context.getSharedPreferences("paseape_calificaciones_prefs", Context.MODE_PRIVATE)
     }
-    val keyEstrellas = "estrellas_${solicitud.uuid ?: solicitud.codigoReserva}"
-    val keyComentario = "comentario_${solicitud.uuid ?: solicitud.codigoReserva}"
-    val keyEnviada = "enviada_${solicitud.uuid ?: solicitud.codigoReserva}"
+    val keyEstrellas = "estrellas_${solicitudActual.uuid ?: solicitudActual.codigoReserva}"
+    val keyComentario = "comentario_${solicitudActual.uuid ?: solicitudActual.codigoReserva}"
+    val keyEnviada = "enviada_${solicitudActual.uuid ?: solicitudActual.codigoReserva}"
 
     var estrellasSeleccionadas by remember {
         mutableIntStateOf(prefsCalificacion.getInt(keyEstrellas, 5))
@@ -1647,10 +1634,9 @@ fun ResumenPaseoClienteScreen(
     val iconInicio = remember(context) { crearIconoPuntoRuta(context, esInicio = true) }
     val iconFin = remember(context) { crearIconoPuntoRuta(context, esInicio = false) }
 
-    val nombrePaseador = solicitud.paseadorNombreCompleto
-        ?.takeIf { it.isNotBlank() }
-        ?: "Roberto Gómez"
-    val nombresMascotas = solicitud.mascotas
+    val nombrePaseador = solicitudActual.paseadorNombreEfectivo
+        ?: "Paseador Asignado"
+    val nombresMascotas = solicitudActual.mascotas
         ?.mapNotNull { it.nombre }
         ?.joinToString(" y ")
         .orEmpty()
@@ -1688,7 +1674,7 @@ fun ResumenPaseoClienteScreen(
 
                     IconButton(
                         onClick = {
-                            val textoCompartir = "Paseo ${solicitud.codigoReserva ?: ""} en PaseaPe: " +
+                            val textoCompartir = "Paseo ${solicitudActual.codigoReserva ?: ""} en PaseaPe: " +
                                 "${String.format(Locale.US, "%.2f km", distanciaKm)} recorridos en $duracionTextoResumen con $nombrePaseador."
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 putExtra(Intent.EXTRA_TEXT, textoCompartir)
@@ -1781,6 +1767,9 @@ fun ResumenPaseoClienteScreen(
                                 }.onFailure {
                                     gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pInicio, 16f))
                                 }
+                            } else {
+                                val centroDistrito = obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion).first()
+                                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(centroDistrito, 15f))
                             }
                         }
                     }
@@ -2061,9 +2050,9 @@ fun ResumenPaseoClienteScreen(
                 }
 
                 // 5. TARJETA DE RECIBO DIGITAL COLAPSABLE
-                val codigoRecibo = solicitud.codigoReserva ?: "PAS-PROG-202611-032A"
-                val montoTotal = solicitud.montoTotal ?: 50.0
-                val metodoPago = solicitud.tipoMetodoPagoDescripcion ?: "Yape/Plin"
+                val codigoRecibo = solicitudActual.codigoReserva ?: "PAS-PROG-202611-032A"
+                val montoTotal = solicitudActual.montoTotal ?: 50.0
+                val metodoPago = solicitudActual.tipoMetodoPagoDescripcion ?: "Yape/Plin"
 
                 Card(
                     shape = RoundedCornerShape(14.dp),
@@ -2116,7 +2105,7 @@ fun ResumenPaseoClienteScreen(
                                 FilaReciboDetalle("Código de operación", codigoRecibo)
                                 FilaReciboDetalle("Paseador", nombrePaseador)
                                 FilaReciboDetalle("Mascotas", nombresMascotas)
-                                FilaReciboDetalle("Distrito", solicitud.distritoDescripcion ?: "Miraflores")
+                                FilaReciboDetalle("Distrito", solicitudActual.distritoDescripcion ?: "Miraflores")
                                 FilaReciboDetalle("Método de pago", metodoPago)
                                 FilaReciboDetalle("Total pagado", "${formatearMoneda(montoTotal)} PEN")
                             }
