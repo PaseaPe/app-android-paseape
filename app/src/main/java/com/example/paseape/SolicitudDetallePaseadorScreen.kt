@@ -125,8 +125,9 @@ sealed interface SolicitudDetalleUiState {
  * - PENDIENTE: permite aceptar o rechazar (con motivo opcional).
  * - ACEPTADA: muestra "Iniciar paseo" y "Cancelar".
  *
- * Los datos vienen de `GET /solicitudes/{uuid}`: cliente (con teléfono),
- * mascotas con foto y precauciones, horario y monto en una sola llamada.
+ * Los datos se arman solo con rutas del API: detalle de la solicitud (o la
+ * lista de disponibles si aún está en BUSCANDO), cliente para el teléfono y
+ * ficha de cada mascota para foto y precauciones.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
