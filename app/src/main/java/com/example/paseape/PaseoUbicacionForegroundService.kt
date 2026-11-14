@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.location.Location
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
@@ -220,9 +221,7 @@ class PaseoUbicacionForegroundService : Service() {
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let {
-                    onNuevaUbicacion(it.latitude, it.longitude, it.accuracy, it.time)
-                }
+                result.lastLocation?.let { onNuevaUbicacion(it) }
             }
         }
         locationCallback = callback
@@ -235,12 +234,7 @@ class PaseoUbicacionForegroundService : Service() {
             )
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 if (location != null) {
-                    onNuevaUbicacion(
-                        location.latitude,
-                        location.longitude,
-                        location.accuracy,
-                        location.time
-                    )
+                    onNuevaUbicacion(location)
                 }
             }
         } catch (e: SecurityException) {
@@ -255,24 +249,33 @@ class PaseoUbicacionForegroundService : Service() {
         locationCallback = null
     }
 
-    private fun onNuevaUbicacion(
-        latitud: Double,
-        longitud: Double,
-        precision: Float,
-        tiempoGpsMillis: Long
-    ) {
+    private fun onNuevaUbicacion(location: Location) {
+        val latitud = location.latitude
+        val longitud = location.longitude
+        val precision = location.accuracy
+
         val ahora = System.currentTimeMillis()
-        val tiempo = if (tiempoGpsMillis in 1..ahora) tiempoGpsMillis else ahora
+        val tiempo = if (location.time in 1..ahora) location.time else ahora
         val fechaGps = LocalDateTime
             .ofInstant(Instant.ofEpochMilli(tiempo), ZoneOffset.UTC)
             .truncatedTo(ChronoUnit.SECONDS)
             .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+        // Datos opcionales del sensor; el backend valida rumbo en [0, 360].
+        val velocidad = location.speed
+            .takeIf { location.hasSpeed() && it >= 0f }
+            ?.toDouble()
+        val rumbo = location.bearing
+            .takeIf { location.hasBearing() && it in 0f..360f }
+            ?.toDouble()
 
         agregarPunto(
             UbicacionPuntoReqDto(
                 latitud = latitud,
                 longitud = longitud,
                 precisionM = precision.toDouble().takeIf { it >= 0 },
+                velocidadMs = velocidad,
+                rumboGrados = rumbo,
                 fechaHoraGps = fechaGps
             )
         )

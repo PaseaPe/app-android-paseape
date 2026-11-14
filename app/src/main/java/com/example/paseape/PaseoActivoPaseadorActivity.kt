@@ -41,7 +41,8 @@ import java.time.ZoneOffset
  *
  * El mapa solo muestra la ubicación actual como punto (sin recorrido ni
  * velocidad). El botón "Finalizar paseo" detiene el servicio y ejecuta
- * `PATCH /paseador/solicitudes/{uuid}/finalizar`.
+ * `PATCH /paseador/solicitudes/{uuid}/finalizar`; al confirmarse, abre
+ * [PaseoResumenPaseadorActivity] con el resumen y el recorrido consolidado.
  */
 class PaseoActivoPaseadorActivity : ComponentActivity() {
 
@@ -349,12 +350,15 @@ class PaseoActivoPaseadorActivity : ComponentActivity() {
                 }
 
                 paseoFinalizado = true
-                Toast.makeText(
-                    this@PaseoActivoPaseadorActivity,
-                    "Paseo finalizado",
-                    Toast.LENGTH_SHORT
-                ).show()
                 setResult(RESULT_OK)
+                startActivity(
+                    Intent(
+                        this@PaseoActivoPaseadorActivity,
+                        PaseoResumenPaseadorActivity::class.java
+                    ).apply {
+                        putExtra(PaseoResumenPaseadorActivity.EXTRA_SOLICITUD_UUID, uuid)
+                    }
+                )
                 finish()
             } catch (e: Exception) {
                 Log.e(TAG, "Error de red al finalizar el paseo", e)

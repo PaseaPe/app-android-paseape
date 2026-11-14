@@ -74,6 +74,10 @@
             android:exported="false"
             android:theme="@style/Theme.PaseaPE" />
         <activity
+            android:name=".PaseoResumenPaseadorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PaseaPE" />
+        <activity
             android:name=".WalkerDashboardActivity"
             android:exported="false"
             android:theme="@style/Theme.PaseaPE" />
