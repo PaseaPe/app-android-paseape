@@ -255,8 +255,8 @@ fun BandejaPaseadorScreen(
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 } else {
-                                    val intent = if (tabActivo == TabPaseos.EN_CURSO) {
-                                        Intent(
+                                    val intent = when {
+                                        tabActivo == TabPaseos.EN_CURSO -> Intent(
                                             context,
                                             PaseoActivoPaseadorActivity::class.java
                                         ).apply {
@@ -265,8 +265,19 @@ fun BandejaPaseadorScreen(
                                                 uuid
                                             )
                                         }
-                                    } else {
-                                        Intent(
+
+                                        solicitud.estadoId ==
+                                            BandejaPaseadorViewModel.ESTADO_FINALIZADA -> Intent(
+                                            context,
+                                            PaseoResumenPaseadorActivity::class.java
+                                        ).apply {
+                                            putExtra(
+                                                PaseoResumenPaseadorActivity.EXTRA_SOLICITUD_UUID,
+                                                uuid
+                                            )
+                                        }
+
+                                        else -> Intent(
                                             context,
                                             SolicitudDetallePaseadorActivity::class.java
                                         ).apply {
@@ -749,7 +760,8 @@ private fun SolicitudPaseoCard(
                 if (estado == BandejaPaseadorViewModel.ESTADO_PENDIENTE ||
                     estado == BandejaPaseadorViewModel.ESTADO_ACEPTADA ||
                     estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO ||
-                    estado == BandejaPaseadorViewModel.ESTADO_EN_CURSO
+                    estado == BandejaPaseadorViewModel.ESTADO_EN_CURSO ||
+                    estado == BandejaPaseadorViewModel.ESTADO_FINALIZADA
                 ) {
                     Modifier.clickable(onClick = onDetalle)
                 } else {
