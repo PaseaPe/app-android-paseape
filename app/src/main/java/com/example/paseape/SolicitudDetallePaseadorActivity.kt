@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.paseape.data.model.CancelarSolicitudReqDto
 import com.example.paseape.data.model.RechazarSolicitudRequest
 import com.example.paseape.data.model.ResponseDto
+import com.example.paseape.data.model.SolicitudMascotaResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
@@ -28,8 +30,13 @@ import retrofit2.Response
 /**
  * Pantalla de detalle de una solicitud de paseo del lado del paseador.
  *
- * Recibe el uuid desde la bandeja y carga todo desde `GET /solicitudes/{uuid}`:
- * cliente (con teléfono), mascotas con foto y precauciones, horario y monto.
+ * Recibe el uuid desde la bandeja y arma la pantalla solo con rutas del API:
+ * - `GET /solicitudes/{uuid}` como fuente principal (paseador ya asignado).
+ * - `GET /paseador/solicitudes/disponibles` como respaldo cuando la solicitud
+ *   todavía está en BUSCANDO (el detalle responde 400 en ese estado).
+ * - `GET /cliente/{uuid}` para el teléfono y `GET /mascotas/mascota/{uuid}`
+ *   para completar la ficha de cada mascota.
+ *
  * Permite aceptar/rechazar (PENDIENTE), tomar/descartar (BUSCANDO) e iniciar o
  * cancelar (ACEPTADA).
  */
@@ -46,6 +53,14 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
     private var authHeader: String = ""
     private var solicitudUuid: String? = null
     private var huboCambios = false
+
+    /** Al volver del paseo activo se cierra el detalle para refrescar la bandeja. */
+    private val paseoActivoLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        huboCambios = true
+        finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,28 +124,28 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
         uiState = SolicitudDetalleUiState.Loading
         lifecycleScope.launch {
             try {
-                val response = withContext(Dispatchers.IO) {
-                    RetrofitClient.apiService.getSolicitudDetalle(authHeader, uuid)
-                }
-                if (!response.isSuccessful) {
-                    uiState = SolicitudDetalleUiState.Error(
-                        ApiErrorMapper.fromResponse(response, ApiErrorContext.WALK)
-                    )
-                    return@launch
-                }
+                when (val carga = cargarSolicitudBase(uuid)) {
+                    is CargaSolicitud.Fallo -> {
+                        uiState = SolicitudDetalleUiState.Error(carga.mensaje)
+                        return@launch
+                    }
 
-                val solicitud = response.body()?.response
-                if (solicitud == null) {
-                    uiState = SolicitudDetalleUiState.Error(
-                        "No se encontraron los datos de la solicitud."
-                    )
-                    return@launch
-                }
+                    CargaSolicitud.NoDisponible -> {
+                        uiState = SolicitudDetalleUiState.Error(
+                            "Esta solicitud ya no está disponible. Es posible que otro " +
+                                "paseador la haya tomado o que el cliente la haya cancelado."
+                        )
+                        return@launch
+                    }
 
-                uiState = SolicitudDetalleUiState.Success(
-                    solicitud = solicitud,
-                    mascotas = mascotasDetalle(solicitud)
-                )
+                    is CargaSolicitud.Ok -> {
+                        val solicitud = enriquecerSolicitud(carga.solicitud, carga.desdeDisponibles)
+                        uiState = SolicitudDetalleUiState.Success(
+                            solicitud = solicitud,
+                            mascotas = mascotasDetalle(solicitud)
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error de red al cargar el detalle de la solicitud", e)
                 uiState = SolicitudDetalleUiState.Error(
@@ -138,6 +153,126 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** Resultado de resolver la solicitud con la ruta de detalle o su respaldo. */
+    private sealed interface CargaSolicitud {
+        data class Ok(
+            val solicitud: SolicitudPaseoResDto,
+            val desdeDisponibles: Boolean
+        ) : CargaSolicitud
+
+        data object NoDisponible : CargaSolicitud
+
+        data class Fallo(val mensaje: String) : CargaSolicitud
+    }
+
+    /**
+     * Fuente principal: `GET /solicitudes/{uuid}`. Si el backend rechaza la
+     * consulta (solicitud aún en BUSCANDO, sin paseador asignado), se busca el
+     * mismo uuid en `GET /paseador/solicitudes/disponibles`.
+     */
+    private suspend fun cargarSolicitudBase(uuid: String): CargaSolicitud {
+        val detalle = withContext(Dispatchers.IO) {
+            RetrofitClient.apiService.getSolicitudDetalle(authHeader, uuid)
+        }
+        if (detalle.isSuccessful) {
+            val solicitud = detalle.body()?.response
+            if (solicitud != null) {
+                return CargaSolicitud.Ok(solicitud, desdeDisponibles = false)
+            }
+        } else {
+            Log.w(TAG, "Detalle no disponible (HTTP ${detalle.code()}); se busca en disponibles")
+        }
+
+        val disponibles = withContext(Dispatchers.IO) {
+            RetrofitClient.apiService.getSolicitudesDisponibles(authHeader)
+        }
+        if (!disponibles.isSuccessful) {
+            return CargaSolicitud.Fallo(
+                ApiErrorMapper.fromResponse(disponibles, ApiErrorContext.WALK)
+            )
+        }
+
+        val solicitud = disponibles.body()?.response?.firstOrNull { it.uuid == uuid }
+            ?: return CargaSolicitud.NoDisponible
+        return CargaSolicitud.Ok(solicitud, desdeDisponibles = true)
+    }
+
+    /**
+     * Completa la solicitud con datos que el detalle o la bandeja no traen:
+     * teléfono del cliente y, cuando viene de `disponibles`, la ficha de cada
+     * mascota (precauciones, edad, peso, energía).
+     */
+    private suspend fun enriquecerSolicitud(
+        base: SolicitudPaseoResDto,
+        desdeDisponibles: Boolean
+    ): SolicitudPaseoResDto {
+        val telefono = base.clienteTelefono?.takeIf { it.isNotBlank() }
+            ?: obtenerTelefonoCliente(base.clienteUuid)
+        val mascotas = if (desdeDisponibles) {
+            enriquecerMascotas(base.mascotas.orEmpty())
+        } else {
+            base.mascotas
+        }
+        return base.copy(clienteTelefono = telefono, mascotas = mascotas)
+    }
+
+    /** `GET /cliente/{uuid}` → `telefono` del usuario cliente. */
+    private suspend fun obtenerTelefonoCliente(clienteUuid: String?): String? {
+        val uuid = clienteUuid?.takeIf { it.isNotBlank() } ?: return null
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                RetrofitClient.apiService.getClientePorUuid(authHeader, uuid)
+            }
+            if (!response.isSuccessful) {
+                Log.w(TAG, "No se pudo obtener el teléfono del cliente (HTTP ${response.code()})")
+                return null
+            }
+            response.body()?.extraerUsuarioCliente()?.telefono?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error al obtener el teléfono del cliente", e)
+            null
+        }
+    }
+
+    /** `GET /mascotas/mascota/{uuid}` → completa la ficha de cada mascota. */
+    private suspend fun enriquecerMascotas(
+        mascotas: List<SolicitudMascotaResDto>
+    ): List<SolicitudMascotaResDto> = mascotas.map { mascota ->
+        val uuid = mascota.uuid?.takeIf { it.isNotBlank() } ?: return@map mascota
+        val response = try {
+            withContext(Dispatchers.IO) {
+                RetrofitClient.apiService.getMascotaPorUuid(authHeader, uuid)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error al obtener la mascota $uuid", e)
+            return@map mascota
+        }
+        if (!response.isSuccessful) {
+            Log.w(TAG, "No se pudo obtener la mascota $uuid (HTTP ${response.code()})")
+            return@map mascota
+        }
+
+        val detalle = response.body()?.extraerMascota() ?: return@map mascota
+        mascota.copy(
+            nombre = detalle.nombre?.takeIf { it.isNotBlank() } ?: mascota.nombre,
+            raza = detalle.tipoRazaDescripcion?.takeIf { it.isNotBlank() } ?: mascota.raza,
+            tamano = detalle.tipoTamanoMascotaDescripcion?.takeIf { it.isNotBlank() }
+                ?: mascota.tamano,
+            tipoRazaDescripcion = detalle.tipoRazaDescripcion,
+            tipoTamanoMascotaDescripcion = detalle.tipoTamanoMascotaDescripcion,
+            tipoNivelEnergiaDescripcion = detalle.tipoNivelEnergiaDescripcion,
+            precaucionesMedicas = detalle.precaucionesMedicas,
+            edadAnos = detalle.edadAnos,
+            edadMeses = detalle.edadMeses,
+            pesoKg = detalle.pesoKg,
+            sociableConPerros = detalle.sociableConPerros,
+            sociableConPersonas = detalle.sociableConPersonas,
+            esterilizado = detalle.esterilizado,
+            fotoMascota = detalle.fotoMascota ?: mascota.fotoMascota,
+            fotoUrl = mascota.fotoUrl ?: detalle.fotoUrl
+        )
     }
 
     /** Adapta las mascotas del endpoint al modelo que ya usa la pantalla. */
@@ -264,7 +399,11 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                     mensaje,
                     Toast.LENGTH_LONG
                 ).show()
-                finish()
+                if (respuestaIniciar.isSuccessful) {
+                    abrirPaseoActivo()
+                } else {
+                    finish()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error de red al tomar la solicitud", e)
                 Toast.makeText(
@@ -279,6 +418,16 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
     }
 
     private fun uuidActual(): String? = solicitudUuid?.takeIf { it.isNotBlank() }
+
+    /** Abre el paseo en curso; al volver se cierra el detalle y la bandeja refresca. */
+    private fun abrirPaseoActivo() {
+        val uuid = uuidActual() ?: return
+        paseoActivoLauncher.launch(
+            Intent(this, PaseoActivoPaseadorActivity::class.java).apply {
+                putExtra(PaseoActivoPaseadorActivity.EXTRA_SOLICITUD_UUID, uuid)
+            }
+        )
+    }
 
     private fun cancelar(motivo: String) {
         ejecutarAccion(AccionPaseo.CANCELAR) { uuid ->
@@ -347,7 +496,7 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                             "Paseo iniciado",
                             Toast.LENGTH_SHORT
                         ).show()
-                        finish()
+                        abrirPaseoActivo()
                     }
 
                     AccionPaseo.CANCELAR -> {

@@ -93,6 +93,10 @@ class BandejaPaseadorViewModel : ViewModel() {
     private val _messages = MutableSharedFlow<PaseosMessage>(extraBufferCapacity = 1)
     val messages: SharedFlow<PaseosMessage> = _messages.asSharedFlow()
 
+    /** UUID del paseo que acaba de pasar a EN_CURSO, para abrir "Paseo Activo". */
+    private val _paseoIniciado = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val paseoIniciado: SharedFlow<String> = _paseoIniciado.asSharedFlow()
+
     private val _accionesEnCurso = MutableStateFlow<Map<String, AccionPaseo>>(emptyMap())
     val accionesEnCurso: StateFlow<Map<String, AccionPaseo>> = _accionesEnCurso.asStateFlow()
 
@@ -320,6 +324,7 @@ class BandejaPaseadorViewModel : ViewModel() {
         when (inicio) {
             is ResultadoApi.Exito -> {
                 emitirInfo("Paseo aceptado e iniciado")
+                _paseoIniciado.tryEmit(uuid)
                 refrescarTabs(
                     setOf(
                         TabPaseos.INMEDIATOS,
@@ -360,6 +365,7 @@ class BandejaPaseadorViewModel : ViewModel() {
                 is ResultadoApi.Exito -> {
                     ajustarContador(TabPaseos.MIS_PASEOS)
                     emitirInfo("Paseo iniciado")
+                    _paseoIniciado.tryEmit(uuid)
                     refrescarTabs(setOf(TabPaseos.MIS_PASEOS, TabPaseos.EN_CURSO))
                 }
 

@@ -18,7 +18,12 @@ val baseUrl: String = localProperties.getProperty("BASE_URL")
     ?: "http://192.168.100.114:7001/api-paseape/"
 
 val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
-    ?: "AIzaSyDUc0m8wC2UWfrDe-hyrQvhzpnK3GGktv0"
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+    ?: error(
+        "Falta MAPS_API_KEY en local.properties. " +
+            "Agrega la línea MAPS_API_KEY=<tu_clave_de_google_maps> para poder compilar."
+    )
 
 android {
     namespace = "com.example.paseape"
@@ -35,9 +40,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Expone BASE_URL y MAPS_API_KEY en BuildConfig y AndroidManifest
+        // Expone BASE_URL en BuildConfig y la clave de Maps en AndroidManifest
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
-        buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 

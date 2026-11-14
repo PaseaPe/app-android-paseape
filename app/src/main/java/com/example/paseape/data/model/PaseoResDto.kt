@@ -173,6 +173,30 @@ data class CancelarSolicitudReqDto(
 )
 
 /**
+ * Punto GPS del lote que se envía a
+ * `POST /paseador/solicitudes/{uuid}/ubicaciones` (HU24).
+ */
+data class UbicacionPuntoReqDto(
+    @SerializedName("latitud") val latitud: Double,
+    @SerializedName("longitud") val longitud: Double,
+    @SerializedName("precision_m") val precisionM: Double? = null,
+    @SerializedName("velocidad_ms") val velocidadMs: Double? = null,
+    @SerializedName("rumbo_grados") val rumboGrados: Double? = null,
+    @SerializedName("fecha_hora_gps") val fechaHoraGps: String? = null
+)
+
+/** Lote de 1 a 50 puntos GPS enviado durante un paseo EN_CURSO. */
+data class RegistrarUbicacionesBatchReqDto(
+    @SerializedName("ubicaciones") val ubicaciones: List<UbicacionPuntoReqDto>
+)
+
+/** Respuesta del registro de telemetría GPS. */
+data class BatchIngestaResDto(
+    @SerializedName("puntos_procesados") val puntosProcesados: Int? = null,
+    @SerializedName("paseo_activo") val paseoActivo: Boolean? = null
+)
+
+/**
  * Respuesta de seguimiento activo en vivo (Sprint 3 - HU24):
  * `GET /cliente/solicitudes/{uuid}/ubicacion-actual`
  */
