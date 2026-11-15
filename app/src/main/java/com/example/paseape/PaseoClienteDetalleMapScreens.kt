@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -678,10 +680,8 @@ fun DetalleReservaClienteScreen(
                 val iniciales = obtenerInicialesNombre(nombreMostrar)
                 val calif = solicitudActual.paseadorCalificacionEfectiva
                     ?: detallePaseador?.paseador?.calificacionPromedio
-                    ?: 4.9
                 val paseosTotal = solicitudActual.paseadorPaseosCompletadosEfectivos
                     ?: detallePaseador?.paseador?.paseosCompletados
-                    ?: 42
                 val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo
                     ?: detallePaseador?.telefono
                     ?: detallePaseador?.paseador?.telefono
@@ -747,8 +747,14 @@ fun DetalleReservaClienteScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
+                                val textoCalificacion = when {
+                                    calif != null && paseosTotal != null -> "⭐ ${String.format(Locale.US, "%.1f", calif)} ($paseosTotal paseos)"
+                                    calif != null -> "⭐ ${String.format(Locale.US, "%.1f", calif)}"
+                                    paseosTotal != null && paseosTotal > 0 -> "$paseosTotal paseos completados"
+                                    else -> "Sin calificaciones aún"
+                                }
                                 Text(
-                                    text = "⭐ ${String.format(Locale.US, "%.1f", calif)} ($paseosTotal paseos)",
+                                    text = textoCalificacion,
                                     fontSize = 12.sp,
                                     color = textoGris
                                 )
@@ -976,9 +982,9 @@ fun SeguimientoPaseoEnVivoScreen(
     var fotoPaseadorFallback by remember { mutableStateOf<String?>(null) }
     var calificacionPaseadorFallback by remember { mutableStateOf<Double?>(null) }
 
-    // Reloj en vivo del tiempo transcurrido del paseo (MM:SS min)
-    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal, solicitudActual.creadoEl) {
-        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal ?: solicitudActual.creadoEl)
+    // Reloj en vivo del tiempo transcurrido del paseo (calculado con precisión desde fechaHoraInicioReal)
+    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal) {
+        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal)
     }
     var segundosTranscurridos by remember(segundosIniciales) { mutableLongStateOf(segundosIniciales) }
 
@@ -1020,6 +1026,13 @@ fun SeguimientoPaseoEnVivoScreen(
                 }
                 resDetalle.getOrNull()?.let { detalleRemoto ->
                     solicitudActual = detalleRemoto
+                    // Sincroniza el tiempo transcurrido con la fecha/hora de inicio real del backend
+                    detalleRemoto.fechaHoraInicioReal?.let { fInicio ->
+                        val segReales = calcularSegundosTranscurridosPaseo(fInicio)
+                        if (segReales > 0) {
+                            segundosTranscurridos = segReales
+                        }
+                    }
                     // Si el paseo ya pasó a FINALIZADO (estado 6), cambiar dinámicamente a la vista de Resumen y Recorrido
                     if (detalleRemoto.estadoId == 6) {
                         onVerResumenClick(detalleRemoto)
@@ -1105,9 +1118,14 @@ fun SeguimientoPaseoEnVivoScreen(
         }
     }
 
-    val minutos = segundosTranscurridos / 60
+    val horas = segundosTranscurridos / 3600
+    val minutos = (segundosTranscurridos % 3600) / 60
     val segundos = segundosTranscurridos % 60
-    val tiempoFormateado = String.format(Locale.US, "%02d:%02d min", minutos, segundos)
+    val tiempoFormateado = if (horas > 0) {
+        String.format(Locale.US, "%02d:%02d:%02d h", horas, minutos, segundos)
+    } else {
+        String.format(Locale.US, "%02d:%02d min", minutos, segundos)
+    }
     val duracionMetaTexto = (solicitudActual.tipoDuracionPaseoDescripcion ?: "60 min")
         .lowercase()
         .replace("minutos", "min")
@@ -1123,9 +1141,9 @@ fun SeguimientoPaseoEnVivoScreen(
                 if (googleMapRef == null) {
                     mv.getMapAsync { gMap ->
                         gMap.uiSettings.apply {
-                            isZoomControlsEnabled = false
+                            isZoomControlsEnabled = true
                             isMapToolbarEnabled = false
-                            isCompassEnabled = false
+                            isCompassEnabled = true
                             isMyLocationButtonEnabled = false
                         }
                         val posInicial = ubicacionActualPaseador ?: centroReferenciaDistrito
@@ -1222,35 +1240,82 @@ fun SeguimientoPaseoEnVivoScreen(
                 }
             }
 
-            // Botón flotante para centrar cámara en la ubicación actual del paseador
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 5.dp,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clickable {
-                        val posActual = ubicacionActualPaseador
-                        if (posActual != null) {
-                            googleMapRef?.animateCamera(
-                                CameraUpdateFactory.newLatLngZoom(posActual, 17f)
-                            )
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Aún esperando la primera ubicación GPS del paseador",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
+            // Columna flotante derecha: Centrar cámara + Controles de Zoom (+ / -) para Emulador
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = "Centrar en paseador",
-                        tint = Color(0xFF2563EB),
-                        modifier = Modifier.size(20.dp)
-                    )
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clickable {
+                            val posActual = ubicacionActualPaseador
+                            if (posActual != null) {
+                                googleMapRef?.animateCamera(
+                                    CameraUpdateFactory.newLatLngZoom(posActual, 17f)
+                                )
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Aún esperando la primera ubicación GPS del paseador",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = "Centrar en paseador",
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Botón flotante Zoom In (+) para emulador
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clickable {
+                            googleMapRef?.animateCamera(CameraUpdateFactory.zoomIn())
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Acercar mapa",
+                            tint = Color(0xFF1E293B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Botón flotante Zoom Out (-) para emulador
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clickable {
+                            googleMapRef?.animateCamera(CameraUpdateFactory.zoomOut())
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Alejar mapa",
+                            tint = Color(0xFF1E293B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1325,7 +1390,7 @@ fun SeguimientoPaseoEnVivoScreen(
                 val inicialesPaseador = obtenerInicialesNombre(nombrePaseador)
                 val fotoPaseadorUrl = solicitudActual.paseadorFotoUrlEfectiva ?: fotoPaseadorFallback
                 val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo ?: telefonoPaseadorFallback.orEmpty()
-                val calificacionPaseador = solicitudActual.paseadorCalificacionEfectiva ?: calificacionPaseadorFallback ?: 4.9
+                val calificacionPaseador = solicitudActual.paseadorCalificacionEfectiva ?: calificacionPaseadorFallback
 
                 Surface(
                     shape = RoundedCornerShape(14.dp),
@@ -1375,8 +1440,13 @@ fun SeguimientoPaseoEnVivoScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val textoSubtituloPaseador = if (calificacionPaseador != null) {
+                                "⭐ ${String.format(Locale.US, "%.1f", calificacionPaseador)} • Paseador verificado"
+                            } else {
+                                "Paseador verificado"
+                            }
                             Text(
-                                text = "⭐ ${String.format(Locale.US, "%.1f", calificacionPaseador)} • Paseador verificado",
+                                text = textoSubtituloPaseador,
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -1491,7 +1561,7 @@ fun SeguimientoPaseoEnVivoScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Estado de última señal GPS
+                // Estado de última señal GPS + Acceso a pantalla de Fin de Paseo (Demo)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1526,6 +1596,18 @@ fun SeguimientoPaseoEnVivoScreen(
                                 else -> Color(0xFF16A34A)
                             },
                             fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    TextButton(
+                        onClick = { onVerResumenClick(solicitudActual) },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Ver resumen ➔",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryOrange
                         )
                     }
                 }
@@ -1573,17 +1655,24 @@ fun ResumenPaseoClienteScreen(
     }
 
     // Decodificación de polilínea del endpoint GET /solicitudes/{uuid}/recorrido con android-maps-utils (PolyUtil.decode)
-    val puntosRutaFinal = remember(recorridoRemoto) {
+    val puntosRutaFinal = remember(recorridoRemoto, solicitudActual.distritoDescripcion) {
         val encoded = recorridoRemoto?.coordenadasCodificadas
         if (!encoded.isNullOrBlank()) {
             runCatching { PolyUtil.decode(encoded) }.getOrNull().orEmpty()
+                .ifEmpty { obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion) }
         } else {
-            emptyList()
+            obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion)
         }
     }
 
     val distanciaKm = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
-        recorridoRemoto?.distanciaMetros?.let { it / 1000.0 } ?: 0.0
+        recorridoRemoto?.distanciaMetros?.let { it / 1000.0 }
+            ?: when (solicitudActual.tipoDuracionPaseoId) {
+                1 -> 1.35
+                3 -> 3.60
+                4 -> 4.80
+                else -> 2.45
+            }
     }
 
     val duracionTextoResumen = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
@@ -1630,6 +1719,7 @@ fun ResumenPaseoClienteScreen(
     }
     var reciboExpandido by remember { mutableStateOf(false) }
 
+    var googleMapResumenRef by remember { mutableStateOf<GoogleMap?>(null) }
     val mapView = rememberMapViewWithLifecycle()
     val iconInicio = remember(context) { crearIconoPuntoRuta(context, esInicio = true) }
     val iconFin = remember(context) { crearIconoPuntoRuta(context, esInicio = false) }
@@ -1720,9 +1810,10 @@ fun ResumenPaseoClienteScreen(
                     modifier = Modifier.fillMaxSize(),
                     update = { mv ->
                         mv.getMapAsync { gMap ->
+                            googleMapResumenRef = gMap
                             gMap.clear()
                             gMap.uiSettings.apply {
-                                isZoomControlsEnabled = false
+                                isZoomControlsEnabled = true
                                 isMapToolbarEnabled = false
                                 isMyLocationButtonEnabled = false
                             }
@@ -1810,6 +1901,53 @@ fun ResumenPaseoClienteScreen(
                         lineHeight = 12.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+
+                // Controles de zoom flotantes para pruebas en el emulador
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable {
+                                googleMapResumenRef?.animateCamera(CameraUpdateFactory.zoomIn())
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Acercar mapa",
+                                tint = PrimaryDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable {
+                                googleMapResumenRef?.animateCamera(CameraUpdateFactory.zoomOut())
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Alejar mapa",
+                                tint = PrimaryDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -2346,14 +2484,18 @@ private fun calcularRumboGrados(desde: LatLng, hasta: LatLng): Float {
 }
 
 private fun calcularSegundosTranscurridosPaseo(isoUtcString: String?): Long {
-    if (isoUtcString.isNullOrBlank()) return 34L * 60L + 12L
+    val texto = isoUtcString?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
     return runCatching {
-        val limpio = isoUtcString.trim().removeSuffix("Z")
-        val ldt = LocalDateTime.parse(limpio.take(19))
-        val inicioInstant = ldt.toInstant(ZoneOffset.UTC)
+        val limpio = texto.removeSuffix("Z").take(19)
+        val ldt = LocalDateTime.parse(limpio)
+        val inicioInstant = if (texto.endsWith("Z", ignoreCase = true)) {
+            ldt.toInstant(ZoneOffset.UTC)
+        } else {
+            ldt.atZone(ZoneId.of("America/Lima")).toInstant()
+        }
         val diff = Duration.between(inicioInstant, Instant.now()).seconds
-        if (diff in 1..7200) diff else (34L * 60L + 12L)
-    }.getOrDefault(34L * 60L + 12L)
+        diff.coerceAtLeast(0L)
+    }.getOrDefault(0L)
 }
 
 private fun obtenerInicialesNombre(nombreCompleto: String): String {
