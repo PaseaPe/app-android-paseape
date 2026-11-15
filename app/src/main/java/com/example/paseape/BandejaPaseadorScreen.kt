@@ -135,6 +135,17 @@ fun BandejaPaseadorScreen(
         }
     }
 
+    // Al iniciar un paseo desde la bandeja se abre directamente "Paseo Activo".
+    LaunchedEffect(Unit) {
+        viewModel.paseoIniciado.collect { uuid ->
+            detalleLauncher.launch(
+                Intent(context, PaseoActivoPaseadorActivity::class.java).apply {
+                    putExtra(PaseoActivoPaseadorActivity.EXTRA_SOLICITUD_UUID, uuid)
+                }
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -244,7 +255,17 @@ fun BandejaPaseadorScreen(
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 } else {
-                                    detalleLauncher.launch(
+                                    val intent = if (tabActivo == TabPaseos.EN_CURSO) {
+                                        Intent(
+                                            context,
+                                            PaseoActivoPaseadorActivity::class.java
+                                        ).apply {
+                                            putExtra(
+                                                PaseoActivoPaseadorActivity.EXTRA_SOLICITUD_UUID,
+                                                uuid
+                                            )
+                                        }
+                                    } else {
                                         Intent(
                                             context,
                                             SolicitudDetallePaseadorActivity::class.java
@@ -254,7 +275,8 @@ fun BandejaPaseadorScreen(
                                                 uuid
                                             )
                                         }
-                                    )
+                                    }
+                                    detalleLauncher.launch(intent)
                                 }
                             }
                         )
@@ -726,7 +748,8 @@ private fun SolicitudPaseoCard(
             .then(
                 if (estado == BandejaPaseadorViewModel.ESTADO_PENDIENTE ||
                     estado == BandejaPaseadorViewModel.ESTADO_ACEPTADA ||
-                    estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO
+                    estado == BandejaPaseadorViewModel.ESTADO_BUSCANDO ||
+                    estado == BandejaPaseadorViewModel.ESTADO_EN_CURSO
                 ) {
                     Modifier.clickable(onClick = onDetalle)
                 } else {

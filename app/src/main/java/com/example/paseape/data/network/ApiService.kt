@@ -43,6 +43,8 @@ import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.GenericApiResponse
 import com.example.paseape.data.model.NotificacionDto
 import com.example.paseape.data.model.PaseoResDto
+import com.example.paseape.data.model.BatchIngestaResDto
+import com.example.paseape.data.model.RegistrarUbicacionesBatchReqDto
 import com.example.paseape.data.model.CrearSolicitudInmediataReqDto
 import com.example.paseape.data.model.CrearSolicitudProgramadaReqDto
 import com.example.paseape.data.model.CancelarSolicitudReqDto
@@ -314,15 +316,25 @@ interface ApiService {
 
     /**
      * Detalle completo de una solicitud (cliente, mascotas con foto y
-     * precauciones, horario y monto). Lo usan la bandeja y el detalle del
-     * paseador; también responde para solicitudes inmediatas en BUSCANDO
-     * dentro del distrito de cobertura del paseador.
+     * precauciones, horario y monto). Solo responde si el paseador ya está
+     * asignado; para una solicitud inmediata en BUSCANDO el backend rechaza la
+     * consulta y hay que usar [getSolicitudesDisponibles].
      */
     @GET("solicitudes/{uuid}")
     suspend fun getSolicitudDetalle(
         @Header("Authorization") token: String,
         @Path("uuid") uuid: String
     ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /**
+     * Solicitudes inmediatas en BUSCANDO dentro del distrito de cobertura del
+     * paseador. Es el respaldo para abrir el detalle de una solicitud que aún
+     * no tiene paseador asignado.
+     */
+    @GET("paseador/solicitudes/disponibles")
+    suspend fun getSolicitudesDisponibles(
+        @Header("Authorization") token: String
+    ): Response<ResponseDto<List<SolicitudPaseoResDto>>>
 
     // Bandeja de solicitudes/paseos del paseador
     @GET("paseador/solicitudes")
@@ -365,6 +377,24 @@ interface ApiService {
     /** Paseo aceptado ACEPTADA -> EN_CURSO. */
     @PATCH("paseador/solicitudes/{uuid}/iniciar")
     suspend fun iniciarPaseo(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String
+    ): Response<ResponseDto<SolicitudPaseoResDto>>
+
+    /**
+     * Registra un lote de 1 a 50 puntos GPS del paseo en curso (HU24).
+     * El backend exige estado EN_CURSO y `fecha_hora_gps` en UTC.
+     */
+    @POST("paseador/solicitudes/{uuid}/ubicaciones")
+    suspend fun registrarUbicaciones(
+        @Header("Authorization") token: String,
+        @Path("uuid") uuid: String,
+        @Body body: RegistrarUbicacionesBatchReqDto
+    ): Response<ResponseDto<BatchIngestaResDto>>
+
+    /** Paseo en curso EN_CURSO -> FINALIZADA. */
+    @PATCH("paseador/solicitudes/{uuid}/finalizar")
+    suspend fun finalizarPaseo(
         @Header("Authorization") token: String,
         @Path("uuid") uuid: String
     ): Response<ResponseDto<SolicitudPaseoResDto>>
