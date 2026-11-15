@@ -2,6 +2,7 @@ package com.example.paseape
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
@@ -33,11 +34,28 @@ class PaseadorDetalleActivity : ComponentActivity() {
         setContent {
             PaseaPETheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val isDocumentLoading by viewModel.isDocumentLoading.collectAsState()
 
                 PaseadorDetalleScreen(
                     uiState = uiState,
+                    isDocumentLoading = isDocumentLoading,
                     onBackClick = { finish() },
                     onRetry = { cargarDetalle(usuarioUuid) },
+                    onObtenerUrlDescarga = { documentUuid, onUrl ->
+                        val authHeader = SessionManager.getAuthHeader(this@PaseadorDetalleActivity)
+                        viewModel.obtenerUrlDescarga(
+                            authHeader = authHeader,
+                            documentUuid = documentUuid,
+                            onUrl = onUrl,
+                            onError = { errorMsg ->
+                                Toast.makeText(
+                                    this@PaseadorDetalleActivity,
+                                    errorMsg,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    },
                     onReservarClick = {
                         val detalle = (uiState as? PaseadorDetalleUiState.Success)?.detalle
                         val paseador = detalle?.paseador

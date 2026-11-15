@@ -50,12 +50,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import coil.compose.AsyncImage
 import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.PaseadorDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
@@ -407,7 +410,7 @@ fun PaseadorCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar Circular con Iniciales
+            // Avatar Circular con Foto de Perfil o Iniciales de respaldo
             Box(
                 modifier = Modifier
                     .size(52.dp)
@@ -424,6 +427,16 @@ fun PaseadorCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
+                if (!paseador.fotoPerfilUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = paseador.fotoPerfilUrl,
+                        contentDescription = "Foto de ${paseador.nombreCompleto}",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(14.dp))

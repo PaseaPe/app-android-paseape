@@ -1238,11 +1238,10 @@ fun CardSolicitudInmediataReal(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
             when (solicitud.estadoId) {
                 5 -> {
-                    // EN_CURSO (Pestaña Activos): Botón principal de Seguimiento en Mapa en Vivo + Ver Detalle
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // EN_CURSO (Pestaña Activos): Botón principal de Seguimiento en Mapa en Vivo
                     Button(
                         onClick = onVerMapaEnVivoClick,
                         modifier = Modifier.fillMaxWidth(),
@@ -1263,22 +1262,9 @@ fun CardSolicitudInmediataReal(
                             fontSize = 13.sp
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = onVerDetalleClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFFCBD5E1))
-                    ) {
-                        Text(
-                            text = "Ver Detalle de Reserva",
-                            color = Color(0xFF334155),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
-                        )
-                    }
                 }
                 6 -> {
+                    Spacer(modifier = Modifier.height(10.dp))
                     // FINALIZADA (Pestaña Historial): Botón principal de Resumen del Paseo y Recorrido
                     Button(
                         onClick = onVerResumenPaseoClick,
@@ -1298,35 +1284,6 @@ fun CardSolicitudInmediataReal(
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = onVerDetalleClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFFCBD5E1))
-                    ) {
-                        Text(
-                            text = "Ver Detalle de Reserva",
-                            color = Color(0xFF334155),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-                else -> {
-                    OutlinedButton(
-                        onClick = onVerDetalleClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, PrimaryOrange),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryOrange)
-                    ) {
-                        Text(
-                            text = "Ver Detalle de Reserva",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
                         )
                     }
                 }
