@@ -49,14 +49,28 @@ data class PaseadorAdminDto(
     @SerializedName("usuario_uuid") val usuarioUuid: String? = null,
     @SerializedName("nombres") val nombres: String,
     @SerializedName("apellidos") val apellidos: String,
+    @SerializedName("correo") val correo: String? = null,
+    @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
+    @SerializedName("tipo_documento_descripcion") val tipoDocumentoDescripcion: String? = null,
+    @SerializedName("numero_documento") val numeroDocumento: String? = null,
+    @SerializedName("experiencia_anos") val experienciaAnos: Int? = null,
+    @SerializedName("biografia") val biografia: String? = null,
+    @SerializedName("tarifa_hora_pen") val tarifaHoraPen: Double? = null,
     @SerializedName("distrito_cobertura_descripcion") val distrito: String,
     @SerializedName("antecedentes_policiales_url") val antecedentesPolicialesUrl: String? = null,
     @SerializedName("estado_verificacion_id") val estadoVerificacionId: Int? = null,
     @SerializedName("estado_verificacion_descripcion") val estadoVerificacion: String,
+    @SerializedName("paseos_completados") val paseosCompletados: Int? = null,
+    @SerializedName("calificacion_promedio") val calificacionPromedio: Double? = null,
     @SerializedName("estado") val estado: Int
 ) {
     val paseadorIdentifier: String?
         get() = paseadorUuid?.takeIf { it.isNotBlank() } ?: uuid
+
+    /** Identificador válido para `GET /paseadores/{uuid}` (detalle del perfil). */
+    val detalleIdentifier: String?
+        get() = usuarioUuid?.takeIf { it.isNotBlank() } ?: paseadorIdentifier
 }
 
 data class ClienteAdminDto(

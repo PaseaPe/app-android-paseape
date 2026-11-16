@@ -329,8 +329,14 @@ class WalkerProfileViewModel : ViewModel() {
                 )
 
                 if (response.isSuccessful) {
-                    _userMessage.emit("Documento(s) subido(s) correctamente.")
-                    null
+                    val documentos = response.body()?.response.orEmpty()
+                    if (documentos.isEmpty()) {
+                        // 2xx sin documentos: el backend no persistió ningún archivo.
+                        "El servidor no confirmó ningún archivo. Intenta de nuevo."
+                    } else {
+                        _userMessage.emit("Documento(s) subido(s) correctamente.")
+                        null
+                    }
                 } else {
                     ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
                 }

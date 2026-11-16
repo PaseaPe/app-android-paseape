@@ -700,7 +700,12 @@ class RegisterViewModel : ViewModel() {
                     files = partes
                 )
                 if (response.isSuccessful) {
-                    null
+                    // 2xx sin documentos: el backend no persistió ningún archivo.
+                    if (response.body()?.response.isNullOrEmpty()) {
+                        "el servidor no confirmó los documentos"
+                    } else {
+                        null
+                    }
                 } else {
                     ApiErrorMapper.fromResponse(response, ApiErrorContext.REGISTER)
                 }

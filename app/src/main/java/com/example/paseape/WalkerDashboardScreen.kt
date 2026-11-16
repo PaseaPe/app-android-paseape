@@ -285,7 +285,8 @@ fun WalkerDashboardScreen(
                             onUrl = onUrl
                         )
                     },
-                    onLimpiarErrorDocumentos = { viewModel.limpiarErrorDocumentos() }
+                    onLimpiarErrorDocumentos = { viewModel.limpiarErrorDocumentos() },
+                    onLogoutClick = onLogoutClick
                 )
             }
         }

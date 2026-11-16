@@ -15,3 +15,7 @@
 local.properties
 .idea
 .vscode
+
+# Volcados de crash de la JVM / daemon de Gradle
+hs_err_pid*.log
+replay_pid*.log
