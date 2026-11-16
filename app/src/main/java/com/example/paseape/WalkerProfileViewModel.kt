@@ -417,6 +417,19 @@ class WalkerProfileViewModel : ViewModel() {
     }
 
     /**
+     * Refresca el detalle del paseador consumiendo la misma ruta del perfil,
+     * sin pasar por [WalkerProfileUiState.Loading] para no parpadear la pantalla
+     * ni cerrar los diálogos abiertos.
+     *
+     * El dashboard permanece vivo detrás de "Paseo Activo", así que sin este
+     * refresco la información de paseos completados se quedaría vieja hasta
+     * volver a iniciar sesión.
+     */
+    fun refrescarPerfil(token: String, usuarioUuid: String) {
+        cargarPerfilSilencioso(token, usuarioUuid)
+    }
+
+    /**
      * Recarga el detalle del paseador sin pasar por [WalkerProfileUiState.Loading],
      * para no cerrar los diálogos abiertos sobre la pantalla de perfil.
      */

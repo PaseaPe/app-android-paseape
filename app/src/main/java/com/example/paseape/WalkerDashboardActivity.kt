@@ -17,6 +17,10 @@ import kotlinx.coroutines.withContext
 
 class WalkerDashboardActivity : ComponentActivity() {
 
+    private var token: String = ""
+    private var userUuid: String = ""
+    private var primeraCargaPerfil = true
+
     private val viewModel by lazy {
         ViewModelProvider(this)[WalkerProfileViewModel::class.java]
     }
@@ -32,8 +36,8 @@ class WalkerDashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val token = SessionManager.getToken(this).orEmpty()
-        val userUuid = intent.getStringExtra("EXTRA_USER_UUID")
+        token = SessionManager.getToken(this).orEmpty()
+        userUuid = intent.getStringExtra("EXTRA_USER_UUID")
             ?: intent.getStringExtra("user_uuid")
             ?: intent.getStringExtra("USER_UUID")
             ?: SessionManager.getUserUuid(this).orEmpty()
@@ -57,6 +61,23 @@ class WalkerDashboardActivity : ComponentActivity() {
                     onLogoutClick = { cerrarSesionYRedirigir() }
                 )
             }
+        }
+    }
+
+    /**
+     * El dashboard queda vivo detrás de "Paseo Activo" y del resumen, así que al
+     * volver hay que volver a consumir el detalle del perfil: los paseos
+     * completados cambiaron en el backend. El primer resume se ignora porque ya
+     * lo carga la pantalla al iniciar.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (primeraCargaPerfil) {
+            primeraCargaPerfil = false
+            return
+        }
+        if (userUuid.isNotBlank()) {
+            viewModel.refrescarPerfil(token = token, usuarioUuid = userUuid)
         }
     }
 
