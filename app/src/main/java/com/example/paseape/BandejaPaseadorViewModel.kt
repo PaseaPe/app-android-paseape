@@ -104,6 +104,12 @@ class BandejaPaseadorViewModel : ViewModel() {
     private var authHeaderActual: String = ""
     private var jobCarga: Job? = null
 
+    /** Refresco periódico de Inmediatos, para no solaparlo consigo mismo. */
+    private var jobRefrescoInmediatos: Job? = null
+
+    /** Evita que el sondeo duplique la petición de un refresco completo. */
+    private var refrescoTodoEnCurso = false
+
     private val mutexEscritura = Mutex()
 
     /**
@@ -134,6 +140,7 @@ class BandejaPaseadorViewModel : ViewModel() {
 
         tokenCargado = header
         jobCarga?.cancel()
+        jobRefrescoInmediatos?.cancel()
         _uiState.value = PaseosUiState.Loading
 
         jobCarga = viewModelScope.launch {
@@ -170,10 +177,55 @@ class BandejaPaseadorViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Refresco al abrir la pestaña "Paseos": si aún no hay datos hace la carga
+     * inicial; si ya se cargó con el mismo token, refresca en segundo plano sin
+     * vaciar la lista. Es el equivalente del refresco del perfil al abrir su pestaña.
+     */
+    fun refrescarAlAbrir(token: String) {
+        if (successActual() == null) {
+            cargar(token, force = true)
+        } else {
+            refrescarTodo()
+        }
+    }
+
+    /**
+     * Refresco periódico de la pestaña Inmediatos mientras está visible. Se omite
+     * si ya hay un refresco en curso o una escritura (tomar/descartar) pendiente.
+     * Los fallos se registran en el log y no muestran snackbar: es un refresco
+     * silencioso que se repetirá en el siguiente ciclo.
+     */
+    fun refrescarInmediatos() {
+        if (refrescoTodoEnCurso) return
+        if (jobRefrescoInmediatos?.isActive == true) return
+        val header = authHeaderActual.ifBlank { return }
+        val actual = successActual()?.tabs?.get(TabPaseos.INMEDIATOS) ?: return
+        if (actual.cargando || actual.cargandoMas) return
+        if (_accionesEnCurso.value.isNotEmpty()) return
+
+        jobRefrescoInmediatos = viewModelScope.launch {
+            when (val resultado = consultarPagina(header, TabPaseos.INMEDIATOS, 0)) {
+                is ResultadoCarga.Exito -> updateSuccess { state ->
+                    state.copy(tabs = state.tabs + (TabPaseos.INMEDIATOS to resultado.data))
+                }
+
+                is ResultadoCarga.Error -> Log.e(
+                    TAG,
+                    "No se pudo refrescar Inmediatos: ${resultado.mensaje}"
+                )
+            }
+        }
+    }
+
     /** Recarga la página 0 de las 4 pestañas (botón de refresco de la top bar). */
     fun refrescarTodo() {
         val header = authHeaderActual.ifBlank { return }
+        if (refrescoTodoEnCurso) return
+        refrescoTodoEnCurso = true
+        jobRefrescoInmediatos?.cancel()
         if (successActual() == null) {
+            refrescoTodoEnCurso = false
             cargar(header, force = true)
             return
         }
@@ -187,35 +239,39 @@ class BandejaPaseadorViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            val resultados = cargarTabsEnParalelo(header, TabPaseos.entries)
-            var primerError: String? = null
+            try {
+                val resultados = cargarTabsEnParalelo(header, TabPaseos.entries)
+                var primerError: String? = null
 
-            resultados.forEach { (tab, resultado) ->
-                when (resultado) {
-                    is ResultadoCarga.Exito -> updateSuccess { state ->
-                        state.copy(tabs = state.tabs + (tab to resultado.data))
-                    }
+                resultados.forEach { (tab, resultado) ->
+                    when (resultado) {
+                        is ResultadoCarga.Exito -> updateSuccess { state ->
+                            state.copy(tabs = state.tabs + (tab to resultado.data))
+                        }
 
-                    is ResultadoCarga.Error -> {
-                        if (primerError == null) primerError = resultado.mensaje
-                        updateSuccess { state ->
-                            val previo = state.tabs[tab] ?: return@updateSuccess state
-                            state.copy(
-                                tabs = state.tabs + (
-                                    tab to previo.copy(
-                                        cargando = false,
-                                        cargandoMas = false,
-                                        error = resultado.mensaje
-                                    )
-                                    )
-                            )
+                        is ResultadoCarga.Error -> {
+                            if (primerError == null) primerError = resultado.mensaje
+                            updateSuccess { state ->
+                                val previo = state.tabs[tab] ?: return@updateSuccess state
+                                state.copy(
+                                    tabs = state.tabs + (
+                                        tab to previo.copy(
+                                            cargando = false,
+                                            cargandoMas = false,
+                                            error = resultado.mensaje
+                                        )
+                                        )
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            primerError?.let { mensaje ->
-                _messages.tryEmit(PaseosMessage(mensaje) { refrescarTodo() })
+                primerError?.let { mensaje ->
+                    _messages.tryEmit(PaseosMessage(mensaje) { refrescarTodo() })
+                }
+            } finally {
+                refrescoTodoEnCurso = false
             }
         }
     }
@@ -531,6 +587,7 @@ class BandejaPaseadorViewModel : ViewModel() {
     private fun refrescarTabs(tabs: Set<TabPaseos>) {
         val header = authHeaderActual.ifBlank { return }
         if (tabs.isEmpty()) return
+        if (TabPaseos.INMEDIATOS in tabs) jobRefrescoInmediatos?.cancel()
 
         updateSuccess { state ->
             state.copy(
