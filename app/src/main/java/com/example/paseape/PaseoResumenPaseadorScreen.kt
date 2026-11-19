@@ -55,6 +55,8 @@ import coil.compose.AsyncImage
 import com.example.paseape.data.model.SolicitudMascotaResDto
 import com.example.paseape.data.model.SolicitudPaseoRecorridoResDto
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.ui.components.ControlesZoomMapa
+import com.example.paseape.ui.components.observarToqueMapa
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
@@ -105,6 +107,10 @@ fun PaseoResumenPaseadorScreen(
     onVolver: () -> Unit,
     onReintentar: () -> Unit
 ) {
+    // Mientras el dedo está sobre el mapa se desactiva el scroll de la pantalla:
+    // si no, el scroll padre se queda con el arrastre y el mapa no se mueve.
+    var mapaTocado by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = { BarraSuperiorResumen() },
         bottomBar = {
@@ -145,7 +151,7 @@ fun PaseoResumenPaseadorScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState(), enabled = !mapaTocado)
                         .padding(horizontal = 16.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -162,7 +168,8 @@ fun PaseoResumenPaseadorScreen(
                     )
                     TarjetaRecorrido(
                         puntos = state.puntosRuta,
-                        totalPuntos = state.recorrido?.coordenadasTotalPuntos
+                        totalPuntos = state.recorrido?.coordenadasTotalPuntos,
+                        onMapaTocado = { tocado -> mapaTocado = tocado }
                     )
                     TarjetaEntrega(
                         direccion = solicitud?.direccionRecojo,
@@ -345,7 +352,8 @@ private fun MetricaResumen(
 @Composable
 private fun TarjetaRecorrido(
     puntos: List<LatLng>,
-    totalPuntos: Int?
+    totalPuntos: Int?,
+    onMapaTocado: (Boolean) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -382,6 +390,7 @@ private fun TarjetaRecorrido(
                     .fillMaxWidth()
                     .height(235.dp)
                     .clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
+                    .observarToqueMapa(onMapaTocado)
             ) {
                 if (puntos.isEmpty()) {
                     MapaSinRecorrido()
@@ -398,73 +407,82 @@ private fun MapaRecorrido(puntos: List<LatLng>) {
     val mapView = rememberMapViewWithLifecycle()
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = Modifier.fillMaxSize(),
-        update = { view ->
-            view.getMapAsync { map ->
-                if (googleMap != null) return@getMapAsync
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { mapView },
+            modifier = Modifier.fillMaxSize(),
+            update = { view ->
+                view.getMapAsync { map ->
+                    if (googleMap != null) return@getMapAsync
 
-                map.uiSettings.apply {
-                    isZoomControlsEnabled = false
-                    isMapToolbarEnabled = false
-                    isMyLocationButtonEnabled = false
-                    isCompassEnabled = false
-                }
+                    map.uiSettings.apply {
+                        isZoomControlsEnabled = false
+                        isMapToolbarEnabled = false
+                        isMyLocationButtonEnabled = false
+                        isCompassEnabled = false
+                    }
 
-                map.addPolyline(
-                    PolylineOptions()
-                        .addAll(puntos)
-                        .width(12f)
-                        .color(PrimaryOrange.toArgb())
-                        .geodesic(true)
-                        .startCap(RoundCap())
-                        .endCap(RoundCap())
-                        .jointType(JointType.ROUND)
-                )
+                    map.addPolyline(
+                        PolylineOptions()
+                            .addAll(puntos)
+                            .width(12f)
+                            .color(PrimaryOrange.toArgb())
+                            .geodesic(true)
+                            .startCap(RoundCap())
+                            .endCap(RoundCap())
+                            .jointType(JointType.ROUND)
+                    )
 
-                map.addMarker(
-                    MarkerOptions()
-                        .position(puntos.first())
-                        .title("Inicio del paseo")
-                        .icon(
-                            BitmapDescriptorFactory.defaultMarker(
-                                BitmapDescriptorFactory.HUE_GREEN
+                    map.addMarker(
+                        MarkerOptions()
+                            .position(puntos.first())
+                            .title("Inicio del paseo")
+                            .icon(
+                                BitmapDescriptorFactory.defaultMarker(
+                                    BitmapDescriptorFactory.HUE_GREEN
+                                )
                             )
-                        )
-                )
-                map.addMarker(
-                    MarkerOptions()
-                        .position(puntos.last())
-                        .title("Fin del paseo")
-                        .icon(
-                            BitmapDescriptorFactory.defaultMarker(
-                                BitmapDescriptorFactory.HUE_RED
+                    )
+                    map.addMarker(
+                        MarkerOptions()
+                            .position(puntos.last())
+                            .title("Fin del paseo")
+                            .icon(
+                                BitmapDescriptorFactory.defaultMarker(
+                                    BitmapDescriptorFactory.HUE_RED
+                                )
                             )
-                        )
-                )
+                    )
 
-                map.setOnMapLoadedCallback {
-                    if (puntos.size == 1) {
-                        map.moveCamera(
-                            CameraUpdateFactory.newLatLngZoom(puntos.first(), 16f)
-                        )
-                    } else {
-                        val bounds = LatLngBounds.builder().apply {
-                            puntos.forEach { include(it) }
-                        }.build()
-                        runCatching {
+                    map.setOnMapLoadedCallback {
+                        if (puntos.size == 1) {
                             map.moveCamera(
-                                CameraUpdateFactory.newLatLngBounds(bounds, 120)
+                                CameraUpdateFactory.newLatLngZoom(puntos.first(), 16f)
                             )
+                        } else {
+                            val bounds = LatLngBounds.builder().apply {
+                                puntos.forEach { include(it) }
+                            }.build()
+                            runCatching {
+                                map.moveCamera(
+                                    CameraUpdateFactory.newLatLngBounds(bounds, 120)
+                                )
+                            }
                         }
                     }
-                }
 
-                googleMap = map
+                    googleMap = map
+                }
             }
-        }
-    )
+        )
+
+        ControlesZoomMapa(
+            googleMap = googleMap,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+        )
+    }
 }
 
 @Composable

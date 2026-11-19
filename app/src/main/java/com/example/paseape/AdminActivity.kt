@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.paseape.data.SessionManager
 import com.example.paseape.data.model.ClienteAdminDto
 import com.example.paseape.data.model.PaseadorAdminDto
+import com.example.paseape.ui.components.descargarDocumento
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PaseaPETheme
 import com.example.paseape.ui.theme.PrimaryDark
@@ -226,6 +226,10 @@ fun AdminScreen(
                                 items(uiState.paseadores) { paseador ->
                                     AdminPaseadorCardReal(
                                         paseador = paseador,
+                                        tieneAntecedentes = paseador.detalleIdentifier?.let {
+                                            uiState.antecedentesPorUsuario[it]
+                                        },
+                                        cargandoAntecedentes = uiState.cargandoAntecedentes,
                                         onClick = { viewModel.openPaseadorDialog(paseador) }
                                     )
                                 }
@@ -273,8 +277,18 @@ fun AdminScreen(
 
     // DIÁLOGO DE ACTUALIZACIÓN DE VERIFICACIÓN DE PASEADOR
     uiState.selectedPaseadorForDialog?.let { paseador ->
+        // El listado de admin no incluye los documentos: se piden al abrir el diálogo.
+        LaunchedEffect(paseador.detalleIdentifier) {
+            paseador.detalleIdentifier?.let { uuid ->
+                viewModel.cargarDocumentosPaseador(token = authToken, usuarioUuid = uuid)
+            }
+        }
+
         ActualizarVerificacionPaseadorDialog(
             paseador = paseador,
+            documentos = uiState.documentosPaseador,
+            cargandoDocumentos = uiState.cargandoDocumentos,
+            documentosError = uiState.documentosError,
             isUpdating = uiState.isUpdating,
             onDismiss = { viewModel.closePaseadorDialog() },
             onConfirm = { nuevoEstado ->
@@ -284,6 +298,19 @@ fun AdminScreen(
                     paseadorUuid = uuid,
                     nuevoEstado = nuevoEstado
                 )
+            },
+            onDescargarDocumento = { documento ->
+                documento.uuid?.let { documentUuid ->
+                    viewModel.obtenerUrlDescarga(
+                        token = authToken,
+                        documentUuid = documentUuid
+                    ) { url ->
+                        context.descargarDocumento(
+                            url = url,
+                            nombreArchivo = documento.nombreOriginal
+                        )
+                    }
+                }
             }
         )
     }
@@ -292,6 +319,8 @@ fun AdminScreen(
 @Composable
 fun AdminPaseadorCardReal(
     paseador: PaseadorAdminDto,
+    tieneAntecedentes: Boolean? = null,
+    cargandoAntecedentes: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
@@ -321,13 +350,68 @@ fun AdminPaseadorCardReal(
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                val tieneAntecedentes = !paseador.antecedentesPolicialesUrl.isNullOrBlank()
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (tieneAntecedentes) "✔ Antecedentes adjuntos" else "⚠ Sin antecedentes adjuntos",
+                    text = paseador.correo ?: "Sin correo",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val tarifa = paseador.tarifaHoraPen?.let {
+                        String.format(java.util.Locale.US, "S/ %.2f/h", it)
+                    }
+                    if (tarifa != null) {
+                        Text(
+                            text = tarifa,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryDark
+                        )
+                    }
+                    Text(
+                        text = "${paseador.paseosCompletados ?: 0} paseos",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                    Text(
+                        text = String.format(
+                            java.util.Locale.US,
+                            "%.1f ⭐",
+                            paseador.calificacionPromedio ?: 0.0
+                        ),
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                // Los documentos reales llegan en segundo plano (`digital_documents`).
+                // La URL legada es solo respaldo y, mientras no haya dato, no se
+                // afirma que falten antecedentes.
+                val urlLegada = paseador.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
+                val estadoAntecedentes = when {
+                    tieneAntecedentes == true -> true
+                    // Un certificado legado también cuenta como antecedente adjunto.
+                    urlLegada != null -> true
+                    tieneAntecedentes == false -> false
+                    else -> null
+                }
+                val (textoAntecedentes, colorAntecedentes) = when {
+                    estadoAntecedentes == true ->
+                        "✔ Antecedentes adjuntos" to Color(0xFF16A34A)
+                    estadoAntecedentes == false ->
+                        "⚠ Sin antecedentes adjuntos" to Color(0xFFD97706)
+                    cargandoAntecedentes ->
+                        "… Verificando antecedentes" to Color(0xFF64748B)
+                    else ->
+                        "— Antecedentes sin verificar" to Color(0xFF64748B)
+                }
+                Text(
+                    text = textoAntecedentes,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (tieneAntecedentes) Color(0xFF16A34A) else Color(0xFFD97706)
+                    color = colorAntecedentes
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(

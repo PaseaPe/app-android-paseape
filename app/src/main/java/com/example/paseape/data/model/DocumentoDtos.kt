@@ -67,3 +67,34 @@ fun formatearTamanoArchivo(bytes: Long?): String {
         else -> String.format(java.util.Locale.US, "%.2f MB", valor / (1024.0 * 1024.0))
     }
 }
+
+/**
+ * IDs de `digital_document_type`, espejo del seed del backend
+ * (`V2.1.0__create_digital_document_schema.sql`).
+ */
+object TipoDocumentoDigital {
+    const val FOTO_PERFIL = 1
+    const val FOTO_MASCOTA = 2
+    const val ANTECEDENTE_POLICIAL = 3
+    const val DOCUMENTO_IDENTIDAD = 4
+}
+
+private val DESCRIPCIONES_FOTO = setOf("FOTO_PERFIL", "FOTO_MASCOTA")
+
+/**
+ * Deja solo los archivos adjuntos descargables (antecedentes, documento de
+ * identidad), excluyendo las fotos de perfil y de mascota.
+ *
+ * El backend devuelve todos los archivos de la carpeta del usuario en
+ * `digital_documents`, así que sin este filtro la foto de perfil aparecería
+ * como un documento más y se descargaría en lugar del PDF/Word.
+ */
+fun List<DigitalDocumentDto>.soloDocumentosAdjuntos(): List<DigitalDocumentDto> =
+    filterNot { documento ->
+        documento.tipoDocumentoId == TipoDocumentoDigital.FOTO_PERFIL ||
+            documento.tipoDocumentoId == TipoDocumentoDigital.FOTO_MASCOTA ||
+            documento.tipoDocumentoDescripcion
+                ?.trim()
+                ?.uppercase()
+                ?.let { it in DESCRIPCIONES_FOTO } == true
+    }

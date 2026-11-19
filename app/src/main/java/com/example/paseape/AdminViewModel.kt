@@ -6,13 +6,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.paseape.data.model.ActualizarEstadoUsuarioRequest
 import com.example.paseape.data.model.ActualizarVerificacionPaseadorRequest
 import com.example.paseape.data.model.ClienteAdminDto
+import com.example.paseape.data.model.DigitalDocumentDto
 import com.example.paseape.data.model.EstadoVerificacionPaseador
 import com.example.paseape.data.model.PaseadorAdminDto
 import com.example.paseape.data.model.UsuarioEstado
+import com.example.paseape.data.model.soloDocumentosAdjuntos
 import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,6 +34,16 @@ data class AdminUiState(
     val clientes: List<ClienteAdminDto> = emptyList(),
     val selectedClienteForDialog: ClienteAdminDto? = null,
     val selectedPaseadorForDialog: PaseadorAdminDto? = null,
+    val documentosPaseador: List<DigitalDocumentDto> = emptyList(),
+    val cargandoDocumentos: Boolean = false,
+    val documentosError: String? = null,
+    /**
+     * `usuarioUuid -> ¿tiene antecedentes adjuntos?` para las tarjetas del
+     * listado. Se llena en segundo plano porque el endpoint del listado no
+     * incluye `digital_documents`. Una clave ausente significa "sin dato".
+     */
+    val antecedentesPorUsuario: Map<String, Boolean> = emptyMap(),
+    val cargandoAntecedentes: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -57,20 +70,169 @@ class AdminViewModel : ViewModel() {
     }
 
     fun openPaseadorDialog(paseador: PaseadorAdminDto) {
-        _uiState.update { it.copy(selectedPaseadorForDialog = paseador) }
+        _uiState.update {
+            it.copy(
+                selectedPaseadorForDialog = paseador,
+                documentosPaseador = emptyList(),
+                cargandoDocumentos = false,
+                documentosError = null
+            )
+        }
     }
 
     fun closePaseadorDialog() {
         if (!_uiState.value.isUpdating) {
-            _uiState.update { it.copy(selectedPaseadorForDialog = null) }
+            _uiState.update {
+                it.copy(
+                    selectedPaseadorForDialog = null,
+                    documentosPaseador = emptyList(),
+                    cargandoDocumentos = false,
+                    documentosError = null
+                )
+            }
         }
+    }
+
+    /**
+     * Carga los documentos digitales del paseador seleccionado. El listado de
+     * admin no los incluye, así que se consume `GET /paseadores/{uuid}` (devuelve
+     * `digital_documents`) con el token del administrador.
+     */
+    fun cargarDocumentosPaseador(token: String, usuarioUuid: String) {
+        if (usuarioUuid.isBlank()) return
+
+        val bearerToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(cargandoDocumentos = true, documentosError = null) }
+            try {
+                val response = RetrofitClient.apiService.getWalkerDetail(
+                    token = bearerToken,
+                    userUuid = usuarioUuid
+                )
+
+                if (response.isSuccessful) {
+                    val documentos = response.body()?.response?.extraerUsuario()?.digitalDocuments
+                        .orEmpty()
+                        .soloDocumentosAdjuntos()
+                    _uiState.update {
+                        it.copy(cargandoDocumentos = false, documentosPaseador = documentos)
+                    }
+                } else {
+                    val errorMsg = ApiErrorMapper.fromResponse(response, ApiErrorContext.ADMIN)
+                    _uiState.update {
+                        it.copy(cargandoDocumentos = false, documentosError = errorMsg)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ADMIN_VM", "Error al cargar documentos del paseador", e)
+                val errorMsg = ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN)
+                _uiState.update {
+                    it.copy(cargandoDocumentos = false, documentosError = errorMsg)
+                }
+            }
+        }
+    }
+
+    /**
+     * Pide la URL prefirmada del documento y la entrega por [onUrl] para que la
+     * vista la descargue con `DownloadManager`. Si falla se avisa por snackbar.
+     */
+    fun obtenerUrlDescarga(
+        token: String,
+        documentUuid: String,
+        onUrl: (String) -> Unit
+    ) {
+        if (documentUuid.isBlank()) return
+
+        val bearerToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.descargarDocumento(
+                    token = bearerToken,
+                    documentUuid = documentUuid
+                )
+                val url = response.body()?.response?.url
+
+                if (response.isSuccessful && !url.isNullOrBlank()) {
+                    withContext(Dispatchers.Main) { onUrl(url) }
+                } else {
+                    _snackbarEvent.emit(
+                        ApiErrorMapper.fromResponse(response, ApiErrorContext.ADMIN)
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("ADMIN_VM", "Error al obtener la URL de descarga", e)
+                _snackbarEvent.emit(ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN))
+            }
+        }
+    }
+
+    /**
+     * Completa en segundo plano qué paseadores del listado tienen antecedentes
+     * adjuntos. El endpoint del listado no incluye `digital_documents`, así que
+     * se consulta `GET /paseadores/{uuid}` por paseador (la misma llamada que
+     * usa el diálogo) y se guarda el resultado por usuario. Si una consulta
+     * falla se deja sin dato, sin interrumpir a las demás.
+     */
+    private suspend fun cargarAntecedentesDeLista(
+        bearerToken: String,
+        paseadores: List<PaseadorAdminDto>
+    ) {
+        val usuarios = paseadores
+            .mapNotNull { it.detalleIdentifier?.takeIf { uuid -> uuid.isNotBlank() } }
+            .distinct()
+        if (usuarios.isEmpty()) return
+
+        _uiState.update { it.copy(cargandoAntecedentes = true) }
+        coroutineScope {
+            usuarios.forEach { usuarioUuid ->
+                launch {
+                    val tieneAntecedentes = try {
+                        val response = RetrofitClient.apiService.getWalkerDetail(
+                            token = bearerToken,
+                            userUuid = usuarioUuid
+                        )
+                        if (response.isSuccessful) {
+                            response.body()?.response?.extraerUsuario()?.digitalDocuments
+                                .orEmpty()
+                                .soloDocumentosAdjuntos()
+                                .isNotEmpty()
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ADMIN_VM", "No se pudieron verificar los antecedentes", e)
+                        null
+                    }
+
+                    if (tieneAntecedentes != null) {
+                        _uiState.update {
+                            it.copy(
+                                antecedentesPorUsuario =
+                                    it.antecedentesPorUsuario + (usuarioUuid to tieneAntecedentes)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        _uiState.update { it.copy(cargandoAntecedentes = false) }
     }
 
     fun cargarDatos(token: String) {
         val bearerToken = if (token.startsWith("Bearer ")) token else "Bearer $token"
 
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    antecedentesPorUsuario = emptyMap(),
+                    cargandoAntecedentes = false
+                )
+            }
             try {
                 val responsePaseadores = RetrofitClient.apiService.listarPaseadoresAdmin(bearerToken)
                 val responseClientes = RetrofitClient.apiService.listarClientesAdmin(bearerToken)
@@ -113,12 +275,17 @@ class AdminViewModel : ViewModel() {
                 if (loadError != null) {
                     _snackbarEvent.emit(loadError)
                 }
+
+                if (paseadoresList.isNotEmpty()) {
+                    cargarAntecedentesDeLista(bearerToken, paseadoresList)
+                }
             } catch (e: Exception) {
                 Log.e("ADMIN_VM", "Error al cargar datos de admin", e)
                 val msg = ApiErrorMapper.fromThrowable(e, ApiErrorContext.ADMIN)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        cargandoAntecedentes = false,
                         errorMessage = msg
                     )
                 }

@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.example.paseape.data.model.SolicitudPaseoResDto
+import com.example.paseape.ui.components.ControlesZoomMapa
+import com.example.paseape.ui.components.observarToqueMapa
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
@@ -124,6 +126,10 @@ fun PaseoActivoPaseadorScreen(
 ) {
     var mostrarConfirmacion by remember { mutableStateOf(false) }
 
+    // Mientras el dedo está sobre el mapa se desactiva el scroll de la pantalla:
+    // si no, el scroll padre se queda con el arrastre y el mapa no se mueve.
+    var mapaTocado by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             BarraSuperiorPaseoActivo(
@@ -169,7 +175,7 @@ fun PaseoActivoPaseadorScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState(), enabled = !mapaTocado)
                         .padding(horizontal = 16.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -179,7 +185,8 @@ fun PaseoActivoPaseadorScreen(
                     TarjetaMapa(
                         ubicacion = state.ubicacion,
                         permisoUbicacion = state.permisoUbicacion,
-                        onSolicitarPermiso = onSolicitarPermiso
+                        onSolicitarPermiso = onSolicitarPermiso,
+                        onMapaTocado = { tocado -> mapaTocado = tocado }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                 }
@@ -596,7 +603,8 @@ private fun FilaMascotaActiva(mascota: MascotaDetalleItem) {
 private fun TarjetaMapa(
     ubicacion: LatLng?,
     permisoUbicacion: Boolean,
-    onSolicitarPermiso: () -> Unit
+    onSolicitarPermiso: () -> Unit,
+    onMapaTocado: (Boolean) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -626,6 +634,7 @@ private fun TarjetaMapa(
                     .fillMaxWidth()
                     .height(225.dp)
                     .clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
+                    .observarToqueMapa(onMapaTocado)
             ) {
                 when {
                     !permisoUbicacion -> MapaSinPermiso(onSolicitarPermiso = onSolicitarPermiso)
@@ -646,23 +655,32 @@ private fun MapaUbicacionActual(ubicacion: LatLng) {
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
     var marcador by remember { mutableStateOf<Marker?>(null) }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = Modifier.fillMaxSize(),
-        update = { view ->
-            view.getMapAsync { map ->
-                if (googleMap == null) {
-                    map.uiSettings.apply {
-                        isZoomControlsEnabled = false
-                        isMapToolbarEnabled = false
-                        isMyLocationButtonEnabled = false
-                        isCompassEnabled = false
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { mapView },
+            modifier = Modifier.fillMaxSize(),
+            update = { view ->
+                view.getMapAsync { map ->
+                    if (googleMap == null) {
+                        map.uiSettings.apply {
+                            isZoomControlsEnabled = false
+                            isMapToolbarEnabled = false
+                            isMyLocationButtonEnabled = false
+                            isCompassEnabled = false
+                        }
+                        googleMap = map
                     }
-                    googleMap = map
                 }
             }
-        }
-    )
+        )
+
+        ControlesZoomMapa(
+            googleMap = googleMap,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+        )
+    }
 
     LaunchedEffect(googleMap, ubicacion) {
         val map = googleMap ?: return@LaunchedEffect

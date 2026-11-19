@@ -329,8 +329,14 @@ class WalkerProfileViewModel : ViewModel() {
                 )
 
                 if (response.isSuccessful) {
-                    _userMessage.emit("Documento(s) subido(s) correctamente.")
-                    null
+                    val documentos = response.body()?.response.orEmpty()
+                    if (documentos.isEmpty()) {
+                        // 2xx sin documentos: el backend no persistió ningún archivo.
+                        "El servidor no confirmó ningún archivo. Intenta de nuevo."
+                    } else {
+                        _userMessage.emit("Documento(s) subido(s) correctamente.")
+                        null
+                    }
                 } else {
                     ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
                 }
@@ -414,6 +420,19 @@ class WalkerProfileViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    /**
+     * Refresca el detalle del paseador consumiendo la misma ruta del perfil,
+     * sin pasar por [WalkerProfileUiState.Loading] para no parpadear la pantalla
+     * ni cerrar los diálogos abiertos.
+     *
+     * El dashboard permanece vivo detrás de "Paseo Activo", así que sin este
+     * refresco la información de paseos completados se quedaría vieja hasta
+     * volver a iniciar sesión.
+     */
+    fun refrescarPerfil(token: String, usuarioUuid: String) {
+        cargarPerfilSilencioso(token, usuarioUuid)
     }
 
     /**

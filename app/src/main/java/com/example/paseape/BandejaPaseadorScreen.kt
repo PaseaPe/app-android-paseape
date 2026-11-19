@@ -66,10 +66,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.paseape.data.model.SolicitudPaseoResDto
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
+import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -87,6 +91,9 @@ private val FondoEnCurso = Color(0xFFE3F2FD)
 private val TextoEnCurso = Color(0xFF1565C0)
 private val FondoRechazada = Color(0xFFFDECEA)
 private val FondoFinalizada = Color(0xFFF1F5F9)
+
+/** Cada cuánto se refresca sola la pestaña Inmediatos mientras está visible. */
+private const val INTERVALO_REFRESCO_INMEDIATOS = 10_000L
 
 /**
  * Bandeja "Gestión de Paseos" del paseador: 4 pestañas con contadores sobre los
@@ -117,8 +124,24 @@ fun BandejaPaseadorScreen(
     var motivoRechazo by remember { mutableStateOf("") }
     var solicitudCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
 
+    // Al abrir la pestaña "Paseos" se refresca, igual que el perfil al abrir la suya.
     LaunchedEffect(token) {
-        viewModel.cargar(token)
+        viewModel.refrescarAlAbrir(token)
+    }
+
+    // Las solicitudes inmediatas caducan en 5 minutos: mientras la pestaña
+    // "Inmediatos" está visible y la app en primer plano, se refresca sola cada
+    // 10 s. Al cambiar de pestaña o salir de la app el ciclo se detiene.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(tabActivo, lifecycleOwner) {
+        if (tabActivo != TabPaseos.INMEDIATOS) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.refrescarInmediatos()
+            while (true) {
+                delay(INTERVALO_REFRESCO_INMEDIATOS)
+                viewModel.refrescarInmediatos()
+            }
+        }
     }
 
     LaunchedEffect(Unit) {

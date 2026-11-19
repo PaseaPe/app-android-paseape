@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -33,7 +32,6 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
@@ -117,6 +115,14 @@ fun WalkerDashboardScreen(
     // Cargar perfil al iniciar
     LaunchedEffect(usuarioUuid) {
         viewModel.cargarPerfil(token = token, usuarioUuid = usuarioUuid)
+    }
+
+    // El perfil cambia en el backend durante el paseo (paseos completados,
+    // calificación), así que se vuelve a consumir cada vez que se abre su pestaña.
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 3) {
+            viewModel.refrescarPerfil(token = token, usuarioUuid = usuarioUuid)
+        }
     }
 
     Scaffold(
@@ -279,7 +285,8 @@ fun WalkerDashboardScreen(
                             onUrl = onUrl
                         )
                     },
-                    onLimpiarErrorDocumentos = { viewModel.limpiarErrorDocumentos() }
+                    onLimpiarErrorDocumentos = { viewModel.limpiarErrorDocumentos() },
+                    onLogoutClick = onLogoutClick
                 )
             }
         }

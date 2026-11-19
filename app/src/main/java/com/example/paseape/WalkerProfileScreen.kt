@@ -1,9 +1,5 @@
 package com.example.paseape
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditLocation
@@ -31,7 +28,6 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -69,9 +66,10 @@ import coil.compose.AsyncImage
 import com.example.paseape.data.model.ArchivoPendiente
 import com.example.paseape.data.model.DistritoParamDto
 import com.example.paseape.data.model.UpdateProfileRequestDto
-import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
+import com.example.paseape.data.model.soloDocumentosAdjuntos
 import com.example.paseape.ui.components.DocumentosSoloLecturaCard
 import com.example.paseape.ui.components.VisorFotoDialog
+import com.example.paseape.ui.components.descargarDocumento
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import com.example.paseape.ui.theme.PrimaryOrange
@@ -95,7 +93,8 @@ fun WalkerProfileScreen(
     onActualizarCobertura: (Int, () -> Unit) -> Unit,
     onEliminarDocumento: (String, () -> Unit) -> Unit,
     onObtenerUrlDescarga: (String, (String) -> Unit) -> Unit,
-    onLimpiarErrorDocumentos: () -> Unit
+    onLimpiarErrorDocumentos: () -> Unit,
+    onLogoutClick: () -> Unit
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showUpdateCoverageDialog by remember { mutableStateOf(false) }
@@ -114,6 +113,15 @@ fun WalkerProfileScreen(
                         fontSize = 20.sp,
                         color = PrimaryDark
                     )
+                },
+                actions = {
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Cerrar sesión",
+                            tint = PrimaryDark
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundOffWhite)
             )
@@ -428,23 +436,29 @@ fun WalkerProfileScreen(
 
                                 // Antecedentes Policiales / Penales: solo lectura en el
                                 // perfil. Agregar o eliminar se hace desde Editar Perfil.
+                                val documentosAdjuntos =
+                                    detalle.digitalDocuments.orEmpty().soloDocumentosAdjuntos()
                                 DocumentosSoloLecturaCard(
-                                    documentos = detalle.digitalDocuments.orEmpty(),
+                                    documentos = documentosAdjuntos,
                                     habilitado = !isDocumentLoading,
                                     onDescargarDocumento = { documento ->
                                         documento.uuid?.let { uuid ->
                                             onObtenerUrlDescarga(uuid) { url ->
-                                                abrirDocumento(context, url)
+                                                context.descargarDocumento(
+                                                    url = url,
+                                                    nombreArchivo = documento.nombreOriginal
+                                                )
                                             }
                                         }
                                     }
                                 )
 
                                 // Compatibilidad con el campo legado de URL, solo si no
-                                // hay documentos digitales todavía.
+                                // hay documentos digitales adjuntos (la foto de perfil
+                                // no cuenta como documento).
                                 val legacyUrl = paseador?.antecedentesPolicialesUrl
                                     ?.takeIf { it.isNotBlank() }
-                                if (detalle.digitalDocuments.isNullOrEmpty() && legacyUrl != null) {
+                                if (documentosAdjuntos.isEmpty() && legacyUrl != null) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -456,9 +470,9 @@ fun WalkerProfileScreen(
                                             color = Color(0xFF64748B),
                                             modifier = Modifier.weight(1f)
                                         )
-                                        TextButton(onClick = { abrirDocumento(context, legacyUrl) }) {
+                                        TextButton(onClick = { context.descargarDocumento(legacyUrl) }) {
                                             Text(
-                                                text = "Abrir enlace",
+                                                text = "Descargar",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = PrimaryDark
@@ -556,7 +570,7 @@ fun WalkerProfileScreen(
                         EditarPerfilPaseadorDialog(
                             detalle = detalle,
                             distritos = distritos,
-                            documentos = detalle.digitalDocuments.orEmpty(),
+                            documentos = detalle.digitalDocuments.orEmpty().soloDocumentosAdjuntos(),
                             archivosPendientes = archivosPendientes,
                             isLoading = isOperationLoading,
                             isDocumentLoading = isDocumentLoading,
@@ -579,7 +593,10 @@ fun WalkerProfileScreen(
                             onDescargarDocumento = { documento ->
                                 documento.uuid?.let { uuid ->
                                     onObtenerUrlDescarga(uuid) { url ->
-                                        abrirDocumento(context, url)
+                                        context.descargarDocumento(
+                                            url = url,
+                                            nombreArchivo = documento.nombreOriginal
+                                        )
                                     }
                                 }
                             },
@@ -734,16 +751,3 @@ fun ItemResumenAtributo(
     }
 }
 
-/** Abre una URL prefirmada de documento en el navegador/visor del sistema. */
-private fun abrirDocumento(context: Context, url: String) {
-    if (url.isBlank()) return
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    }.onFailure {
-        Toast.makeText(
-            context,
-            "No se pudo abrir el documento.",
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-}
