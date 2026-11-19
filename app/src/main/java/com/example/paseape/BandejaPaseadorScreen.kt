@@ -123,6 +123,7 @@ fun BandejaPaseadorScreen(
     var solicitudRechazar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
     var motivoRechazo by remember { mutableStateOf("") }
     var solicitudCancelar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
+    var solicitudTomar by remember { mutableStateOf<SolicitudPaseoResDto?>(null) }
 
     // Al abrir la pestaña "Paseos" se refresca, igual que el perfil al abrir la suya.
     LaunchedEffect(token) {
@@ -164,6 +165,18 @@ fun BandejaPaseadorScreen(
             detalleLauncher.launch(
                 Intent(context, PaseoActivoPaseadorActivity::class.java).apply {
                     putExtra(PaseoActivoPaseadorActivity.EXTRA_SOLICITUD_UUID, uuid)
+                }
+            )
+        }
+    }
+
+    // Al tomar un paseo inmediato con la opción "Después" se abre su detalle,
+    // donde el paseador pulsa "Iniciar paseo" cuando esté con la mascota.
+    LaunchedEffect(Unit) {
+        viewModel.paseoTomado.collect { uuid ->
+            detalleLauncher.launch(
+                Intent(context, SolicitudDetallePaseadorActivity::class.java).apply {
+                    putExtra(SolicitudDetallePaseadorActivity.EXTRA_SOLICITUD_UUID, uuid)
                 }
             )
         }
@@ -241,7 +254,7 @@ fun BandejaPaseadorScreen(
                                 val uuid = solicitud.uuid
                                 if (uuid != null) {
                                     when (tabActivo) {
-                                        TabPaseos.INMEDIATOS -> viewModel.tomarInmediata(uuid)
+                                        TabPaseos.INMEDIATOS -> solicitudTomar = solicitud
                                         TabPaseos.MIS_PASEOS -> viewModel.aceptarProgramada(uuid)
                                         TabPaseos.EN_CURSO,
                                         TabPaseos.HISTORIAL -> Unit
@@ -318,6 +331,54 @@ fun BandejaPaseadorScreen(
                 }
             }
         }
+    }
+
+    solicitudTomar?.let { solicitud ->
+        AlertDialog(
+            onDismissRequest = { solicitudTomar = null },
+            title = {
+                Text(
+                    text = "¿Iniciar el paseo ahora?",
+                    fontWeight = FontWeight.Bold,
+                    color = PrimaryDark
+                )
+            },
+            text = {
+                Text(
+                    text = "Al tomar la solicitud puedes arrancar el reloj del paseo " +
+                        "en este momento o dejarlo para más tarde. Con \"Después\" el " +
+                        "paseo queda en Mis paseos y se abre su detalle para iniciarlo " +
+                        "cuando estés con la mascota.",
+                    fontSize = 14.sp,
+                    color = TextoGris
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        solicitud.uuid?.let { viewModel.tomarInmediata(it, iniciarAhora = true) }
+                        solicitudTomar = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = PrimaryOrange
+                    )
+                ) {
+                    Text("Iniciar ahora", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        solicitud.uuid?.let { viewModel.tomarInmediata(it, iniciarAhora = false) }
+                        solicitudTomar = null
+                    }
+                ) {
+                    Text("Después", color = PrimaryDark)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 
     solicitudDescartar?.let { solicitud ->

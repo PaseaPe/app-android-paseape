@@ -97,6 +97,13 @@ class BandejaPaseadorViewModel : ViewModel() {
     private val _paseoIniciado = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val paseoIniciado: SharedFlow<String> = _paseoIniciado.asSharedFlow()
 
+    /**
+     * UUID de un paseo inmediato tomado pero NO iniciado (estado ACEPTADA), para
+     * abrir su detalle y que el usuario pulse "Iniciar paseo" cuando quiera.
+     */
+    private val _paseoTomado = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val paseoTomado: SharedFlow<String> = _paseoTomado.asSharedFlow()
+
     private val _accionesEnCurso = MutableStateFlow<Map<String, AccionPaseo>>(emptyMap())
     val accionesEnCurso: StateFlow<Map<String, AccionPaseo>> = _accionesEnCurso.asStateFlow()
 
@@ -333,11 +340,15 @@ class BandejaPaseadorViewModel : ViewModel() {
     }
 
     /**
-     * Acepta una solicitud inmediata: PATCH /tomar y, al confirmar, inicia el
-     * paseo con PATCH /iniciar para que aparezca en la pestaña En Curso.
-     * Se quita de Inmediatos de forma optimista.
+     * Acepta una solicitud inmediata: PATCH /tomar. Se quita de Inmediatos de
+     * forma optimista y luego, según [iniciarAhora]:
+     * - `true`: encadena PATCH /iniciar (ACEPTADA -> EN_CURSO), emite [paseoIniciado]
+     *   y se abre "Paseo Activo" directamente.
+     * - `false`: deja el paseo en ACEPTADA (visible en "Mis paseos"), emite
+     *   [paseoTomado] para abrir el detalle y no arranca el reloj hasta que el
+     *   usuario pulse "Iniciar paseo".
      */
-    fun tomarInmediata(uuid: String) {
+    fun tomarInmediata(uuid: String, iniciarAhora: Boolean = true) {
         val existe = successActual()?.tabs?.get(TabPaseos.INMEDIATOS)
             ?.items?.any { it.uuid == uuid } ?: false
         if (!existe) return
@@ -356,15 +367,29 @@ class BandejaPaseadorViewModel : ViewModel() {
             when (resultado) {
                 is ResultadoApi.Exito -> {
                     ajustarContador(TabPaseos.INMEDIATOS)
-                    iniciarTrasTomar(header, uuid)
+                    if (iniciarAhora) {
+                        iniciarTrasTomar(header, uuid)
+                    } else {
+                        dejarPendienteDeInicio(uuid)
+                    }
                 }
 
                 is ResultadoApi.Error -> {
                     removido?.let(::restaurarLocal)
-                    emitirError(resultado.mensaje) { tomarInmediata(uuid) }
+                    emitirError(resultado.mensaje) { tomarInmediata(uuid, iniciarAhora) }
                 }
             }
         }
+    }
+
+    /**
+     * Paseo inmediato tomado a petición del usuario para iniciarlo después:
+     * queda en ACEPTADA (por eso aparece en "Mis paseos") y se abre su detalle.
+     */
+    private fun dejarPendienteDeInicio(uuid: String) {
+        emitirInfo("Paseo aceptado. Inícialo desde su detalle cuando estés con la mascota.")
+        _paseoTomado.tryEmit(uuid)
+        refrescarTabs(setOf(TabPaseos.INMEDIATOS, TabPaseos.MIS_PASEOS))
     }
 
     /**

@@ -360,9 +360,10 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
     }
 
     /**
-     * Flujo de solicitud inmediata: PATCH /tomar y, al confirmar, PATCH /iniciar
-     * (igual que la bandeja). Si el inicio falla, el paseo queda ACEPTADA en
-     * "Mis paseos" y se avisa al usuario.
+     * Flujo de solicitud inmediata: PATCH /tomar y quedarse en la pantalla. El
+     * estado pasa a ACEPTADA (visible en "Mis paseos") y el paseador pulsa
+     * "Iniciar paseo" cuando quiera, de modo que `fecha_hora_inicio_real` y el
+     * reloj del paseo arrancan en el momento real y no al aceptar.
      */
     private fun tomar() {
         val uuid = uuidActual() ?: return
@@ -384,26 +385,14 @@ class SolicitudDetallePaseadorActivity : ComponentActivity() {
                 }
 
                 huboCambios = true
-
-                val respuestaIniciar = withContext(Dispatchers.IO) {
-                    RetrofitClient.apiService.iniciarPaseo(authHeader, uuid)
-                }
-                val mensaje = if (respuestaIniciar.isSuccessful) {
-                    "Paseo aceptado e iniciado"
-                } else {
-                    "Paseo aceptado, pero no se pudo iniciar: " +
-                        ApiErrorMapper.fromResponse(respuestaIniciar, ApiErrorContext.WALK)
-                }
                 Toast.makeText(
                     this@SolicitudDetallePaseadorActivity,
-                    mensaje,
+                    "Paseo aceptado. Pulsa \"Iniciar paseo\" cuando estés con la mascota.",
                     Toast.LENGTH_LONG
                 ).show()
-                if (respuestaIniciar.isSuccessful) {
-                    abrirPaseoActivo()
-                } else {
-                    finish()
-                }
+                // Recarga el detalle para mostrar los botones de estado ACEPTADA
+                // ("Iniciar paseo" y "Cancelar paseo").
+                cargarDetalle()
             } catch (e: Exception) {
                 Log.e(TAG, "Error de red al tomar la solicitud", e)
                 Toast.makeText(
