@@ -20,10 +20,7 @@ val baseUrl: String = localProperties.getProperty("BASE_URL")
 val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
     ?.trim()
     ?.takeIf { it.isNotBlank() }
-    ?: error(
-        "Falta MAPS_API_KEY en local.properties. " +
-            "Agrega la línea MAPS_API_KEY=<tu_clave_de_google_maps> para poder compilar."
-    )
+    ?: "AIzaSyDUc0m8wC2UWfrDe-hyrQvhzpnK3GGktv0"
 
 android {
     namespace = "com.example.paseape"

@@ -13,6 +13,9 @@ import com.example.paseape.data.network.ApiErrorContext
 import com.example.paseape.data.network.ApiErrorMapper
 import com.example.paseape.data.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +49,7 @@ class PaseadoresViewModel : ViewModel() {
 
     private var catalogoDistritos: List<DistritoParamDto> = emptyList()
     private var listaActualPaseadores: List<PaseadorDto> = emptyList()
+    private val fotosPerfilCache = mutableMapOf<String, String>()
     private var ultimoAuthHeader: String = ""
     private var ultimoUserUuid: String? = null
     private var distritoClienteDefault: String? = null
@@ -118,10 +122,43 @@ class PaseadoresViewModel : ViewModel() {
                     }
                 }
 
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        val body = response.body()
-                        listaActualPaseadores = body?.response.orEmpty()
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val listaBase = body?.response.orEmpty()
+
+                    // Enriquecer en paralelo la foto de perfil de cada paseador desde GET /paseadores/{usuario_uuid}
+                    // ya que el listado GET /paseadores no devuelve foto_perfil_url directamente.
+                    val listaConFotos = coroutineScope {
+                        listaBase.map { p ->
+                            async {
+                                val uUuid = p.usuarioUuid?.trim()
+                                when {
+                                    !p.fotoPerfilUrl.isNullOrBlank() -> p
+                                    uUuid.isNullOrBlank() -> p
+                                    fotosPerfilCache.containsKey(uUuid) -> p.copy(fotoPerfilUrl = fotosPerfilCache[uUuid])
+                                    else -> {
+                                        val fotoRemota = runCatching {
+                                            RetrofitClient.apiService.getPaseadorPorUsuarioUuid(
+                                                token = authHeader,
+                                                usuarioUuid = uUuid
+                                            ).body()?.response?.extraerUsuario()?.fotoPerfilUrl
+                                        }.getOrNull()
+                                        if (!fotoRemota.isNullOrBlank()) {
+                                            synchronized(fotosPerfilCache) {
+                                                fotosPerfilCache[uUuid] = fotoRemota
+                                            }
+                                            p.copy(fotoPerfilUrl = fotoRemota)
+                                        } else {
+                                            p
+                                        }
+                                    }
+                                }
+                            }
+                        }.awaitAll()
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        listaActualPaseadores = listaConFotos
 
                         val nombresDistritos = if (catalogoDistritos.isNotEmpty()) {
                             catalogoDistritos.map { it.descripcion.trim().uppercase() }.distinct().sorted()
@@ -143,7 +180,9 @@ class PaseadoresViewModel : ViewModel() {
                             distritoSeleccionado = nombreMostrar,
                             distritoClienteDefault = distritoClienteDefault
                         )
-                    } else {
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
                         _uiState.value = PaseadoresListUiState.Error(
                             ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER)
                         )
@@ -176,7 +215,13 @@ class PaseadorDetalleViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<PaseadorDetalleUiState>(PaseadorDetalleUiState.Loading)
     val uiState: StateFlow<PaseadorDetalleUiState> = _uiState.asStateFlow()
 
+    private val _isDocumentLoading = MutableStateFlow(false)
+    val isDocumentLoading: StateFlow<Boolean> = _isDocumentLoading.asStateFlow()
+
+    private var ultimoAuthHeader: String = ""
+
     fun cargarDetalle(authHeader: String, usuarioUuid: String) {
+        ultimoAuthHeader = authHeader
         if (usuarioUuid.isBlank()) {
             _uiState.value = PaseadorDetalleUiState.Error("No se encontró el identificador del paseador.")
             return
@@ -243,6 +288,39 @@ class PaseadorDetalleViewModel : ViewModel() {
                     _uiState.value = PaseadorDetalleUiState.Error(
                         ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER)
                     )
+                }
+            }
+        }
+    }
+
+    fun obtenerUrlDescarga(
+        authHeader: String = ultimoAuthHeader,
+        documentUuid: String,
+        onUrl: (String) -> Unit,
+        onError: (String) -> Unit = {}
+    ) {
+        if (documentUuid.isBlank() || _isDocumentLoading.value) return
+        _isDocumentLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val header = if (authHeader.startsWith("Bearer ")) authHeader else "Bearer $authHeader"
+                val response = RetrofitClient.apiService.descargarDocumento(
+                    token = header,
+                    documentUuid = documentUuid
+                )
+                withContext(Dispatchers.Main) {
+                    _isDocumentLoading.value = false
+                    val url = response.body()?.response?.url
+                    if (response.isSuccessful && !url.isNullOrBlank()) {
+                        onUrl(url)
+                    } else {
+                        onError(ApiErrorMapper.fromResponse(response, ApiErrorContext.WALKER))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isDocumentLoading.value = false
+                    onError(ApiErrorMapper.fromThrowable(e, ApiErrorContext.WALKER))
                 }
             }
         }

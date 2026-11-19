@@ -346,7 +346,8 @@ fun DocumentosSoloLecturaCard(
     habilitado: Boolean,
     onDescargarDocumento: (DigitalDocumentDto) -> Unit,
     modifier: Modifier = Modifier,
-    titulo: String = "Certificado de antecedentes policiales / penales"
+    titulo: String = "Certificado de antecedentes policiales / penales",
+    mensajeVacio: String = "Todavía no hay documentos adjuntos. Agrégalos desde Editar Perfil."
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -377,7 +378,7 @@ fun DocumentosSoloLecturaCard(
 
             if (documentos.isEmpty()) {
                 Text(
-                    text = "Todavía no hay documentos adjuntos. Agrégalos desde Editar Perfil.",
+                    text = mensajeVacio,
                     fontSize = 12.sp,
                     color = HintGray
                 )

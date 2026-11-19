@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -678,10 +680,8 @@ fun DetalleReservaClienteScreen(
                 val iniciales = obtenerInicialesNombre(nombreMostrar)
                 val calif = solicitudActual.paseadorCalificacionEfectiva
                     ?: detallePaseador?.paseador?.calificacionPromedio
-                    ?: 4.9
                 val paseosTotal = solicitudActual.paseadorPaseosCompletadosEfectivos
                     ?: detallePaseador?.paseador?.paseosCompletados
-                    ?: 42
                 val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo
                     ?: detallePaseador?.telefono
                     ?: detallePaseador?.paseador?.telefono
@@ -747,8 +747,14 @@ fun DetalleReservaClienteScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
+                                val textoCalificacion = when {
+                                    calif != null && paseosTotal != null -> "⭐ ${String.format(Locale.US, "%.1f", calif)} ($paseosTotal paseos)"
+                                    calif != null -> "⭐ ${String.format(Locale.US, "%.1f", calif)}"
+                                    paseosTotal != null && paseosTotal > 0 -> "$paseosTotal paseos completados"
+                                    else -> "Sin calificaciones aún"
+                                }
                                 Text(
-                                    text = "⭐ ${String.format(Locale.US, "%.1f", calif)} ($paseosTotal paseos)",
+                                    text = textoCalificacion,
                                     fontSize = 12.sp,
                                     color = textoGris
                                 )
@@ -968,7 +974,7 @@ fun SeguimientoPaseoEnVivoScreen(
     var rumboActual by remember { mutableFloatStateOf(0f) }
     var precisionMetros by remember { mutableDoubleStateOf(0.0) }
     var senalDegradada by remember { mutableStateOf(false) }
-    var segundosDesdeUltimaSenal by remember { mutableIntStateOf(0) }
+    var segundosDesdeUltimaSenal by remember { mutableLongStateOf(0L) }
     var isScreenActive by remember { mutableStateOf(true) }
 
     // Datos complementarios de respaldo del paseador
@@ -976,18 +982,23 @@ fun SeguimientoPaseoEnVivoScreen(
     var fotoPaseadorFallback by remember { mutableStateOf<String?>(null) }
     var calificacionPaseadorFallback by remember { mutableStateOf<Double?>(null) }
 
-    // Reloj en vivo del tiempo transcurrido del paseo (MM:SS min)
-    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal, solicitudActual.creadoEl) {
-        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal ?: solicitudActual.creadoEl)
+    // Reloj en vivo del tiempo transcurrido del paseo (calculado con precisión desde fechaHoraInicioReal en UTC)
+    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal) {
+        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal)
     }
     var segundosTranscurridos by remember(segundosIniciales) { mutableLongStateOf(segundosIniciales) }
 
     LaunchedEffect(isScreenActive) {
         while (isActive && isScreenActive) {
             delay(1_000L)
-            segundosTranscurridos += 1L
+            val fInicio = solicitudActual.fechaHoraInicioReal
+            segundosTranscurridos = if (!fInicio.isNullOrBlank()) {
+                calcularSegundosTranscurridosPaseo(fInicio)
+            } else {
+                segundosTranscurridos + 1L
+            }
             if (!esperandoPrimeraSenalGps) {
-                segundosDesdeUltimaSenal = (segundosDesdeUltimaSenal + 1).coerceAtMost(999)
+                segundosDesdeUltimaSenal += 1L
             }
         }
     }
@@ -1020,8 +1031,15 @@ fun SeguimientoPaseoEnVivoScreen(
                 }
                 resDetalle.getOrNull()?.let { detalleRemoto ->
                     solicitudActual = detalleRemoto
-                    // Si el paseo ya pasó a FINALIZADO (estado 6), cambiar dinámicamente a la vista de Resumen y Recorrido
-                    if (detalleRemoto.estadoId == 6) {
+                    // Sincroniza el tiempo transcurrido con la fecha/hora de inicio real del backend
+                    detalleRemoto.fechaHoraInicioReal?.let { fInicio ->
+                        val segReales = calcularSegundosTranscurridosPaseo(fInicio)
+                        if (segReales > 0) {
+                            segundosTranscurridos = segReales
+                        }
+                    }
+                    // Si el paseo ya pasó a FINALIZADO (estado 6), cambiar automáticamente a la vista de Resumen y Recorrido
+                    if (detalleRemoto.estadoId == 6 || detalleRemoto.estadoDescripcion?.uppercase()?.contains("FINALIZ") == true) {
                         onVerResumenClick(detalleRemoto)
                         return@LaunchedEffect
                     }
@@ -1062,6 +1080,16 @@ fun SeguimientoPaseoEnVivoScreen(
                         // HTTP 200 con response = null -> Esperando primera señal GPS real del paseador
                         esperandoPrimeraSenalGps = ubicacionActualPaseador == null
                     }
+                } else {
+                    // Si falla ubicacion-actual (ej. el paseo acaba de finalizar en ese instante), verificar estado inmediatamente
+                    val verificacionFin = withContext(Dispatchers.IO) {
+                        repository.obtenerDetalleSolicitud(authHeader, uuid)
+                    }.getOrNull()
+                    if (verificacionFin != null && (verificacionFin.estadoId == 6 || verificacionFin.estadoDescripcion?.uppercase()?.contains("FINALIZ") == true)) {
+                        solicitudActual = verificacionFin
+                        onVerResumenClick(verificacionFin)
+                        return@LaunchedEffect
+                    }
                 }
             }
 
@@ -1075,11 +1103,7 @@ fun SeguimientoPaseoEnVivoScreen(
     val mapView = rememberMapViewWithLifecycle()
     val iconWalker = remember(context) { crearIconoPaseadorNaranja(context) }
 
-    val centroReferenciaDistrito = remember(solicitudActual.distritoDescripcion) {
-        obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion).first()
-    }
-
-    // Actualiza ÚNICAMENTE el marcador de la ubicación actual del paseador en el GoogleMap (sin polilínea simulada)
+    // Actualiza ÚNICAMENTE el marcador de la ubicación actual del paseador en el GoogleMap (sin ubicación predeterminada)
     LaunchedEffect(googleMapRef, ubicacionActualPaseador, senalDegradada, rumboActual) {
         val map = googleMapRef ?: return@LaunchedEffect
         val puntoActual = ubicacionActualPaseador ?: return@LaunchedEffect
@@ -1105,36 +1129,71 @@ fun SeguimientoPaseoEnVivoScreen(
         }
     }
 
-    val minutos = segundosTranscurridos / 60
+    val horas = segundosTranscurridos / 3600
+    val minutos = (segundosTranscurridos % 3600) / 60
     val segundos = segundosTranscurridos % 60
-    val tiempoFormateado = String.format(Locale.US, "%02d:%02d min", minutos, segundos)
+    val tiempoFormateado = if (horas > 0) {
+        String.format(Locale.US, "%02d:%02d:%02d h", horas, minutos, segundos)
+    } else {
+        String.format(Locale.US, "%02d:%02d min", minutos, segundos)
+    }
     val duracionMetaTexto = (solicitudActual.tipoDuracionPaseoDescripcion ?: "60 min")
         .lowercase()
         .replace("minutos", "min")
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 1. GOOGLE MAP EN VIVO (PARTE SUPERIOR - SOLO MARCADOR DE UBICACIÓN ACTUAL)
-        AndroidView(
-            factory = { mapView },
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.66f),
-            update = { mv ->
-                if (googleMapRef == null) {
-                    mv.getMapAsync { gMap ->
-                        gMap.uiSettings.apply {
-                            isZoomControlsEnabled = false
-                            isMapToolbarEnabled = false
-                            isCompassEnabled = false
-                            isMyLocationButtonEnabled = false
-                        }
-                        val posInicial = ubicacionActualPaseador ?: centroReferenciaDistrito
-                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(posInicial, 16f))
-                        googleMapRef = gMap
-                    }
+        // 1. GOOGLE MAP EN VIVO (SOLO SE MUESTRA Y CENTRA CUANDO HAY UBICACIÓN GPS REAL DEL PASEADOR)
+        if (ubicacionActualPaseador == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.66f)
+                    .background(Color(0xFFF8FAFC)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF2563EB),
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Esperando ubicación GPS en tiempo real del paseador...",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF334155),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
-        )
+        } else {
+            AndroidView(
+                factory = { mapView },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.66f),
+                update = { mv ->
+                    if (googleMapRef == null) {
+                        mv.getMapAsync { gMap ->
+                            gMap.uiSettings.apply {
+                                isZoomControlsEnabled = true
+                                isMapToolbarEnabled = false
+                                isCompassEnabled = true
+                                isMyLocationButtonEnabled = false
+                            }
+                            ubicacionActualPaseador?.let { posReal ->
+                                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(posReal, 17f))
+                            }
+                            googleMapRef = gMap
+                        }
+                    }
+                }
+            )
+        }
 
         // 2. OVERLAY SUPERIOR: BOTÓN VOLVER + BADGE "EN VIVO" + BRÚJULA + BOTÓN CENTRAR
         Row(
@@ -1222,35 +1281,82 @@ fun SeguimientoPaseoEnVivoScreen(
                 }
             }
 
-            // Botón flotante para centrar cámara en la ubicación actual del paseador
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 5.dp,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clickable {
-                        val posActual = ubicacionActualPaseador
-                        if (posActual != null) {
-                            googleMapRef?.animateCamera(
-                                CameraUpdateFactory.newLatLngZoom(posActual, 17f)
-                            )
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Aún esperando la primera ubicación GPS del paseador",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
+            // Columna flotante derecha: Centrar cámara + Controles de Zoom (+ / -) para Emulador
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = "Centrar en paseador",
-                        tint = Color(0xFF2563EB),
-                        modifier = Modifier.size(20.dp)
-                    )
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clickable {
+                            val posActual = ubicacionActualPaseador
+                            if (posActual != null) {
+                                googleMapRef?.animateCamera(
+                                    CameraUpdateFactory.newLatLngZoom(posActual, 17f)
+                                )
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Aún esperando la primera ubicación GPS del paseador",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = "Centrar en paseador",
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Botón flotante Zoom In (+) para emulador
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clickable {
+                            googleMapRef?.animateCamera(CameraUpdateFactory.zoomIn())
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Acercar mapa",
+                            tint = Color(0xFF1E293B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Botón flotante Zoom Out (-) para emulador
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clickable {
+                            googleMapRef?.animateCamera(CameraUpdateFactory.zoomOut())
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Alejar mapa",
+                            tint = Color(0xFF1E293B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1325,7 +1431,7 @@ fun SeguimientoPaseoEnVivoScreen(
                 val inicialesPaseador = obtenerInicialesNombre(nombrePaseador)
                 val fotoPaseadorUrl = solicitudActual.paseadorFotoUrlEfectiva ?: fotoPaseadorFallback
                 val telefonoPaseador = solicitudActual.paseadorTelefonoEfectivo ?: telefonoPaseadorFallback.orEmpty()
-                val calificacionPaseador = solicitudActual.paseadorCalificacionEfectiva ?: calificacionPaseadorFallback ?: 4.9
+                val calificacionPaseador = solicitudActual.paseadorCalificacionEfectiva ?: calificacionPaseadorFallback
 
                 Surface(
                     shape = RoundedCornerShape(14.dp),
@@ -1375,8 +1481,13 @@ fun SeguimientoPaseoEnVivoScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val textoSubtituloPaseador = if (calificacionPaseador != null) {
+                                "⭐ ${String.format(Locale.US, "%.1f", calificacionPaseador)} • Paseador verificado"
+                            } else {
+                                "Paseador verificado"
+                            }
                             Text(
-                                text = "⭐ ${String.format(Locale.US, "%.1f", calificacionPaseador)} • Paseador verificado",
+                                text = textoSubtituloPaseador,
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -1494,40 +1605,34 @@ fun SeguimientoPaseoEnVivoScreen(
                 // Estado de última señal GPS
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        val colorIndicadorGps = when {
-                            esperandoPrimeraSenalGps -> Color(0xFF2563EB)
-                            senalDegradada -> Color(0xFFF59E0B)
-                            else -> Color(0xFF16A34A)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(colorIndicadorGps)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = when {
-                                esperandoPrimeraSenalGps -> "A la espera de la primera señal GPS del paseador..."
-                                senalDegradada -> "Señal GPS débil o retrasada • Hace ${segundosDesdeUltimaSenal}s"
-                                else -> "Última señal GPS: Hace $segundosDesdeUltimaSenal segundos • Precisión óptima (${String.format(Locale.US, "%.1f", precisionMetros)}m)"
-                            },
-                            fontSize = 11.sp,
-                            color = when {
-                                esperandoPrimeraSenalGps -> Color(0xFF1D4ED8)
-                                senalDegradada -> Color(0xFFB45309)
-                                else -> Color(0xFF16A34A)
-                            },
-                            fontWeight = FontWeight.Medium
-                        )
+                    val colorIndicadorGps = when {
+                        esperandoPrimeraSenalGps -> Color(0xFF2563EB)
+                        senalDegradada -> Color(0xFFF59E0B)
+                        else -> Color(0xFF16A34A)
                     }
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(colorIndicadorGps)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = when {
+                            esperandoPrimeraSenalGps -> "A la espera de la primera señal GPS del paseador..."
+                            senalDegradada -> "Señal GPS débil o retrasada • Hace ${segundosDesdeUltimaSenal}s"
+                            else -> "Última señal GPS: Hace $segundosDesdeUltimaSenal segundos • Precisión óptima (${String.format(Locale.US, "%.1f", precisionMetros)}m)"
+                        },
+                        fontSize = 11.sp,
+                        color = when {
+                            esperandoPrimeraSenalGps -> Color(0xFF1D4ED8)
+                            senalDegradada -> Color(0xFFB45309)
+                            else -> Color(0xFF16A34A)
+                        },
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -1554,12 +1659,14 @@ fun ResumenPaseoClienteScreen(
 
     var solicitudActual by remember(solicitud.uuid) { mutableStateOf(solicitud) }
     var recorridoRemoto by remember { mutableStateOf<SolicitudPaseoRecorridoResDto?>(null) }
+    var cargandoRecorrido by remember { mutableStateOf(true) }
 
     // Cuando el paseo está FINALIZADO (estado 6), consume el endpoint de Recorrido completo
     // GET /solicitudes/{uuid}/recorrido (y complementa el detalle con GET /solicitudes/{uuid})
     LaunchedEffect(solicitud.uuid, authHeader) {
         val uuid = solicitud.uuid.orEmpty()
         if (uuid.isNotBlank() && authHeader.isNotBlank()) {
+            cargandoRecorrido = true
             val resRecorrido = withContext(Dispatchers.IO) {
                 repository.obtenerRecorridoPaseo(authHeader, uuid)
             }
@@ -1569,10 +1676,13 @@ fun ResumenPaseoClienteScreen(
                 repository.obtenerDetalleSolicitud(authHeader, uuid)
             }
             resDetalle.getOrNull()?.let { solicitudActual = it }
+            cargandoRecorrido = false
+        } else {
+            cargandoRecorrido = false
         }
     }
 
-    // Decodificación de polilínea del endpoint GET /solicitudes/{uuid}/recorrido con android-maps-utils (PolyUtil.decode)
+    // Decodificación de polilínea real del endpoint GET /solicitudes/{uuid}/recorrido con android-maps-utils (PolyUtil.decode)
     val puntosRutaFinal = remember(recorridoRemoto) {
         val encoded = recorridoRemoto?.coordenadasCodificadas
         if (!encoded.isNullOrBlank()) {
@@ -1582,24 +1692,21 @@ fun ResumenPaseoClienteScreen(
         }
     }
 
-    val distanciaKm = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
+    val distanciaKm = remember(recorridoRemoto) {
         recorridoRemoto?.distanciaMetros?.let { it / 1000.0 } ?: 0.0
     }
 
-    val duracionTextoResumen = remember(recorridoRemoto, solicitudActual.tipoDuracionPaseoId) {
-        val seg = recorridoRemoto?.duracionSegundos
-        if (seg != null && seg > 0) {
-            val h = seg / 3600
-            val m = (seg % 3600) / 60
-            if (h > 0) "${h}h ${String.format(Locale.US, "%02dm", m)}" else "${m}m"
-        } else {
-            when (solicitudActual.tipoDuracionPaseoId) {
-                1 -> "30m"
-                3 -> "1h 30m"
-                4 -> "2h 00m"
-                else -> "1h 00m"
-            }
-        }
+    val duracionTextoResumen = remember(
+        recorridoRemoto,
+        solicitudActual.fechaHoraInicioReal,
+        solicitudActual.fechaHoraFinReal
+    ) {
+        val segRecorrido = recorridoRemoto?.duracionSegundos?.toLong()?.takeIf { it > 0L }
+        val segCalculados = segRecorrido ?: calcularDuracionEntreFechasUtc(
+            inicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitudActual.fechaHoraInicioReal,
+            finIso = recorridoRemoto?.fechaHoraFin ?: solicitudActual.fechaHoraFinReal
+        )
+        formatearDuracionRealResumen(segCalculados)
     }
 
     val totalPuntosRegistrados = recorridoRemoto?.coordenadasTotalPuntos ?: puntosRutaFinal.size
@@ -1630,6 +1737,7 @@ fun ResumenPaseoClienteScreen(
     }
     var reciboExpandido by remember { mutableStateOf(false) }
 
+    var googleMapResumenRef by remember { mutableStateOf<GoogleMap?>(null) }
     val mapView = rememberMapViewWithLifecycle()
     val iconInicio = remember(context) { crearIconoPuntoRuta(context, esInicio = true) }
     val iconFin = remember(context) { crearIconoPuntoRuta(context, esInicio = false) }
@@ -1709,107 +1817,197 @@ fun ResumenPaseoClienteScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. MAPA CON TRAZA FINAL CONSOLIDADA (INICIO VERDE -> POLILÍNEA NARANJA -> FIN ROJO)
+            // 1. MAPA CON TRAZA FINAL CONSOLIDADA (SOLO SI HAY PUNTOS GPS REALES; SIN UBICACIÓN PREDETERMINADA)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(225.dp)
             ) {
-                AndroidView(
-                    factory = { mapView },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { mv ->
-                        mv.getMapAsync { gMap ->
-                            gMap.clear()
-                            gMap.uiSettings.apply {
-                                isZoomControlsEnabled = false
-                                isMapToolbarEnabled = false
-                                isMyLocationButtonEnabled = false
-                            }
+                when {
+                    cargandoRecorrido -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFFF8FAFC)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = naranja,
+                                strokeWidth = 2.5.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
 
-                            if (puntosRutaFinal.isNotEmpty()) {
-                                gMap.addPolyline(
-                                    PolylineOptions()
-                                        .addAll(puntosRutaFinal)
-                                        .width(14f)
-                                        .color(android.graphics.Color.parseColor("#FF5722"))
-                                        .geodesic(true)
-                                        .startCap(RoundCap())
-                                        .endCap(RoundCap())
-                                        .jointType(JointType.ROUND)
-                                )
+                    puntosRutaFinal.isEmpty() -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFFF8FAFC)),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Sin datos GPS registrados para este recorrido",
+                                fontSize = 13.sp,
+                                color = Color(0xFF64748B),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
 
-                                val pInicio = puntosRutaFinal.first()
-                                val pFin = puntosRutaFinal.last()
+                    else -> {
+                        AndroidView(
+                            factory = { mapView },
+                            modifier = Modifier.fillMaxSize(),
+                            update = { mv ->
+                                mv.getMapAsync { gMap ->
+                                    googleMapResumenRef = gMap
+                                    gMap.clear()
+                                    gMap.uiSettings.apply {
+                                        isZoomControlsEnabled = true
+                                        isMapToolbarEnabled = false
+                                        isMyLocationButtonEnabled = false
+                                    }
 
-                                gMap.addMarker(
-                                    MarkerOptions()
-                                        .position(pInicio)
-                                        .title("INICIO $horaInicioTexto")
-                                        .anchor(0.5f, 0.5f)
-                                        .icon(iconInicio)
-                                )
-
-                                gMap.addMarker(
-                                    MarkerOptions()
-                                        .position(pFin)
-                                        .title("FIN $horaFinTexto")
-                                        .anchor(0.5f, 0.5f)
-                                        .icon(iconFin)
-                                )
-
-                                val boundsBuilder = LatLngBounds.Builder()
-                                puntosRutaFinal.forEach { boundsBuilder.include(it) }
-                                runCatching {
-                                    gMap.moveCamera(
-                                        CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 90)
+                                    gMap.addPolyline(
+                                        PolylineOptions()
+                                            .addAll(puntosRutaFinal)
+                                            .width(14f)
+                                            .color(android.graphics.Color.parseColor("#FF5722"))
+                                            .geodesic(true)
+                                            .startCap(RoundCap())
+                                            .endCap(RoundCap())
+                                            .jointType(JointType.ROUND)
                                     )
-                                }.onFailure {
-                                    gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pInicio, 16f))
+
+                                    val pInicio = puntosRutaFinal.first()
+                                    val pFin = puntosRutaFinal.last()
+
+                                    gMap.addMarker(
+                                        MarkerOptions()
+                                            .position(pInicio)
+                                            .title("INICIO $horaInicioTexto")
+                                            .anchor(0.5f, 0.5f)
+                                            .icon(iconInicio)
+                                    )
+
+                                    gMap.addMarker(
+                                        MarkerOptions()
+                                            .position(pFin)
+                                            .title("FIN $horaFinTexto")
+                                            .anchor(0.5f, 0.5f)
+                                            .icon(iconFin)
+                                    )
+
+                                    if (puntosRutaFinal.size == 1) {
+                                        gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pInicio, 17f))
+                                    } else {
+                                        val boundsBuilder = LatLngBounds.Builder()
+                                        puntosRutaFinal.forEach { boundsBuilder.include(it) }
+                                        runCatching {
+                                            gMap.moveCamera(
+                                                CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 90)
+                                            )
+                                        }.onFailure {
+                                            gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(pInicio, 16f))
+                                        }
+                                    }
                                 }
-                            } else {
-                                val centroDistrito = obtenerRutaBasePorDistrito(solicitudActual.distritoDescripcion).first()
-                                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(centroDistrito, 15f))
+                            }
+                        )
+
+                        // Etiquetas flotantes INICIO / FIN sobre el mapa
+                        Surface(
+                            color = Color.White.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(8.dp),
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = "INICIO\n$horaInicioTexto",
+                                color = Color(0xFF16A34A),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        Surface(
+                            color = Color.White.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(8.dp),
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = "FIN\n$horaFinTexto",
+                                color = Color(0xFFEA580C),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        // Controles de zoom flotantes para pruebas en el emulador
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clickable {
+                                        googleMapResumenRef?.animateCamera(CameraUpdateFactory.zoomIn())
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Acercar mapa",
+                                        tint = PrimaryDark,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clickable {
+                                        googleMapResumenRef?.animateCamera(CameraUpdateFactory.zoomOut())
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Remove,
+                                        contentDescription = "Alejar mapa",
+                                        tint = PrimaryDark,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }
-                )
-
-                // Etiquetas flotantes INICIO / FIN sobre el mapa como en el Figma
-                Surface(
-                    color = Color.White.copy(alpha = 0.92f),
-                    shape = RoundedCornerShape(8.dp),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "INICIO\n$horaInicioTexto",
-                        color = Color(0xFF16A34A),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Surface(
-                    color = Color.White.copy(alpha = 0.92f),
-                    shape = RoundedCornerShape(8.dp),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "FIN\n$horaFinTexto",
-                        color = Color(0xFFEA580C),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
                 }
             }
 
@@ -1889,7 +2087,7 @@ fun ResumenPaseoClienteScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Inicio: $horaInicioTexto AM",
+                                text = "Inicio: $horaInicioTexto",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = textoOscuro
@@ -1901,7 +2099,7 @@ fun ResumenPaseoClienteScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "Fin: $horaFinTexto AM",
+                                text = "Fin: $horaFinTexto",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = textoOscuro
@@ -2274,65 +2472,6 @@ private fun crearIconoPuntoRuta(context: Context, esInicio: Boolean): BitmapDesc
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-/**
- * Rutas reales por calles/parques de los distritos de Lima para visualización en Google Maps.
- */
-private fun obtenerRutaBasePorDistrito(distritoDescripcion: String?): List<LatLng> {
-    val dist = distritoDescripcion?.trim()?.uppercase().orEmpty()
-    return when {
-        dist.contains("SAN ISIDRO") -> listOf(
-            LatLng(-12.10120, -77.03650),
-            LatLng(-12.10065, -77.03610),
-            LatLng(-12.10010, -77.03555),
-            LatLng(-12.09950, -77.03510),
-            LatLng(-12.09895, -77.03475),
-            LatLng(-12.09840, -77.03440),
-            LatLng(-12.09785, -77.03415),
-            LatLng(-12.09730, -77.03380)
-        )
-        dist.contains("SURCO") -> listOf(
-            LatLng(-12.11360, -76.99180),
-            LatLng(-12.11305, -76.99125),
-            LatLng(-12.11250, -76.99070),
-            LatLng(-12.11195, -76.99015),
-            LatLng(-12.11140, -76.98960),
-            LatLng(-12.11090, -76.98910),
-            LatLng(-12.11040, -76.98855)
-        )
-        dist.contains("BARRANCO") -> listOf(
-            LatLng(-12.14890, -77.02185),
-            LatLng(-12.14830, -77.02140),
-            LatLng(-12.14775, -77.02095),
-            LatLng(-12.14720, -77.02050),
-            LatLng(-12.14665, -77.02005),
-            LatLng(-12.14610, -77.01960),
-            LatLng(-12.14555, -77.01915)
-        )
-        dist.contains("SAN BORJA") -> listOf(
-            LatLng(-12.10140, -77.00210),
-            LatLng(-12.10085, -77.00155),
-            LatLng(-12.10030, -77.00100),
-            LatLng(-12.09975, -77.00045),
-            LatLng(-12.09920, -76.99990),
-            LatLng(-12.09865, -76.99935)
-        )
-        else -> {
-            // Miraflores (Av. Primavera / Calle Los Pinos / Parque Reducto - igual al Figma)
-            listOf(
-                LatLng(-12.12685, -77.02410),
-                LatLng(-12.12630, -77.02365),
-                LatLng(-12.12575, -77.02320),
-                LatLng(-12.12520, -77.02270),
-                LatLng(-12.12475, -77.02210),
-                LatLng(-12.12430, -77.02155),
-                LatLng(-12.12385, -77.02105),
-                LatLng(-12.12340, -77.02055),
-                LatLng(-12.12295, -77.02010)
-            )
-        }
-    }
-}
-
 private fun calcularRumboGrados(desde: LatLng, hasta: LatLng): Float {
     val lat1 = Math.toRadians(desde.latitude)
     val lon1 = Math.toRadians(desde.longitude)
@@ -2345,15 +2484,41 @@ private fun calcularRumboGrados(desde: LatLng, hasta: LatLng): Float {
     return ((brng + 360.0) % 360.0).toFloat()
 }
 
+/**
+ * El backend (api-paseape) corre en UTC y serializa LocalDateTime sin sufijo 'Z'.
+ * Se interpreta en UTC para obtener los segundos reales transcurridos sin límites artificiales.
+ */
 private fun calcularSegundosTranscurridosPaseo(isoUtcString: String?): Long {
-    if (isoUtcString.isNullOrBlank()) return 34L * 60L + 12L
+    val texto = isoUtcString?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
     return runCatching {
-        val limpio = isoUtcString.trim().removeSuffix("Z")
-        val ldt = LocalDateTime.parse(limpio.take(19))
-        val inicioInstant = ldt.toInstant(ZoneOffset.UTC)
+        val limpio = texto.removeSuffix("Z").take(19)
+        val inicioInstant = LocalDateTime.parse(limpio).toInstant(ZoneOffset.UTC)
         val diff = Duration.between(inicioInstant, Instant.now()).seconds
-        if (diff in 1..7200) diff else (34L * 60L + 12L)
-    }.getOrDefault(34L * 60L + 12L)
+        diff.coerceAtLeast(0L)
+    }.getOrDefault(0L)
+}
+
+private fun calcularDuracionEntreFechasUtc(inicioIso: String?, finIso: String?): Long? {
+    val iniStr = inicioIso?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    val finStr = finIso?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return runCatching {
+        val ini = LocalDateTime.parse(iniStr.removeSuffix("Z").take(19)).toInstant(ZoneOffset.UTC)
+        val fin = LocalDateTime.parse(finStr.removeSuffix("Z").take(19)).toInstant(ZoneOffset.UTC)
+        Duration.between(ini, fin).seconds.coerceAtLeast(0L)
+    }.getOrNull()
+}
+
+private fun formatearDuracionRealResumen(segundos: Long?): String {
+    if (segundos == null || segundos <= 0L) return "—"
+    val h = segundos / 3600
+    val m = (segundos % 3600) / 60
+    val s = segundos % 60
+    return when {
+        h > 0 -> String.format(Locale.US, "%dh %02dm", h, m)
+        m > 0 && s > 0 -> "${m}m ${s}s"
+        m > 0 -> "${m} min"
+        else -> "${s}s"
+    }
 }
 
 private fun obtenerInicialesNombre(nombreCompleto: String): String {
@@ -2369,42 +2534,58 @@ private fun formatearFechaYBloqueDetalle(
     creadoEl: String?
 ): String {
     val localeEs = Locale("es", "PE")
-    val fechaTexto = runCatching {
-        val fechaStr = fechaProgramada?.take(10)
-            ?: creadoEl?.take(10)
-        if (!fechaStr.isNullOrBlank()) {
-            val ld = LocalDate.parse(fechaStr)
-            val fmt = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM", localeEs)
-            ld.format(fmt).replaceFirstChar { it.uppercase() }
-        } else {
-            "Hoy"
-        }
-    }.getOrDefault(fechaProgramada ?: "Hoy")
+    val fmtFecha = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM", localeEs)
 
-    val rangoBloque = if (!bloqueCodigo.isNullOrBlank()) {
+    // Si tiene bloque horario es Paseo Programado (usa fecha_programada).
+    // Si NO tiene bloque horario es Paseo Inmediato: usa creado_el convertido de UTC a America/Lima
+    // para evitar el desfase de +1 día cuando en UTC ya pasó la medianoche.
+    if (!bloqueCodigo.isNullOrBlank()) {
+        val fechaTexto = runCatching {
+            val fechaStr = fechaProgramada?.take(10)
+            if (!fechaStr.isNullOrBlank()) {
+                LocalDate.parse(fechaStr).format(fmtFecha).replaceFirstChar { it.uppercase() }
+            } else {
+                "Hoy"
+            }
+        }.getOrDefault(fechaProgramada ?: "Hoy")
+
         val limpio = bloqueCodigo.uppercase().removePrefix("B")
         val partes = limpio.split("_")
-        if (partes.size == 2) {
+        val rangoBloque = if (partes.size == 2) {
             "${partes[0]}:00 - ${partes[1]}:00 ($bloqueCodigo)"
         } else {
             bloqueCodigo
         }
+        return "$fechaTexto • $rangoBloque"
     } else {
-        "Modalidad Inmediata"
+        val ldtLima = fechaHoraUtcALocal(creadoEl)
+        val fechaTexto = ldtLima?.toLocalDate()?.format(fmtFecha)?.replaceFirstChar { it.uppercase() }
+            ?: runCatching {
+                val fechaStr = fechaProgramada?.take(10)
+                if (!fechaStr.isNullOrBlank()) {
+                    LocalDate.parse(fechaStr).format(fmtFecha).replaceFirstChar { it.uppercase() }
+                } else {
+                    "Hoy"
+                }
+            }.getOrDefault("Hoy")
+        val horaCreacion = formatearHoraPaseo(creadoEl)
+        return if (horaCreacion != null) {
+            "$fechaTexto • $horaCreacion (Modalidad Inmediata)"
+        } else {
+            "$fechaTexto • Modalidad Inmediata"
+        }
     }
-
-    return "$fechaTexto • $rangoBloque"
 }
 
-private fun calcularSegundosAntiguedadGps(isoUtcString: String?): Int {
-    if (isoUtcString.isNullOrBlank()) return 1
+private fun calcularSegundosAntiguedadGps(isoUtcString: String?): Long {
+    if (isoUtcString.isNullOrBlank()) return 0L
     return runCatching {
         val limpio = isoUtcString.trim().removeSuffix("Z")
         val ldt = LocalDateTime.parse(limpio.take(19))
         val gpsInstant = ldt.toInstant(ZoneOffset.UTC)
         val diff = Duration.between(gpsInstant, Instant.now()).seconds
-        diff.coerceIn(1L, 999L).toInt()
-    }.getOrDefault(1)
+        diff.coerceAtLeast(0L)
+    }.getOrDefault(0L)
 }
 
 private fun obtenerHorasInicioFinResumen(
@@ -2428,16 +2609,16 @@ private fun obtenerHorasInicioFinResumen(
         }.getOrNull()
     }
 
-    if (inicioReal != null && finReal != null) {
-        return inicioReal to finReal
+    if (inicioReal != null || finReal != null) {
+        return (inicioReal ?: "—") to (finReal ?: "—")
     }
 
     if (!bloqueCodigo.isNullOrBlank()) {
         val limpio = bloqueCodigo.uppercase().removePrefix("B")
         val partes = limpio.split("_")
         if (partes.size == 2) {
-            return (inicioReal ?: "${partes[0]}:00") to (finReal ?: "${partes[1]}:00")
+            return "${partes[0]}:00" to "${partes[1]}:00"
         }
     }
-    return (inicioReal ?: "08:00") to (finReal ?: "09:00")
+    return "—" to "—"
 }

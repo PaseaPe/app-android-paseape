@@ -10,6 +10,7 @@ data class PaseadorDto(
     @SerializedName("apellidos") val apellidos: String? = null,
     @SerializedName("correo") val correo: String? = null,
     @SerializedName("telefono") val telefono: String? = null,
+    @SerializedName("foto_perfil_url") val fotoPerfilUrl: String? = null,
     @SerializedName("tipo_documento_id") val tipoDocumentoId: Int? = null,
     @SerializedName("numero_documento") val numeroDocumento: String? = null,
     @SerializedName("experiencia_anos") val experienciaAnos: Int? = null,

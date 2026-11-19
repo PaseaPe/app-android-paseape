@@ -33,17 +33,19 @@ private val FORMATO_FECHA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy · HH:m
 /** Estado del backend: solicitud inmediata aún buscando paseador. */
 internal const val ESTADO_SOLICITUD_BUSCANDO = 8
 
+private val ZONA_PERU = ZoneId.of("America/Lima")
+
 /**
  * El backend (api-paseape) corre con `user.timezone=UTC` y serializa
  * `creado_el` y `hora_vencimiento` como LocalDateTime sin zona. Los pasamos
- * a la zona del dispositivo antes de mostrarlos.
+ * a la zona horaria de Perú (America/Lima) antes de mostrarlos.
  */
 internal fun fechaHoraUtcALocal(texto: String?): LocalDateTime? {
-    val valor = texto?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    val valor = texto?.trim()?.removeSuffix("Z")?.take(19)?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         LocalDateTime.parse(valor)
             .atOffset(ZoneOffset.UTC)
-            .atZoneSameInstant(ZoneId.systemDefault())
+            .atZoneSameInstant(ZONA_PERU)
             .toLocalDateTime()
     }.getOrNull()
 }
@@ -68,25 +70,28 @@ internal fun formatearBloqueHorario(codigo: String?): String? {
 
 /**
  * Línea "📅 fecha · 🕒 hora" de una tarjeta de paseo.
- * - Programado: `fecha_programada` + bloque horario.
- * - Inmediato: `creado_el` (UTC -> hora local).
+ * - Programado (con bloque horario): `fecha_programada` + bloque horario.
+ * - Inmediato (sin bloque horario): `creado_el` convertido de UTC a America/Lima
+ *   (evita mostrar el día siguiente cuando en UTC ya pasó la medianoche).
  */
 internal fun textoFechaHoraPaseo(
     fechaProgramada: String?,
     bloqueHorarioCodigo: String?,
     creadoEl: String?
 ): String? {
-    val fecha = formatearFechaPaseo(fechaProgramada)
-    if (fecha != null) {
-        val bloque = formatearBloqueHorario(bloqueHorarioCodigo)
-        return if (bloque != null) "📅 $fecha · 🕒 $bloque" else "📅 $fecha"
+    val bloque = formatearBloqueHorario(bloqueHorarioCodigo)
+    if (bloque != null) {
+        val fecha = formatearFechaPaseo(fechaProgramada)
+        if (fecha != null) {
+            return "📅 $fecha · 🕒 $bloque"
+        }
     }
     val fechaCreacion = fechaHoraUtcALocal(creadoEl)?.format(FORMATO_FECHA)
     val horaCreacion = formatearHoraPaseo(creadoEl)
     return when {
         fechaCreacion != null && horaCreacion != null -> "📅 $fechaCreacion · 🕒 $horaCreacion"
         fechaCreacion != null -> "📅 $fechaCreacion"
-        else -> null
+        else -> formatearFechaPaseo(fechaProgramada)?.let { "📅 $it" }
     }
 }
 
