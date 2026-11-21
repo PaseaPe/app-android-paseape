@@ -889,14 +889,11 @@ private fun formatearTiempo(segundosTotales: Long): String {
     }
 }
 
-/** El backend guarda `fecha_hora_inicio_real` en UTC; se muestra en hora de Lima. */
-private fun horaLocalTexto(isoUtc: String?): String? {
-    val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
+/** `GET /solicitudes/{uuid}` ya devuelve `fecha_hora_inicio_real` en hora de Lima (`America/Lima`). */
+private fun horaLocalTexto(isoLima: String?): String? {
+    val texto = isoLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         val limpio = texto.removeSuffix("Z").take(19)
-        LocalDateTime.parse(limpio)
-            .atOffset(ZoneOffset.UTC)
-            .atZoneSameInstant(ZONA_LIMA)
-            .format(FORMATO_HORA_ACTIVO)
+        LocalDateTime.parse(limpio).format(FORMATO_HORA_ACTIVO)
     }.getOrNull()
 }

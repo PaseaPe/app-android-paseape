@@ -132,6 +132,10 @@ fun DetalleReservaClienteScreen(
     var detallePaseador by remember(solicitud.paseadorUuid) {
         mutableStateOf<UsuarioPaseadorDetalleDto?>(null)
     }
+    // GET /solicitudes/{uuid} ya devuelve las fechas convertidas a America/Lima en el backend
+    var detalleCargadoEnLima by remember(solicitud.uuid) {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(solicitud.uuid, authHeader) {
         val uuid = solicitud.uuid.orEmpty()
@@ -141,6 +145,7 @@ fun DetalleReservaClienteScreen(
             }
             resDetalle.getOrNull()?.let { detalleRemoto ->
                 solicitudActual = detalleRemoto
+                detalleCargadoEnLima = true
             }
 
             // Respaldo opcional si no vino anidado el objeto paseador en el detalle
@@ -580,11 +585,17 @@ fun DetalleReservaClienteScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val horarioFormateado = remember(solicitudActual.fechaProgramada, solicitudActual.bloqueHorarioCodigo, solicitudActual.creadoEl) {
+                    val horarioFormateado = remember(
+                        solicitudActual.fechaProgramada,
+                        solicitudActual.bloqueHorarioCodigo,
+                        solicitudActual.creadoEl,
+                        detalleCargadoEnLima
+                    ) {
                         formatearFechaYBloqueDetalle(
                             fechaProgramada = solicitudActual.fechaProgramada,
                             bloqueCodigo = solicitudActual.bloqueHorarioCodigo,
-                            creadoEl = solicitudActual.creadoEl
+                            creadoEl = solicitudActual.creadoEl,
+                            yaEnZonaLima = detalleCargadoEnLima
                         )
                     }
 
@@ -981,10 +992,11 @@ fun SeguimientoPaseoEnVivoScreen(
     var telefonoPaseadorFallback by remember { mutableStateOf<String?>(null) }
     var fotoPaseadorFallback by remember { mutableStateOf<String?>(null) }
     var calificacionPaseadorFallback by remember { mutableStateOf<Double?>(null) }
+    var detalleCargadoEnLima by remember(solicitud.uuid) { mutableStateOf(false) }
 
-    // Reloj en vivo del tiempo transcurrido del paseo (calculado con precisión desde fechaHoraInicioReal en UTC)
-    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal) {
-        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal)
+    // Reloj en vivo del tiempo transcurrido del paseo (soporta tanto America/Lima de GET /solicitudes/{uuid} como UTC de bandeja)
+    val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal, detalleCargadoEnLima) {
+        calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal, yaEnZonaLima = detalleCargadoEnLima)
     }
     var segundosTranscurridos by remember(segundosIniciales) { mutableLongStateOf(segundosIniciales) }
 
@@ -993,7 +1005,7 @@ fun SeguimientoPaseoEnVivoScreen(
             delay(1_000L)
             val fInicio = solicitudActual.fechaHoraInicioReal
             segundosTranscurridos = if (!fInicio.isNullOrBlank()) {
-                calcularSegundosTranscurridosPaseo(fInicio)
+                calcularSegundosTranscurridosPaseo(fInicio, yaEnZonaLima = detalleCargadoEnLima)
             } else {
                 segundosTranscurridos + 1L
             }
@@ -1031,12 +1043,10 @@ fun SeguimientoPaseoEnVivoScreen(
                 }
                 resDetalle.getOrNull()?.let { detalleRemoto ->
                     solicitudActual = detalleRemoto
-                    // Sincroniza el tiempo transcurrido con la fecha/hora de inicio real del backend
+                    detalleCargadoEnLima = true
+                    // Sincroniza el tiempo transcurrido con la fecha/hora de inicio real del backend (GET /solicitudes/{uuid} viene en America/Lima)
                     detalleRemoto.fechaHoraInicioReal?.let { fInicio ->
-                        val segReales = calcularSegundosTranscurridosPaseo(fInicio)
-                        if (segReales > 0) {
-                            segundosTranscurridos = segReales
-                        }
+                        segundosTranscurridos = calcularSegundosTranscurridosPaseo(fInicio, yaEnZonaLima = true)
                     }
                     // Si el paseo ya pasó a FINALIZADO (estado 6), cambiar automáticamente a la vista de Resumen y Recorrido
                     if (detalleRemoto.estadoId == 6 || detalleRemoto.estadoDescripcion?.uppercase()?.contains("FINALIZ") == true) {
@@ -1660,6 +1670,7 @@ fun ResumenPaseoClienteScreen(
     var solicitudActual by remember(solicitud.uuid) { mutableStateOf(solicitud) }
     var recorridoRemoto by remember { mutableStateOf<SolicitudPaseoRecorridoResDto?>(null) }
     var cargandoRecorrido by remember { mutableStateOf(true) }
+    var detalleCargadoEnLima by remember(solicitud.uuid) { mutableStateOf(false) }
 
     // Cuando el paseo está FINALIZADO (estado 6), consume el endpoint de Recorrido completo
     // GET /solicitudes/{uuid}/recorrido (y complementa el detalle con GET /solicitudes/{uuid})
@@ -1675,7 +1686,10 @@ fun ResumenPaseoClienteScreen(
             val resDetalle = withContext(Dispatchers.IO) {
                 repository.obtenerDetalleSolicitud(authHeader, uuid)
             }
-            resDetalle.getOrNull()?.let { solicitudActual = it }
+            resDetalle.getOrNull()?.let {
+                solicitudActual = it
+                detalleCargadoEnLima = true
+            }
             cargandoRecorrido = false
         } else {
             cargandoRecorrido = false
@@ -1702,19 +1716,32 @@ fun ResumenPaseoClienteScreen(
         solicitudActual.fechaHoraFinReal
     ) {
         val segRecorrido = recorridoRemoto?.duracionSegundos?.toLong()?.takeIf { it > 0L }
-        val segCalculados = segRecorrido ?: calcularDuracionEntreFechasUtc(
-            inicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitudActual.fechaHoraInicioReal,
-            finIso = recorridoRemoto?.fechaHoraFin ?: solicitudActual.fechaHoraFinReal
-        )
+        val segCalculados = segRecorrido
+            ?: calcularDuracionEntreFechasUtc(
+                inicioIso = recorridoRemoto?.fechaHoraInicio,
+                finIso = recorridoRemoto?.fechaHoraFin
+            )
+            ?: calcularDuracionEntreFechasUtc(
+                inicioIso = solicitudActual.fechaHoraInicioReal,
+                finIso = solicitudActual.fechaHoraFinReal
+            )
         formatearDuracionRealResumen(segCalculados)
     }
 
     val totalPuntosRegistrados = recorridoRemoto?.coordenadasTotalPuntos ?: puntosRutaFinal.size
-    val (horaInicioTexto, horaFinTexto) = remember(solicitudActual.bloqueHorarioCodigo, recorridoRemoto, solicitudActual.fechaHoraInicioReal, solicitudActual.fechaHoraFinReal) {
+    val (horaInicioTexto, horaFinTexto) = remember(
+        solicitudActual.bloqueHorarioCodigo,
+        recorridoRemoto,
+        solicitudActual.fechaHoraInicioReal,
+        solicitudActual.fechaHoraFinReal,
+        detalleCargadoEnLima
+    ) {
+        val usaFechasRecorridoUtc = !recorridoRemoto?.fechaHoraInicio.isNullOrBlank() || !recorridoRemoto?.fechaHoraFin.isNullOrBlank()
         obtenerHorasInicioFinResumen(
             bloqueCodigo = solicitudActual.bloqueHorarioCodigo,
-            fechaHoraInicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitudActual.fechaHoraInicioReal,
-            fechaHoraFinIso = recorridoRemoto?.fechaHoraFin ?: solicitudActual.fechaHoraFinReal
+            fechaHoraInicioIso = if (usaFechasRecorridoUtc) recorridoRemoto?.fechaHoraInicio else solicitudActual.fechaHoraInicioReal,
+            fechaHoraFinIso = if (usaFechasRecorridoUtc) recorridoRemoto?.fechaHoraFin else solicitudActual.fechaHoraFinReal,
+            yaEnZonaLima = !usaFechasRecorridoUtc && detalleCargadoEnLima
         )
     }
 
@@ -2485,14 +2512,28 @@ private fun calcularRumboGrados(desde: LatLng, hasta: LatLng): Float {
 }
 
 /**
- * El backend (api-paseape) corre en UTC y serializa LocalDateTime sin sufijo 'Z'.
- * Se interpreta en UTC para obtener los segundos reales transcurridos sin límites artificiales.
+ * Calcula los segundos reales transcurridos desde el inicio del paseo:
+ * - `GET /solicitudes/{uuid}` devuelve `fecha_hora_inicio_real` ya convertida a `America/Lima` (commit 6c08d37 del backend).
+ * - `GET /cliente/solicitudes` (bandeja) devuelve `fecha_hora_inicio_real` en `UTC`.
+ * Soporta ambos casos automáticamente para evitar el desfase de +5 horas (05:00:xx).
  */
-private fun calcularSegundosTranscurridosPaseo(isoUtcString: String?): Long {
-    val texto = isoUtcString?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
+private fun calcularSegundosTranscurridosPaseo(
+    isoString: String?,
+    yaEnZonaLima: Boolean = false
+): Long {
+    val texto = isoString?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
     return runCatching {
+        val zonaLima = ZoneId.of("America/Lima")
         val limpio = texto.removeSuffix("Z").take(19)
-        val inicioInstant = LocalDateTime.parse(limpio).toInstant(ZoneOffset.UTC)
+        val ldt = LocalDateTime.parse(limpio)
+        val ahoraLima = LocalDateTime.now(zonaLima)
+        // Si ya viene de GET /solicitudes/{uuid} (yaEnZonaLima = true) o no está en el futuro respecto a la hora de Lima,
+        // se interpreta directamente en America/Lima. Si está ~5 horas en el futuro respecto a Lima, viene en UTC desde la bandeja.
+        val inicioInstant = if (yaEnZonaLima || !ldt.isAfter(ahoraLima.plusMinutes(2))) {
+            ldt.atZone(zonaLima).toInstant()
+        } else {
+            ldt.toInstant(ZoneOffset.UTC)
+        }
         val diff = Duration.between(inicioInstant, Instant.now()).seconds
         diff.coerceAtLeast(0L)
     }.getOrDefault(0L)
@@ -2531,14 +2572,17 @@ private fun obtenerInicialesNombre(nombreCompleto: String): String {
 private fun formatearFechaYBloqueDetalle(
     fechaProgramada: String?,
     bloqueCodigo: String?,
-    creadoEl: String?
+    creadoEl: String?,
+    yaEnZonaLima: Boolean = false
 ): String {
     val localeEs = Locale("es", "PE")
     val fmtFecha = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM", localeEs)
+    val fmtHora = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
     // Si tiene bloque horario es Paseo Programado (usa fecha_programada).
-    // Si NO tiene bloque horario es Paseo Inmediato: usa creado_el convertido de UTC a America/Lima
-    // para evitar el desfase de +1 día cuando en UTC ya pasó la medianoche.
+    // Si NO tiene bloque horario es Paseo Inmediato:
+    // - Si ya viene de GET /solicitudes/{uuid} (yaEnZonaLima = true), creado_el ya está en America/Lima.
+    // - Si viene de la bandeja (yaEnZonaLima = false), creado_el está en UTC y se convierte a America/Lima.
     if (!bloqueCodigo.isNullOrBlank()) {
         val fechaTexto = runCatching {
             val fechaStr = fechaProgramada?.take(10)
@@ -2558,7 +2602,13 @@ private fun formatearFechaYBloqueDetalle(
         }
         return "$fechaTexto • $rangoBloque"
     } else {
-        val ldtLima = fechaHoraUtcALocal(creadoEl)
+        val ldtLima = if (yaEnZonaLima) {
+            creadoEl?.trim()?.removeSuffix("Z")?.take(19)?.takeIf { it.isNotBlank() }?.let {
+                runCatching { LocalDateTime.parse(it) }.getOrNull()
+            }
+        } else {
+            fechaHoraUtcALocal(creadoEl)
+        }
         val fechaTexto = ldtLima?.toLocalDate()?.format(fmtFecha)?.replaceFirstChar { it.uppercase() }
             ?: runCatching {
                 val fechaStr = fechaProgramada?.take(10)
@@ -2568,7 +2618,7 @@ private fun formatearFechaYBloqueDetalle(
                     "Hoy"
                 }
             }.getOrDefault("Hoy")
-        val horaCreacion = formatearHoraPaseo(creadoEl)
+        val horaCreacion = ldtLima?.format(fmtHora)
         return if (horaCreacion != null) {
             "$fechaTexto • $horaCreacion (Modalidad Inmediata)"
         } else {
@@ -2591,7 +2641,8 @@ private fun calcularSegundosAntiguedadGps(isoUtcString: String?): Long {
 private fun obtenerHorasInicioFinResumen(
     bloqueCodigo: String?,
     fechaHoraInicioIso: String? = null,
-    fechaHoraFinIso: String? = null
+    fechaHoraFinIso: String? = null,
+    yaEnZonaLima: Boolean = false
 ): Pair<String, String> {
     val zonaLima = ZoneId.of("America/Lima")
     val fmtHora = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
@@ -2599,13 +2650,21 @@ private fun obtenerHorasInicioFinResumen(
     val inicioReal = fechaHoraInicioIso?.takeIf { it.isNotBlank() }?.let { raw ->
         runCatching {
             val ldt = LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19))
-            ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            if (yaEnZonaLima) {
+                ldt.format(fmtHora)
+            } else {
+                ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            }
         }.getOrNull()
     }
     val finReal = fechaHoraFinIso?.takeIf { it.isNotBlank() }?.let { raw ->
         runCatching {
             val ldt = LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19))
-            ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            if (yaEnZonaLima) {
+                ldt.format(fmtHora)
+            } else {
+                ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            }
         }.getOrNull()
     }
 
