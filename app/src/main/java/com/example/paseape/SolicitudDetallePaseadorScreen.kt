@@ -586,7 +586,7 @@ private fun HorarioCard(
                     color = PrimaryDark
                 )
             } else {
-                val horaSolicitud = fechaHoraUtcALocal(solicitud.creadoEl)
+                val horaSolicitud = fechaHoraLocal(solicitud.creadoEl)
                     ?.format(FORMATO_HORA_DETALLE)
                 Text(
                     text = "Ahora${horaSolicitud?.let { " · solicitado a las $it" }.orEmpty()}",

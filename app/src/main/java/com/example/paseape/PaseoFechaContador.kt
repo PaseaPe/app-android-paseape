@@ -22,7 +22,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -36,18 +35,12 @@ internal const val ESTADO_SOLICITUD_BUSCANDO = 8
 private val ZONA_PERU = ZoneId.of("America/Lima")
 
 /**
- * El backend (api-paseape) corre con `user.timezone=UTC` y serializa
- * `creado_el` y `hora_vencimiento` como LocalDateTime sin zona. Los pasamos
- * a la zona horaria de Perú (America/Lima) antes de mostrarlos.
+ * El backend (api-paseape) entrega las fechas ya en la hora de Perú
+ * (America/Lima), así que se leen tal cual llegan: la app no convierte nada.
  */
-internal fun fechaHoraUtcALocal(texto: String?): LocalDateTime? {
+internal fun fechaHoraLocal(texto: String?): LocalDateTime? {
     val valor = texto?.trim()?.removeSuffix("Z")?.take(19)?.takeIf { it.isNotBlank() } ?: return null
-    return runCatching {
-        LocalDateTime.parse(valor)
-            .atOffset(ZoneOffset.UTC)
-            .atZoneSameInstant(ZONA_PERU)
-            .toLocalDateTime()
-    }.getOrNull()
+    return runCatching { LocalDateTime.parse(valor) }.getOrNull()
 }
 
 /** `fecha_programada` llega como LocalDate ISO ("2026-10-27"). */
@@ -55,11 +48,11 @@ internal fun formatearFechaPaseo(texto: String?): String? {
     val valor = texto?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         LocalDate.parse(valor).format(FORMATO_FECHA)
-    }.getOrNull() ?: fechaHoraUtcALocal(valor)?.format(FORMATO_FECHA)
+    }.getOrNull() ?: fechaHoraLocal(valor)?.format(FORMATO_FECHA)
 }
 
 internal fun formatearHoraPaseo(texto: String?): String? =
-    fechaHoraUtcALocal(texto)?.format(FORMATO_HORA)
+    fechaHoraLocal(texto)?.format(FORMATO_HORA)
 
 /** "B06_07" -> "06:00 - 07:00"; cualquier otro código se deja tal cual. */
 internal fun formatearBloqueHorario(codigo: String?): String? {
@@ -71,8 +64,8 @@ internal fun formatearBloqueHorario(codigo: String?): String? {
 /**
  * Línea "📅 fecha · 🕒 hora" de una tarjeta de paseo.
  * - Programado (con bloque horario): `fecha_programada` + bloque horario.
- * - Inmediato (sin bloque horario): `creado_el` convertido de UTC a America/Lima
- *   (evita mostrar el día siguiente cuando en UTC ya pasó la medianoche).
+ * - Inmediato (sin bloque horario): `creado_el` tal como llega del backend
+ *   (ya en hora de Perú).
  */
 internal fun textoFechaHoraPaseo(
     fechaProgramada: String?,
@@ -86,7 +79,7 @@ internal fun textoFechaHoraPaseo(
             return "📅 $fecha · 🕒 $bloque"
         }
     }
-    val fechaCreacion = fechaHoraUtcALocal(creadoEl)?.format(FORMATO_FECHA)
+    val fechaCreacion = fechaHoraLocal(creadoEl)?.format(FORMATO_FECHA)
     val horaCreacion = formatearHoraPaseo(creadoEl)
     return when {
         fechaCreacion != null && horaCreacion != null -> "📅 $fechaCreacion · 🕒 $horaCreacion"
@@ -97,15 +90,16 @@ internal fun textoFechaHoraPaseo(
 
 private fun instanteVencimiento(horaVencimiento: String?): Instant? {
     val valor = horaVencimiento?.trim()?.takeIf { it.isNotBlank() } ?: return null
-    return runCatching { LocalDateTime.parse(valor).toInstant(ZoneOffset.UTC) }.getOrNull()
+    return runCatching {
+        LocalDateTime.parse(valor).atZone(ZONA_PERU).toInstant()
+    }.getOrNull()
 }
 
 /**
- * "dd/MM/yyyy · HH:mm" en la hora local del dispositivo a partir de `creado_el`
- * (el backend lo guarda en UTC).
+ * "dd/MM/yyyy · HH:mm" en la hora que entrega el backend a partir de `creado_el`.
  */
 internal fun textoFechaHoraNotificacion(creadoEl: String?): String? =
-    fechaHoraUtcALocal(creadoEl)?.format(FORMATO_FECHA_HORA)
+    fechaHoraLocal(creadoEl)?.format(FORMATO_FECHA_HORA)
 
 /**
  * Una solicitud inmediata está expirada cuando pasó su `hora_vencimiento`
@@ -138,9 +132,9 @@ internal fun recordarAhora(activo: Boolean): Instant {
     return ahora
 }
 
-/** Lo más reciente primero: ordena por `creado_el` real (UTC -> local). */
+/** Lo más reciente primero: ordena por `creado_el` tal como llega del backend. */
 internal fun ordenarPorCreacionDesc(lista: List<SolicitudPaseoResDto>): List<SolicitudPaseoResDto> =
-    lista.sortedByDescending { fechaHoraUtcALocal(it.creadoEl) ?: LocalDateTime.MIN }
+    lista.sortedByDescending { fechaHoraLocal(it.creadoEl) ?: LocalDateTime.MIN }
 
 /**
  * Contador regresivo de una solicitud inmediata. El backend la marca VENCIDA

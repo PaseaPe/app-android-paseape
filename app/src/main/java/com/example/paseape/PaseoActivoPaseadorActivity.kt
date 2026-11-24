@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.ZoneId
 
 /**
  * Pantalla de paseo en curso del paseador.
@@ -373,12 +373,13 @@ class PaseoActivoPaseadorActivity : ComponentActivity() {
         }
     }
 
-    /** El backend guarda `fecha_hora_inicio_real` en UTC. */
-    private fun parseInicioMillis(isoUtc: String?): Long? {
-        val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    /** El backend entrega `fecha_hora_inicio_real` ya en hora de Lima. */
+    private fun parseInicioMillis(fechaInicio: String?): Long? {
+        val texto = fechaInicio?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return runCatching {
             LocalDateTime.parse(texto.removeSuffix("Z").take(19))
-                .toInstant(ZoneOffset.UTC)
+                .atZone(ZoneId.of("America/Lima"))
+                .toInstant()
                 .toEpochMilli()
         }.getOrNull()
     }

@@ -75,8 +75,6 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -88,7 +86,6 @@ private val AmbarSuaveActivo = Color(0xFFFFF8E1)
 private val AmbarTextoActivo = Color(0xFF8D6E00)
 private val NaranjaSuaveActivo = Color(0xFFFFF3E0)
 
-private val ZONA_LIMA = ZoneId.of("America/Lima")
 private val FORMATO_HORA_ACTIVO = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
 /**
@@ -889,14 +886,11 @@ private fun formatearTiempo(segundosTotales: Long): String {
     }
 }
 
-/** El backend guarda `fecha_hora_inicio_real` en UTC; se muestra en hora de Lima. */
-private fun horaLocalTexto(isoUtc: String?): String? {
-    val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
+/** El backend entrega `fecha_hora_inicio_real` ya en hora de Lima; se muestra tal cual. */
+private fun horaLocalTexto(isoHoraLima: String?): String? {
+    val texto = isoHoraLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
-        val limpio = texto.removeSuffix("Z").take(19)
-        LocalDateTime.parse(limpio)
-            .atOffset(ZoneOffset.UTC)
-            .atZoneSameInstant(ZONA_LIMA)
+        LocalDateTime.parse(texto.removeSuffix("Z").take(19))
             .format(FORMATO_HORA_ACTIVO)
     }.getOrNull()
 }

@@ -60,7 +60,10 @@ fun Paso1Screen(
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
+            Surface(
+                modifier = Modifier.navigationBarsPadding(),
+                shadowElevation = 8.dp
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val bloqueActivo = viewModel.bloqueSeleccionado
                     val cantMascotas = (bloqueActivo?.mascotas?.size ?: 0)

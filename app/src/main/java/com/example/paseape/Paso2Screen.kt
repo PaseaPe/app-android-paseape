@@ -55,7 +55,10 @@ fun Paso2Screen(
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
+            Surface(
+                modifier = Modifier.navigationBarsPadding(),
+                shadowElevation = 8.dp
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

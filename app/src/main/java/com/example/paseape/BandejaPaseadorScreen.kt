@@ -77,7 +77,7 @@ import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.util.Locale
 
 private val TextoGris = Color(0xFF64748B)
@@ -1272,17 +1272,20 @@ private fun textoVigencia(solicitud: SolicitudPaseoResDto): String {
     }
 }
 
+/** Zona en la que el backend entrega `creado_el`; se usa para medir la antigüedad. */
+private val ZONA_LIMA_BANDEJA = ZoneId.of("America/Lima")
+
 /**
- * "Solicitado hace X min" a partir de `creado_el`.
- * El backend guarda `creado_el` en UTC, así que se compara contra UTC para no
- * desfasar el resultado con la hora local del dispositivo.
+ * "Solicitado hace X min" a partir de `creado_el`, comparando contra la hora
+ * que entrega el backend (hora de Lima).
  */
 private fun tiempoDesdeCreacion(creadoEl: String?): String {
     val texto = creadoEl?.trim()
     if (texto.isNullOrBlank()) return "Solicitud inmediata"
 
-    val creado = runCatching { LocalDateTime.parse(texto).toInstant(ZoneOffset.UTC) }.getOrNull()
-        ?: return "Solicitud inmediata"
+    val creado = runCatching {
+        LocalDateTime.parse(texto).atZone(ZONA_LIMA_BANDEJA).toInstant()
+    }.getOrNull() ?: return "Solicitud inmediata"
     val minutos = runCatching {
         Duration.between(creado, Instant.now()).toMinutes()
     }.getOrNull() ?: return "Solicitud inmediata"

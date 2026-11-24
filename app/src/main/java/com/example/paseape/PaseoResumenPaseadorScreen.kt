@@ -71,7 +71,6 @@ import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.gms.maps.model.RoundCap
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -774,27 +773,26 @@ private fun duracionSegundosResumen(state: PaseoResumenUiState): Long? {
     val delRecorrido = state.recorrido?.duracionSegundos?.takeIf { it > 0 }?.toLong()
     if (delRecorrido != null) return delRecorrido
 
-    val inicio = parseUtcMillis(state.solicitud?.fechaHoraInicioReal) ?: return null
-    val fin = parseUtcMillis(state.solicitud?.fechaHoraFinReal) ?: return null
+    val inicio = parseMillis(state.solicitud?.fechaHoraInicioReal) ?: return null
+    val fin = parseMillis(state.solicitud?.fechaHoraFinReal) ?: return null
     return ((fin - inicio) / 1000).takeIf { it > 0 }
 }
 
-private fun parseUtcMillis(isoUtc: String?): Long? {
-    val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
+private fun parseMillis(fechaHoraLima: String?): Long? {
+    val texto = fechaHoraLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         LocalDateTime.parse(texto.removeSuffix("Z").take(19))
-            .toInstant(ZoneOffset.UTC)
+            .atZone(ZONA_LIMA_RESUMEN)
+            .toInstant()
             .toEpochMilli()
     }.getOrNull()
 }
 
-/** El backend guarda las horas en UTC; se muestran en hora de Lima. */
-private fun horaLocalTexto(isoUtc: String?): String? {
-    val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
+/** El backend entrega las horas ya en hora de Lima; se muestran tal cual. */
+private fun horaLocalTexto(isoHoraLima: String?): String? {
+    val texto = isoHoraLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         LocalDateTime.parse(texto.removeSuffix("Z").take(19))
-            .atOffset(ZoneOffset.UTC)
-            .atZoneSameInstant(ZONA_LIMA_RESUMEN)
             .format(FORMATO_HORA_RESUMEN)
     }.getOrNull()
 }

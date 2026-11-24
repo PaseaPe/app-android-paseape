@@ -84,7 +84,9 @@ fun PaseadorDetalleScreen(
             // Botón inferior fijo para contratar o reservar servicio
             if (uiState is PaseadorDetalleUiState.Success) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
                     color = Color.White,
                     shadowElevation = 8.dp
                 ) {

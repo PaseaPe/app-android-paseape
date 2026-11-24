@@ -982,7 +982,7 @@ fun SeguimientoPaseoEnVivoScreen(
     var fotoPaseadorFallback by remember { mutableStateOf<String?>(null) }
     var calificacionPaseadorFallback by remember { mutableStateOf<Double?>(null) }
 
-    // Reloj en vivo del tiempo transcurrido del paseo (calculado con precisión desde fechaHoraInicioReal en UTC)
+    // Reloj en vivo del tiempo transcurrido del paseo (desde fechaHoraInicioReal, ya en hora de Lima)
     val segundosIniciales = remember(solicitudActual.fechaHoraInicioReal) {
         calcularSegundosTranscurridosPaseo(solicitudActual.fechaHoraInicioReal)
     }
@@ -1702,7 +1702,7 @@ fun ResumenPaseoClienteScreen(
         solicitudActual.fechaHoraFinReal
     ) {
         val segRecorrido = recorridoRemoto?.duracionSegundos?.toLong()?.takeIf { it > 0L }
-        val segCalculados = segRecorrido ?: calcularDuracionEntreFechasUtc(
+        val segCalculados = segRecorrido ?: calcularDuracionEntreFechas(
             inicioIso = recorridoRemoto?.fechaHoraInicio ?: solicitudActual.fechaHoraInicioReal,
             finIso = recorridoRemoto?.fechaHoraFin ?: solicitudActual.fechaHoraFinReal
         )
@@ -2484,26 +2484,30 @@ private fun calcularRumboGrados(desde: LatLng, hasta: LatLng): Float {
     return ((brng + 360.0) % 360.0).toFloat()
 }
 
+/** Zona horaria en la que el backend entrega todas las fechas (America/Lima). */
+private val ZONA_LIMA = ZoneId.of("America/Lima")
+
 /**
- * El backend (api-paseape) corre en UTC y serializa LocalDateTime sin sufijo 'Z'.
- * Se interpreta en UTC para obtener los segundos reales transcurridos sin límites artificiales.
+ * El backend (api-paseape) entrega `fecha_hora_inicio_real` ya en hora de Lima
+ * sin sufijo de zona; se lee tal cual y se compara contra `Instant.now()` para
+ * obtener los segundos reales transcurridos.
  */
-private fun calcularSegundosTranscurridosPaseo(isoUtcString: String?): Long {
-    val texto = isoUtcString?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
+private fun calcularSegundosTranscurridosPaseo(fechaInicioIso: String?): Long {
+    val texto = fechaInicioIso?.trim()?.takeIf { it.isNotBlank() } ?: return 0L
     return runCatching {
         val limpio = texto.removeSuffix("Z").take(19)
-        val inicioInstant = LocalDateTime.parse(limpio).toInstant(ZoneOffset.UTC)
+        val inicioInstant = LocalDateTime.parse(limpio).atZone(ZONA_LIMA).toInstant()
         val diff = Duration.between(inicioInstant, Instant.now()).seconds
         diff.coerceAtLeast(0L)
     }.getOrDefault(0L)
 }
 
-private fun calcularDuracionEntreFechasUtc(inicioIso: String?, finIso: String?): Long? {
+private fun calcularDuracionEntreFechas(inicioIso: String?, finIso: String?): Long? {
     val iniStr = inicioIso?.trim()?.takeIf { it.isNotBlank() } ?: return null
     val finStr = finIso?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
-        val ini = LocalDateTime.parse(iniStr.removeSuffix("Z").take(19)).toInstant(ZoneOffset.UTC)
-        val fin = LocalDateTime.parse(finStr.removeSuffix("Z").take(19)).toInstant(ZoneOffset.UTC)
+        val ini = LocalDateTime.parse(iniStr.removeSuffix("Z").take(19)).atZone(ZONA_LIMA).toInstant()
+        val fin = LocalDateTime.parse(finStr.removeSuffix("Z").take(19)).atZone(ZONA_LIMA).toInstant()
         Duration.between(ini, fin).seconds.coerceAtLeast(0L)
     }.getOrNull()
 }
@@ -2537,8 +2541,8 @@ private fun formatearFechaYBloqueDetalle(
     val fmtFecha = DateTimeFormatter.ofPattern("EEEE, dd 'de' MMMM", localeEs)
 
     // Si tiene bloque horario es Paseo Programado (usa fecha_programada).
-    // Si NO tiene bloque horario es Paseo Inmediato: usa creado_el convertido de UTC a America/Lima
-    // para evitar el desfase de +1 día cuando en UTC ya pasó la medianoche.
+    // Si NO tiene bloque horario es Paseo Inmediato: usa `creado_el` tal como
+    // llega del backend (ya en hora de Perú).
     if (!bloqueCodigo.isNullOrBlank()) {
         val fechaTexto = runCatching {
             val fechaStr = fechaProgramada?.take(10)
@@ -2558,7 +2562,7 @@ private fun formatearFechaYBloqueDetalle(
         }
         return "$fechaTexto • $rangoBloque"
     } else {
-        val ldtLima = fechaHoraUtcALocal(creadoEl)
+        val ldtLima = fechaHoraLocal(creadoEl)
         val fechaTexto = ldtLima?.toLocalDate()?.format(fmtFecha)?.replaceFirstChar { it.uppercase() }
             ?: runCatching {
                 val fechaStr = fechaProgramada?.take(10)
@@ -2577,6 +2581,12 @@ private fun formatearFechaYBloqueDetalle(
     }
 }
 
+/**
+ * Antigüedad de la última señal GPS.
+ * `GET /cliente/solicitudes/{uuid}/ubicacion-actual` es el único endpoint que el
+ * backend sigue entregando en UTC (lo valida contra `LocalDateTime.now(UTC)`), así
+ * que aquí se interpreta en UTC y no se convierte.
+ */
 private fun calcularSegundosAntiguedadGps(isoUtcString: String?): Long {
     if (isoUtcString.isNullOrBlank()) return 0L
     return runCatching {
@@ -2593,19 +2603,16 @@ private fun obtenerHorasInicioFinResumen(
     fechaHoraInicioIso: String? = null,
     fechaHoraFinIso: String? = null
 ): Pair<String, String> {
-    val zonaLima = ZoneId.of("America/Lima")
     val fmtHora = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
     val inicioReal = fechaHoraInicioIso?.takeIf { it.isNotBlank() }?.let { raw ->
         runCatching {
-            val ldt = LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19))
-            ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19)).format(fmtHora)
         }.getOrNull()
     }
     val finReal = fechaHoraFinIso?.takeIf { it.isNotBlank() }?.let { raw ->
         runCatching {
-            val ldt = LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19))
-            ldt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zonaLima).format(fmtHora)
+            LocalDateTime.parse(raw.trim().removeSuffix("Z").take(19)).format(fmtHora)
         }.getOrNull()
     }
 
