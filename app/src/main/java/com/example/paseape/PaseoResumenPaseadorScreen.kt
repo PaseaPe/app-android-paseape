@@ -788,11 +788,13 @@ private fun parseUtcMillis(isoUtc: String?): Long? {
     }.getOrNull()
 }
 
-/** `GET /solicitudes/{uuid}` ya devuelve `fecha_hora_fin_real` en hora de Lima (`America/Lima`). */
-private fun horaLocalTexto(isoLima: String?): String? {
-    val texto = isoLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
+/** El backend guarda las horas en UTC; se muestran en hora de Lima. */
+private fun horaLocalTexto(isoUtc: String?): String? {
+    val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         LocalDateTime.parse(texto.removeSuffix("Z").take(19))
+            .atOffset(ZoneOffset.UTC)
+            .atZoneSameInstant(ZONA_LIMA_RESUMEN)
             .format(FORMATO_HORA_RESUMEN)
     }.getOrNull()
 }

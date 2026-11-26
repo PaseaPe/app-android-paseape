@@ -373,21 +373,13 @@ class PaseoActivoPaseadorActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * `GET /solicitudes/{uuid}` devuelve `fecha_hora_inicio_real` ya convertida a `America/Lima` (commit 6c08d37 del backend).
-     */
-    private fun parseInicioMillis(isoLima: String?): Long? {
-        val texto = isoLima?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    /** El backend guarda `fecha_hora_inicio_real` en UTC. */
+    private fun parseInicioMillis(isoUtc: String?): Long? {
+        val texto = isoUtc?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return runCatching {
-            val zonaLima = java.time.ZoneId.of("America/Lima")
-            val ldt = LocalDateTime.parse(texto.removeSuffix("Z").take(19))
-            val ahoraLima = LocalDateTime.now(zonaLima)
-            val instant = if (!ldt.isAfter(ahoraLima.plusMinutes(2))) {
-                ldt.atZone(zonaLima).toInstant()
-            } else {
-                ldt.toInstant(ZoneOffset.UTC)
-            }
-            instant.toEpochMilli()
+            LocalDateTime.parse(texto.removeSuffix("Z").take(19))
+                .toInstant(ZoneOffset.UTC)
+                .toEpochMilli()
         }.getOrNull()
     }
 }

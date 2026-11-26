@@ -101,15 +101,11 @@ private fun instanteVencimiento(horaVencimiento: String?): Instant? {
 }
 
 /**
- * "dd/MM/yyyy · HH:mm" a partir de `creado_el` de notificaciones.
- * El endpoint `GET /notificaciones/no-leidas` ya convierte `creado_el` a `America/Lima` en el backend (commit 6c08d37).
+ * "dd/MM/yyyy · HH:mm" en la hora local del dispositivo a partir de `creado_el`
+ * (el backend lo guarda en UTC).
  */
-internal fun textoFechaHoraNotificacion(creadoEl: String?): String? {
-    val valor = creadoEl?.trim()?.removeSuffix("Z")?.take(19)?.takeIf { it.isNotBlank() } ?: return null
-    return runCatching {
-        LocalDateTime.parse(valor).format(FORMATO_FECHA_HORA)
-    }.getOrNull()
-}
+internal fun textoFechaHoraNotificacion(creadoEl: String?): String? =
+    fechaHoraUtcALocal(creadoEl)?.format(FORMATO_FECHA_HORA)
 
 /**
  * Una solicitud inmediata está expirada cuando pasó su `hora_vencimiento`
