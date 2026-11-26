@@ -1,9 +1,5 @@
 package com.example.paseape
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,7 +35,6 @@ import coil.compose.AsyncImage
 import com.example.paseape.data.model.DisponibilidadPaseadorDto
 import com.example.paseape.data.model.MascotaData
 import com.example.paseape.data.model.UsuarioPaseadorDetalleDto
-import com.example.paseape.ui.components.DocumentosSoloLecturaCard
 import com.example.paseape.ui.theme.BackgroundOffWhite
 import com.example.paseape.ui.theme.PrimaryDark
 import java.util.Locale
@@ -211,7 +205,6 @@ fun PaseadorDetalleContent(
 ) {
     val paseador = detalle.paseador
     val scrollState = rememberScrollState()
-    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -483,40 +476,30 @@ fun PaseadorDetalleContent(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                DocumentosSoloLecturaCard(
-                    documentos = detalle.digitalDocuments.orEmpty(),
-                    habilitado = !isDocumentLoading,
-                    mensajeVacio = "El paseador aún no ha adjuntado documentos de antecedentes.",
-                    onDescargarDocumento = { documento ->
-                        documento.uuid?.let { uuid ->
-                            onObtenerUrlDescarga(uuid) { url ->
-                                abrirDocumentoCliente(context, url)
-                            }
-                        }
-                    }
-                )
-
-                val legacyUrl = paseador?.antecedentesPolicialesUrl?.takeIf { it.isNotBlank() }
-                if (detalle.digitalDocuments.isNullOrEmpty() && legacyUrl != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                // Los antecedentes penales no se muestran al cliente: solo el
+                // aviso de que el paseador fue verificado por los administradores.
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFFECFDF5)
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Certificado registrado previamente",
-                            fontSize = 11.sp,
-                            color = Color(0xFF64748B),
-                            modifier = Modifier.weight(1f)
+                            text = "✔",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF16A34A)
                         )
-                        TextButton(onClick = { abrirDocumentoCliente(context, legacyUrl) }) {
-                            Text(
-                                text = "Abrir enlace",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryDark
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Paseador verificado por administradores",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF16A34A)
+                        )
                     }
                 }
 
@@ -575,15 +558,3 @@ fun PaseadorDetalleContent(
     }
 }
 
-private fun abrirDocumentoCliente(context: Context, url: String) {
-    if (url.isBlank()) return
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    }.onFailure {
-        Toast.makeText(
-            context,
-            "No se pudo abrir el documento.",
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-}
